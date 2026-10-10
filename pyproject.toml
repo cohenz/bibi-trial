@@ -1,0 +1,17 @@
+# Workspace-level tool configuration (packages live in services/* and adapters/*)
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+pythonpath = ["services/common", "services/api", "services/worker", "adapters/project315"]
+markers = [
+  "db: needs PostgreSQL (DATABASE_URL / NTK_TEST_DATABASE_URL)",
+  "e2e: end-to-end pipeline + API",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008", "UP038"]

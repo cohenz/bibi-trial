@@ -1,0 +1,544 @@
+{
+ "_note": "SYNTHETIC test data in the canonical snapshot format. Not real Project 315 content.",
+ "events": [
+  {
+   "event_315_id": "SYN-001",
+   "indictment_reference": "סעיף בדיוני 1",
+   "date_or_range": "02/02/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 1 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "inferred",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-1"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/1",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-002",
+   "indictment_reference": "סעיף בדיוני 2",
+   "date_or_range": "03/03/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 2 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "נתניהו לא מעורב בדרישה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "staff",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-2"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/2",
+   "court_mentions": [],
+   "witness_mentions": [
+    "העד מר דוד לוי"
+   ]
+  },
+  {
+   "event_315_id": "SYN-003",
+   "indictment_reference": "סעיף בדיוני 3",
+   "date_or_range": "04/04/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 3 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "third_party",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-3"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-3"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/3",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-004",
+   "indictment_reference": "סעיף בדיוני 4",
+   "date_or_range": "05/05/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 4 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "הדרישה לא נענתה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "unknown",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-4"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/4",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-005",
+   "indictment_reference": "סעיף בדיוני 5",
+   "date_or_range": "06/06/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 5 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "direct",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-5"
+   ],
+   "wayback_urls": [
+    "not a url"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/5",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-006",
+   "indictment_reference": "סעיף בדיוני 6",
+   "date_or_range": "07/07/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 6 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "נתניהו לא מעורב בדרישה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "inferred",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-6"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-6"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/6",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-007",
+   "indictment_reference": "סעיף בדיוני 7",
+   "date_or_range": "2015-03-01 - 2015-03-05",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 7 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "staff",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-7"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/7",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-008",
+   "indictment_reference": "סעיף בדיוני 8",
+   "date_or_range": "09/09/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 8 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "הדרישה לא נענתה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "third_party",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-8"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/8",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-009",
+   "indictment_reference": "סעיף בדיוני 9",
+   "date_or_range": "10/01/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 9 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "unknown",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-9"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-9"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/9",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-010",
+   "indictment_reference": "סעיף בדיוני 10",
+   "date_or_range": "11/02/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 10 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "נתניהו לא מעורב בדרישה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "direct",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-10"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/10",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-011",
+   "indictment_reference": "סעיף בדיוני 11",
+   "date_or_range": "12/03/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 11 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "כנראה",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-11"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/11",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-012",
+   "indictment_reference": "סעיף בדיוני 12",
+   "date_or_range": "13/04/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 12 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "הדרישה לא נענתה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "staff",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-12"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-12"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/12",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-013",
+   "indictment_reference": "סעיף בדיוני 13",
+   "date_or_range": "14/05/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 13 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "third_party",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/13",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-014",
+   "indictment_reference": "סעיף בדיוני 14",
+   "date_or_range": "15/06/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 14 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "נתניהו לא מעורב בדרישה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "unknown",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-14"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/14",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-015",
+   "indictment_reference": "סעיף בדיוני 15",
+   "date_or_range": "16/07/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 15 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "direct",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-15"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-15"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/15",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-016",
+   "indictment_reference": "סעיף בדיוני 16",
+   "date_or_range": "17/08/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 16 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "הדרישה לא נענתה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "inferred",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-16"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/16",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-017",
+   "indictment_reference": "סעיף בדיוני 17",
+   "date_or_range": "18/09/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 17 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "staff",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-17"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/17",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-018",
+   "indictment_reference": "סעיף בדיוני 18",
+   "date_or_range": "19/01/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 18 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "נתניהו לא מעורב בדרישה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "third_party",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-18"
+   ],
+   "wayback_urls": [
+    "https://web.archive.org/web/2015/https://example.org/synthetic/article-18"
+   ],
+   "project315_page_url": "https://example.org/synthetic/p315/18",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-019",
+   "indictment_reference": "סעיף בדיוני 19",
+   "date_or_range": "20/02/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 19 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "unknown",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-19"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/19",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-020",
+   "indictment_reference": "סעיף בדיוני 20",
+   "date_or_range": "21/03/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 20 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "הדרישה לא נענתה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "direct",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-20"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/20",
+   "court_mentions": [],
+   "witness_mentions": []
+  },
+  {
+   "event_315_id": "SYN-001",
+   "indictment_reference": "סעיף בדיוני 1",
+   "date_or_range": "02/02/2015",
+   "requester": "דובר בדיוני",
+   "recipient": "עורך בדיוני",
+   "subject": "אירוע סינתטי מספר 1 לבדיקות בלבד",
+   "description": "רשומה סינתטית. אינה מתארת אירוע אמיתי.",
+   "requested_action": "שינוי כותרת (בדיוני)",
+   "prosecution_description": "תיאור בדיוני לצורך בדיקה",
+   "project315_classification": "היענות לא חריגה",
+   "project315_reasoning_summary": "נימוק בדיוני לצורך בדיקת המתאם",
+   "netanyahu_involvement": "inferred",
+   "persons": [
+    "דובר בדיוני",
+    "עורך בדיוני"
+   ],
+   "original_article_urls": [
+    "https://example.org/synthetic/article-1"
+   ],
+   "wayback_urls": [],
+   "project315_page_url": "https://example.org/synthetic/p315/1",
+   "court_mentions": [],
+   "witness_mentions": []
+  }
+ ]
+}

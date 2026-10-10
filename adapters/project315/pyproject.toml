@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ntk-p315"
+version = "1.0.0"
+description = "Project 315 export adapter"
+requires-python = ">=3.12"
+dependencies = ["ntk-common"]
+
+[tool.setuptools.packages.find]
+include = ["ntk_p315*"]

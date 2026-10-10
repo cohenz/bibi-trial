@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ntk-worker"
+version = "2.1.0"
+description = "Ingestion worker (Celery) and the trial-knowledge CLI"
+requires-python = ">=3.12"
+dependencies = ["ntk-common", "ntk-p315", "celery[redis]>=5.4", "click>=8.1"]
+
+[project.scripts]
+trial-knowledge = "ntk_worker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ntk_worker*"]

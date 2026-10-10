@@ -1,0 +1,204 @@
+"""Executes a model task end-to-end with contracts and run records.
+
+For every call a ``ModelRunRecord`` is produced (spec §17 / brief): provider,
+model id/version, prompt version, temperature, schema version, timing, token
+usage, input source ids, input/output hashes, status and validation errors.
+
+Idempotency: the run id is UUIDv5(task, model, prompt version, input hash).
+If a successful run with that id exists in the ``RunStore`` it is reused and
+the provider is not called again.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import re
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Protocol
+
+from .. import contracts, ids
+from .prompts import ALL as PROMPTS
+from .prompts import ROLE_FOR_TASK
+from .providers import ModelProvider, ProviderError, backoff_sleep
+from .registry import ModelRegistry, ModelSpec
+
+
+@dataclass
+class ModelRunRecord:
+    id: str
+    task_type: str
+    role: str
+    provider: str
+    model_family: str
+    model_id: str
+    model_version: str
+    prompt_version: str
+    schema_version: str
+    corpus_version: str
+    temperature: float
+    input_hash: str
+    input: dict
+    input_source_ids: list[str]
+    output: dict
+    output_hash: str | None
+    usage: dict
+    status: str  # succeeded | invalid_output | provider_error | rejected_by_gate
+    validation_errors: list[dict] = field(default_factory=list)
+    duration_ms: int = 0
+    error: dict | None = None
+    registry_id: str = ""
+    created_at: str = field(default_factory=lambda: dt.datetime.now(dt.UTC).isoformat())
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "succeeded"
+
+
+class RunStore(Protocol):
+    def get_run(self, run_id: str) -> ModelRunRecord | None: ...
+    def save_run(self, run: ModelRunRecord) -> None: ...
+
+
+class MemoryRunStore:
+    def __init__(self) -> None:
+        self.runs: dict[str, ModelRunRecord] = {}
+
+    def get_run(self, run_id: str) -> ModelRunRecord | None:
+        return self.runs.get(run_id)
+
+    def save_run(self, run: ModelRunRecord) -> None:
+        self.runs[run.id] = run
+
+
+_FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.S)
+
+
+def parse_json_text(text: str) -> Any:
+    t = _FENCE.sub("", text.strip())
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        start, end = t.find("{"), t.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(t[start : end + 1])
+        raise
+
+
+SemanticCheck = Callable[[dict], list[dict]]
+
+
+class ModelRunner:
+    def __init__(self, registry: ModelRegistry, providers: dict[str, ModelProvider], store: RunStore,
+                 *, max_retries: int = 3, sleep: Callable[[int], None] = backoff_sleep):
+        self.registry = registry
+        self.providers = providers
+        self.store = store
+        self.max_retries = max_retries
+        self.sleep = sleep
+
+    def provider_for(self, spec: ModelSpec) -> ModelProvider:
+        if spec.provider not in self.providers:
+            raise KeyError(f"no provider instance for {spec.provider!r}")
+        return self.providers[spec.provider]
+
+    def run(self, task_type: str, payload: dict, *, input_source_ids: list[str], corpus_version: str,
+            semantic_check: SemanticCheck | None = None, role: str | None = None) -> ModelRunRecord:
+        prompt = PROMPTS[task_type]
+        role = role or ROLE_FOR_TASK[task_type]
+        spec = self.registry.get(role)
+        user = prompt.render_user(payload)
+        input_hash = ids.sha256_json({"system": prompt.system, "user": user, "schema": prompt.schema})
+        run_id = str(ids.derived_uuid("model_run", task_type, spec.provider, spec.model_id, prompt.version, input_hash))
+        cached = self.store.get_run(run_id)
+        if cached is not None and cached.ok:
+            return cached
+
+        provider = self.provider_for(spec)
+        started = time.monotonic()
+        last_error: ProviderError | None = None
+        result = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                result = provider.generate_json(model_id=spec.model_id, system=prompt.system, user=user,
+                                                temperature=spec.temperature, task_type=task_type, payload=payload)
+                break
+            except ProviderError as exc:
+                last_error = exc
+                if not exc.retryable or attempt >= self.max_retries:
+                    break
+                self.sleep(attempt)
+        duration = int((time.monotonic() - started) * 1000)
+        base = dict(
+            id=run_id, task_type=task_type, role=role, provider=spec.provider, model_family=spec.model_family,
+            model_id=spec.model_id, prompt_version=prompt.version, schema_version=f"{prompt.schema}@2.0",
+            corpus_version=corpus_version, temperature=spec.temperature, input_hash=input_hash,
+            input={"payload_sha256": ids.sha256_json(payload), "source_ids": input_source_ids[:2000]},
+            input_source_ids=input_source_ids, duration_ms=duration, registry_id=spec.registry_id,
+        )
+        if result is None:
+            run = ModelRunRecord(**base, model_version=spec.model_id, output={}, output_hash=None, usage={},
+                                 status="provider_error",
+                                 error={"message": str(last_error)[:500], "status": getattr(last_error, "status", None)})
+            self.store.save_run(run)
+            return run
+
+        errors: list[dict] = []
+        output: dict = {}
+        try:
+            parsed = parse_json_text(result.text)
+            if not isinstance(parsed, dict):
+                raise ValueError("model output is not a JSON object")
+            output = parsed
+            contracts.validate(prompt.schema, output)
+            if semantic_check:
+                errors.extend(semantic_check(output))
+        except contracts.ContractError as ce:
+            errors.extend(ce.errors)
+        except (ValueError, json.JSONDecodeError) as exc:
+            errors.append({"path": "/", "message": f"invalid JSON: {exc}"[:300], "validator": "json"})
+        status = "succeeded" if not errors else "invalid_output"
+        run = ModelRunRecord(
+            **base,
+            model_version=result.model_version or spec.model_id,
+            output=output if status == "succeeded" else {"raw_text_sha256": ids.sha256_text(result.text)},
+            output_hash=ids.sha256_json(output) if output else None,
+            usage=result.usage or {},
+            status=status,
+            validation_errors=errors,
+        )
+        self.store.save_run(run)
+        return run
+
+
+def unknown_ids_check(allowed: set[str], *paths: str) -> SemanticCheck:
+    """Semantic check: every id at the given JSON paths must be in ``allowed``.
+
+    Paths use ``a.b[].c`` notation, e.g. ``summary_sentences[].source_unit_ids[]``."""
+
+    def walk(obj: Any, parts: list[str]) -> list[Any]:
+        if not parts:
+            return [obj]
+        head, rest = parts[0], parts[1:]
+        if head.endswith("[]"):
+            key = head[:-2]
+            seq = obj.get(key, []) if key else obj
+            out = []
+            for item in seq or []:
+                out.extend(walk(item, rest))
+            return out
+        if isinstance(obj, dict) and head in obj:
+            return walk(obj[head], rest)
+        return []
+
+    def check(output: dict) -> list[dict]:
+        errs = []
+        for path in paths:
+            for value in walk(output, path.split(".")):
+                if value is not None and value not in allowed:
+                    errs.append({"path": path, "message": f"unknown id {value!r} not in input", "validator": "unknown_id"})
+        return errs
+
+    return check

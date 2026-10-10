@@ -36,8 +36,10 @@ class ChunkRecord:
 
 
 def _unit_text(u: UnitRecord) -> str:
-    who = f"{u.speaker_label}: " if u.speaker_label else ""
-    return f"{who}{u.raw_text}"
+    # turns whose label sits on the same printed line already carry it in raw_text — don't repeat it
+    if not u.speaker_label or u.raw_text.lstrip().startswith(u.speaker_label):
+        return u.raw_text
+    return f"{u.speaker_label}: {u.raw_text}"
 
 
 def build_chunks(units: list[UnitRecord], *, profile: str = CHUNK_PROFILE, min_tokens: int = MIN_TOKENS,

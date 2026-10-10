@@ -11,6 +11,7 @@
   trial-knowledge p315-import FILE [--mapping mapping.json] [--synthetic]
   trial-knowledge label-export --kind speakers --n 200 --out golden/labels/speakers.csv
   trial-knowledge label-score --kind speakers --file golden/labels/speakers.csv
+  trial-knowledge bench-pool --suite golden/search-bench-pilot-v1.json --out golden/labels/search.csv
   trial-knowledge openapi --out contracts/openapi.json
 """
 
@@ -243,6 +244,8 @@ def bench(suite: str, out: str | None, published_only: bool) -> None:
     if out:
         Path(out).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     click.echo(json.dumps(report["summary"], ensure_ascii=False, indent=2))
+    if report["summary"].get("measured") is False:
+        sys.exit(2)
 
 
 @main.command("p315-import")
@@ -269,6 +272,30 @@ def p315_import(file: str, mapping: str | None, synthetic: bool, source: str | N
         click.echo(f"  warning: {w}")
 
 
+@main.command("storage-check")
+def storage_check() -> None:
+    """Check object storage reachability and that the bucket is not publicly listable. Prints no secrets."""
+    import requests
+    from ntk_common.config import get_settings
+    from ntk_common.storage import build_storage
+
+    s = get_settings()
+    st = build_storage(s)
+    probe = st.content_key("0" * 64)
+    try:
+        st.head(probe)
+        click.echo(f"bucket {st.bucket}: reachable (HEAD ok)")
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"bucket {st.bucket}: NOT reachable: {type(e).__name__}")
+        sys.exit(1)
+    if s.s3_endpoint_url:
+        r = requests.get(f"{s.s3_endpoint_url.rstrip('/')}/{st.bucket}", timeout=10)
+        public = r.status_code == 200
+        click.echo(f"anonymous list: HTTP {r.status_code} ({'PUBLIC — fix this' if public else 'private'})")
+        if public:
+            sys.exit(1)
+
+
 @main.command("label-export")
 @click.option("--kind", type=click.Choice(["speakers", "exchanges", "citations"]), required=True)
 @click.option("--n", default=200)
@@ -281,6 +308,28 @@ def label_export(kind: str, n: int, out: str, seed: str) -> None:
     s, eng, _, _ = _ctx()
     count = export_label_sample(eng, kind=kind, n=n, out=Path(out), seed=seed)
     click.echo(f"wrote {count} rows to {out}; fill the 'label_*' columns and run label-score")
+
+
+@main.command("bench-pool")
+@click.option("--suite", required=True)
+@click.option("--out", required=True)
+@click.option("--depth", default=20)
+def bench_pool(suite: str, out: str, depth: int) -> None:
+    """Export pooled search hits per query for human relevance labelling."""
+    from ntk_common.evaluation import export_search_pool
+
+    _, _, services, _ = _ctx()
+    n = export_search_pool(Path(suite), services=services, out=Path(out), depth=depth)
+    click.echo(f"wrote {n} rows to {out}; set label_relevant=1 and run bench-apply-labels")
+
+
+@main.command("bench-apply-labels")
+@click.option("--suite", required=True)
+@click.option("--file", "path", required=True)
+def bench_apply_labels(suite: str, path: str) -> None:
+    from ntk_common.evaluation import apply_search_labels
+
+    click.echo(json.dumps(apply_search_labels(Path(suite), Path(path)), ensure_ascii=False))
 
 
 @main.command("label-score")

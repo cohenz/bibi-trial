@@ -1,0 +1,167 @@
+{
+ "name": "search-bench-synthetic-v1",
+ "description": "Smoke benchmark on the synthetic fictional protocol (tests/fixtures/synthetic_protocol.pdf). One short document, so Recall/nDCG here only show that every retrieval signal works on Hebrew morphology, quoting and abbreviations. It says NOTHING about quality on real protocols — use search-bench-pilot-v1 for that.",
+ "corpus": "synthetic",
+ "thresholds": {
+  "recall@20": 0.85,
+  "ndcg@10": 0.6,
+  "p95_latency_ms": 800
+ },
+ "queries": [
+  {
+   "id": "sb-syn-01",
+   "query": "מי ביקש לשנות את הכותרת",
+   "relevant": [
+    {
+     "contains": "מי ביקש לשנות את הכותרת",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-02",
+   "query": "שינוי הכותרת",
+   "relevant": [
+    {
+     "contains": "לשנות את הכותרת",
+     "hearing_date": "2021-04-12"
+    }
+   ],
+   "note": "nominal form vs infinitive"
+  },
+  {
+   "id": "sb-syn-03",
+   "query": "הדובר",
+   "relevant": [
+    {
+     "contains": "הגיע מהדובר",
+     "hearing_date": "2021-04-12"
+    }
+   ],
+   "note": "prefix stripping מ+ה"
+  },
+  {
+   "id": "sb-syn-04",
+   "query": "\"לא הוצג לי שום מסמך\"",
+   "relevant": [
+    {
+     "contains": "לא הוצג לי שום מסמך",
+     "hearing_date": "2021-04-12"
+    }
+   ],
+   "note": "exact quoted phrase"
+  },
+  {
+   "id": "sb-syn-05",
+   "query": "מסמך ת/12",
+   "relevant": [
+    {
+     "contains": "ת/12",
+     "hearing_date": "2021-04-12"
+    }
+   ],
+   "note": "exhibit identifier"
+  },
+  {
+   "id": "sb-syn-06",
+   "query": "התנגדות שאלה מדריכה",
+   "relevant": [
+    {
+     "contains": "השאלה מדריכה",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-07",
+   "query": "החלטה על ההתנגדות",
+   "relevant": [
+    {
+     "contains": "ההתנגדות נדחית",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-08",
+   "query": "הפגישה במאי 2015",
+   "relevant": [
+    {
+     "contains": "במאי 2015",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-09",
+   "query": "פגישה ביוני חקירה במשטרה",
+   "relevant": [
+    {
+     "contains": "בחקירה במשטרה",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-10",
+   "query": "הסגן הכין סיכום",
+   "relevant": [
+    {
+     "contains": "שיכין סיכום",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-11",
+   "query": "מיילים ששלח הנאשם",
+   "relevant": [
+    {
+     "contains": "מיילים",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-12",
+   "query": "הוראה ישירה מהנאשם",
+   "relevant": [
+    {
+     "contains": "הוראה ישירה",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-13",
+   "query": "מנהל המחלקה",
+   "relevant": [
+    {
+     "contains": "מנהל המחלקה",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-14",
+   "query": "עו\"ד גולן חקירה נגדית",
+   "relevant": [
+    {
+     "contains": "חקירה נגדית",
+     "hearing_date": "2021-04-12"
+    }
+   ]
+  },
+  {
+   "id": "sb-syn-15",
+   "query": "עורך הדין גולן",
+   "relevant": [
+    {
+     "contains": "עו\"ד גולן",
+     "hearing_date": "2021-04-12"
+    }
+   ],
+   "note": "abbreviation expansion עו\"ד ↔ עורך דין"
+  }
+ ]
+}

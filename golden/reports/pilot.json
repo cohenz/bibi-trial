@@ -1,0 +1,11 @@
+{
+  "summary": {
+    "suite": "pilot-hebrew-legal-v1",
+    "measured": false,
+    "passed": false,
+    "blocked_by": "published hearings missing from corpus: 2021-04-05, 2021-04-07, 2021-04-12, 2021-04-13",
+    "questions": 18
+  },
+  "results": [],
+  "generated_at": "2026-10-10T17:28:18.076424+00:00"
+}

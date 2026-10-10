@@ -201,3 +201,65 @@ def test_verify_request_rejects_replay_skew_and_bad_signature():
     with pytest.raises(AuthError, match="skew"):
         verify_request(keys=keys, headers=h, method="GET", path="/v2/admin/whoami", query="", body=body, nonces=NonceStore(),
                        max_skew=300, now=time.time() + 3600)
+
+
+class _FakeResp:
+    def __init__(self, status, data):
+        self.status_code, self._data, self.text = status, data, json.dumps(data)
+
+    def json(self):
+        return self._data
+
+
+class _FakeSession:
+    def __init__(self, *responses):
+        self.responses, self.calls = list(responses), []
+
+    def post(self, url, headers, data, timeout):
+        self.calls.append({"url": url, "headers": headers, "body": json.loads(data)})
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+def test_gemini_provider_request_shape_and_parsing():
+    from ntk_common.llm.providers import GeminiProvider
+
+    sess = _FakeSession(_FakeResp(200, {"candidates": [{"content": {"parts": [{"text": "thinking", "thought": True},
+                                                                              {"text": '{"ok": true}'}]}}],
+                                        "usageMetadata": {"promptTokenCount": 5}, "modelVersion": "m-001"}))
+    p = GeminiProvider("k-secret", "https://generativelanguage.googleapis.com/v1beta/", session=sess)
+    r = p.generate_json(model_id="some-model", system="sys", user="usr", temperature=0.0, task_type="digest")
+    call = sess.calls[0]
+    assert call["url"] == "https://generativelanguage.googleapis.com/v1beta/models/some-model:generateContent"
+    assert "k-secret" not in call["url"] and call["headers"]["x-goog-api-key"] == "k-secret"  # key in header, never in URL
+    assert call["body"]["generationConfig"]["responseMimeType"] == "application/json"
+    assert r.text == '{"ok": true}' and r.model_version == "m-001"  # thought parts dropped
+
+
+def test_gemini_provider_errors_are_classified_and_do_not_leak_key():
+    from ntk_common.llm.providers import GeminiProvider, ProviderError
+
+    p = GeminiProvider("k-secret", "https://x.test/v1beta", session=_FakeSession(
+        _FakeResp(429, {"error": "quota"}), _FakeResp(400, {"error": "bad"}), ConnectionError("boom"),
+        _FakeResp(200, {"candidates": [], "promptFeedback": {"blockReason": "SAFETY"}})))
+    outcomes = []
+    for _ in range(4):
+        with pytest.raises(ProviderError) as ei:
+            p.generate_json(model_id="m", system="s", user="u", temperature=0, task_type="t")
+        assert "k-secret" not in str(ei.value)
+        outcomes.append(ei.value.retryable)
+    assert outcomes == [True, False, True, False]
+
+
+def test_gemini_embeddings_batch_and_normalise():
+    from ntk_common.llm.providers import GeminiProvider
+
+    sess = _FakeSession(_FakeResp(200, {"embeddings": [{"values": [3.0, 4.0]}, {"values": [0.0, 2.0]}]}))
+    p = GeminiProvider("", "https://x.test/v1beta", session=sess)
+    out = p.embed(model_id="emb", texts=["א", "ב"], dim=2, task="document")
+    assert out == [[0.6, 0.8], [0.0, 1.0]]
+    req = sess.calls[0]["body"]["requests"][0]
+    assert req["taskType"] == "RETRIEVAL_DOCUMENT" and req["outputDimensionality"] == 2
+    assert "x-goog-api-key" not in sess.calls[0]["headers"]  # empty key → header omitted (egress proxy may inject it)

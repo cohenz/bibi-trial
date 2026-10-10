@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.base"
+  },
+  "deploy": {
+    "startCommand": "celery -A ntk_worker.celery_app beat --loglevel INFO",
+    "restartPolicyType": "ALWAYS"
+  }
+}

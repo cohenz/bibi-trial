@@ -76,16 +76,20 @@ def build_claim(self, claim_id: str) -> dict:
 
 @app.task(name=TASK_VERIFY_ARTIFACT)
 def verify_artifact(artifact_id: str) -> dict:
-    """Re-run gates for a digest after its sources or judicial statements changed."""
+    """Rebuild and re-gate a hearing digest or claim card after its sources or judicial statements changed."""
     p = _pipeline()
     with p.s.engine.connect() as conn:
         art = kdb.get_artifact(conn, artifact_id)
     if art is None:
         return {"artifact_id": artifact_id, "status": "not_found"}
+    # a rebuild creates a new draft version through the same gates; the published version stays until a human re-approves
     if art["object_type"] == "hearing":
-        job_like = art["object_id"]
-        return {"artifact_id": artifact_id, "status": "rebuild_via_job", "hearing_id": job_like}
-    return {"artifact_id": artifact_id, "status": "unsupported"}
+        out = p.rebuild_hearing_digest(str(art["object_id"]))
+        return {"artifact_id": artifact_id, "status": "rebuilt", "new": out}
+    if art["object_type"] == "claim":
+        out = p.build_claim(str(art["object_id"]))
+        return {"artifact_id": artifact_id, "status": "rebuilt", "new": out}
+    return {"artifact_id": artifact_id, "status": "unsupported", "object_type": art["object_type"]}
 
 
 @app.task(name=TASK_DELIVER_WEBHOOKS)

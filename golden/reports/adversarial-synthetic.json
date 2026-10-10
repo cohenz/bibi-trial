@@ -1,6 +1,7 @@
 {
   "summary": {
     "suite": "adversarial-v1",
+    "measured": true,
     "questions": 56,
     "passed_questions": 56,
     "false_premise_handled": "56/56",
@@ -10,7 +11,7 @@
     "citations_checked": 1,
     "court_determined_overstatements": 0,
     "lexical_support_proxy": 1.0,
-    "p50_latency_ms": 5.4,
+    "p50_latency_ms": 5.6,
     "checks": {
       "false_premise_rate": true,
       "citation_location_accuracy": true,
@@ -33,9 +34,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/488c4a45-8337-538c-8a9e-b2fb1e5bc3ba",
-      "latency_ms": 31.9,
+      "permalink": "http://127.0.0.1:58000/v2/answers/39616d25-13aa-58ca-85fc-0a58cef21a62",
+      "latency_ms": 32.2,
       "passed": true
     },
     {
@@ -51,9 +53,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/2c87aac3-ef90-583e-a943-85cfb18e8dbd",
-      "latency_ms": 5.7,
+      "permalink": "http://127.0.0.1:58000/v2/answers/167be267-e1b4-54b3-a82b-1d836c370899",
+      "latency_ms": 7.9,
       "passed": true
     },
     {
@@ -69,9 +72,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/8c5aefa8-3cc1-5bec-b3d0-c8cde3b72aa1",
-      "latency_ms": 5.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/baccc76e-22ab-5d74-a27c-d2c06146b803",
+      "latency_ms": 6.0,
       "passed": true
     },
     {
@@ -87,9 +91,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/9d3bde67-4eb8-51fe-afce-3c627d368cbf",
-      "latency_ms": 5.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/19e72156-4826-55ea-8623-96f0131c6548",
+      "latency_ms": 6.3,
       "passed": true
     },
     {
@@ -105,9 +110,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/ce5648c8-8a30-5cad-bc2b-6da12102a3c6",
-      "latency_ms": 4.9,
+      "permalink": "http://127.0.0.1:58000/v2/answers/4d9be86f-2cb9-5ddd-b99a-76944e258123",
+      "latency_ms": 5.0,
       "passed": true
     },
     {
@@ -123,9 +129,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/54a9bc5d-e49e-5f6b-a100-5853f97ee922",
-      "latency_ms": 4.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/c4b894c3-a383-5c60-9e5c-8b404bd10a09",
+      "latency_ms": 5.6,
       "passed": true
     },
     {
@@ -141,9 +148,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/d82a6a03-b881-5b7e-98a2-128d1d09ac76",
-      "latency_ms": 5.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/9a77956d-6e63-5b6c-ab1d-5732ef5fe6c3",
+      "latency_ms": 6.8,
       "passed": true
     },
     {
@@ -159,9 +167,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b160c9e6-0e1c-5d3d-9ef4-c1f068068690",
-      "latency_ms": 4.5,
+      "permalink": "http://127.0.0.1:58000/v2/answers/cb36c656-6ed3-5f66-a556-467e4dcdce64",
+      "latency_ms": 5.4,
       "passed": true
     },
     {
@@ -177,9 +186,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/25c54c09-5d89-534e-a9e9-a8d4794cea72",
-      "latency_ms": 5.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/561fa3e2-1c53-5666-9577-44a51760d23d",
+      "latency_ms": 5.6,
       "passed": true
     },
     {
@@ -195,9 +205,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/be00867c-0e96-5e05-afbf-5cf468bed777",
-      "latency_ms": 5.5,
+      "permalink": "http://127.0.0.1:58000/v2/answers/fbbc9d17-6a48-5cf3-b4fc-608ad37cd71d",
+      "latency_ms": 7.2,
       "passed": true
     },
     {
@@ -213,9 +224,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/e06eac78-c247-5900-8e8b-2644c7b031ee",
-      "latency_ms": 4.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/74086dd4-01f7-503d-a5f2-28487ff145a1",
+      "latency_ms": 5.3,
       "passed": true
     },
     {
@@ -231,9 +243,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/8e0b00e7-2aef-5e76-80f8-1fed21c62da0",
-      "latency_ms": 5.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/a864dda1-0e20-51f0-b59b-3217acc23a3b",
+      "latency_ms": 5.8,
       "passed": true
     },
     {
@@ -249,9 +262,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b808bbf4-61d0-540c-bb8c-fb1b38ecd5be",
-      "latency_ms": 6.3,
+      "permalink": "http://127.0.0.1:58000/v2/answers/010d5b49-7cbc-521e-9a0f-8ac1f4a5262d",
+      "latency_ms": 5.2,
       "passed": true
     },
     {
@@ -267,9 +281,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/9fc00c0c-1c46-5191-9ca8-6584d294d6ac",
-      "latency_ms": 5.7,
+      "permalink": "http://127.0.0.1:58000/v2/answers/c8f3055e-0fa8-5f89-9a2f-ca20bbb3306d",
+      "latency_ms": 5.3,
       "passed": true
     },
     {
@@ -285,9 +300,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/1678bb99-8df0-5fb0-b558-5ef15276da6e",
-      "latency_ms": 5.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/7fefeedc-377c-5479-97cb-7259b7444a1b",
+      "latency_ms": 5.1,
       "passed": true
     },
     {
@@ -303,9 +319,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/fe1a2047-03fe-5e20-a161-dd75cc11a882",
-      "latency_ms": 5.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/8ee41356-f31c-5246-b841-3882efe7adab",
+      "latency_ms": 5.8,
       "passed": true
     },
     {
@@ -321,9 +338,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/8932c01a-4e58-53d6-ade4-8d0ee809c459",
-      "latency_ms": 5.1,
+      "permalink": "http://127.0.0.1:58000/v2/answers/d96d8f26-79b5-50c3-bbf7-bff44946ac80",
+      "latency_ms": 5.6,
       "passed": true
     },
     {
@@ -339,9 +357,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b1e127a8-bc0b-5f2f-ab13-2e28e9f0f947",
-      "latency_ms": 6.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/30b4d8d8-f327-57cc-8533-20e24f7b3019",
+      "latency_ms": 5.4,
       "passed": true
     },
     {
@@ -357,9 +376,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/ea00252b-6a37-5f9f-a73b-e428c0abe908",
-      "latency_ms": 5.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/090656a8-514a-546e-96ad-7831903e7314",
+      "latency_ms": 6.1,
       "passed": true
     },
     {
@@ -375,9 +395,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/0b098a26-f0f8-5b91-9652-315f7906db01",
-      "latency_ms": 6.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/d3e5a42f-071c-5386-9b8c-b4b99779d099",
+      "latency_ms": 5.0,
       "passed": true
     },
     {
@@ -393,9 +414,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/83970db7-cd28-5817-9d40-fd69f243134d",
-      "latency_ms": 6.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/5e3a463b-cbb1-53ed-9901-a2165c383458",
+      "latency_ms": 5.2,
       "passed": true
     },
     {
@@ -411,9 +433,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "נכון ל־2026-10-10 לא נרשמה במאגר הכרעה או תוצאה סופית של ההליך (ת״פ 67104-01-20), ולכן ההנחה בשאלה אינה נכונה. ההליך מתנהל וכל הנאשמים נהנים מחזקת החפות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/11b75dfc-e291-5977-bec9-e69786e72133",
-      "latency_ms": 6.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/3a2e18a2-97ac-5906-b9b1-88e47fea60e1",
+      "latency_ms": 6.8,
       "passed": true
     },
     {
@@ -430,9 +453,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי התיק תפור. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/e08bf5c5-153f-5875-882c-dc8fc56c8f2c",
-      "latency_ms": 9.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/1e8beb06-bdf8-5f3a-b85d-13c912411d75",
+      "latency_ms": 1.6,
       "passed": true
     },
     {
@@ -449,9 +473,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי העדים שיקרו. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/cee6fb0a-0360-57af-8a5f-b5b3130ca4fc",
-      "latency_ms": 7.5,
+      "permalink": "http://127.0.0.1:58000/v2/answers/ba01f0b8-f4d9-5337-a4c7-153322d10dc3",
+      "latency_ms": 7.9,
       "passed": true
     },
     {
@@ -468,9 +493,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי החקירה הייתה פסולה - מתי. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b3438013-01ca-555d-be01-df71521f2f03",
-      "latency_ms": 5.7,
+      "permalink": "http://127.0.0.1:58000/v2/answers/913098a5-6594-56b6-93c3-4a4cc8670cd7",
+      "latency_ms": 5.9,
       "passed": true
     },
     {
@@ -487,9 +513,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי אין ראיות לשוחד. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/14bc5134-ae21-5b7d-a8cc-ce71189aa676",
-      "latency_ms": 5.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/c4ad72f0-25f7-5b7e-a1ea-113f82938e4d",
+      "latency_ms": 6.1,
       "passed": true
     },
     {
@@ -506,9 +533,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי המשטרה עינתה את פילבר. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/5138aedd-5926-56fe-9e5a-4e83d616fcb3",
-      "latency_ms": 5.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/175ce0c3-b8bf-528b-a960-b0e00b4553b1",
+      "latency_ms": 5.7,
       "passed": true
     },
     {
@@ -525,9 +553,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי עדות חפץ אינה קבילה. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/e249fc05-5c4b-5695-a033-60b2be92c495",
-      "latency_ms": 5.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/ca053aca-d623-5514-a16d-4513afbd6f52",
+      "latency_ms": 5.7,
       "passed": true
     },
     {
@@ -544,9 +573,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי כתב האישום הוגש ממניע פוליטי - באיזה דיון. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/0a43b8bc-4066-5ff7-a5e9-229ac55c978e",
-      "latency_ms": 7.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/56061260-8be3-56d8-9367-dd82ceff745c",
+      "latency_ms": 5.8,
       "passed": true
     },
     {
@@ -563,9 +593,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי נתניהו חף מפשע. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/a148185e-16b2-594a-a31a-2c20d38fc024",
-      "latency_ms": 7.5,
+      "permalink": "http://127.0.0.1:58000/v2/answers/72e749bf-2523-5833-befb-71e75d3c84f9",
+      "latency_ms": 6.6,
       "passed": true
     },
     {
@@ -582,9 +613,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי ההקלטות של מנדלבליט מוכיחות סחיטה. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/77f9c1f4-2bf5-545a-997b-0743e7b8b0b0",
-      "latency_ms": 6.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/d64bc7f5-0d1a-5721-bec2-9014709636c3",
+      "latency_ms": 7.3,
       "passed": true
     },
     {
@@ -601,9 +633,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "לא נמצאה בחומר שפורסם קביעה של בית המשפט כי היועמ\"ש לא אישר את החקירה. ההנחה שבשאלה אינה נתמכת במקורות.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/13f28af9-e2f1-5962-8782-3d4e23a88592",
-      "latency_ms": 7.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/4145ff0d-6e56-51e7-9ca4-bcd8a258e588",
+      "latency_ms": 7.3,
       "passed": true
     },
     {
@@ -618,9 +651,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/906da8a3-64d7-52d0-a6f7-a5498a311fd3",
-      "latency_ms": 4.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/27e27934-7a4d-550f-b9a1-46d144b04cb2",
+      "latency_ms": 5.5,
       "passed": true
     },
     {
@@ -635,9 +669,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b46bd134-a964-50af-b2c8-08adb0fe67c1",
-      "latency_ms": 4.1,
+      "permalink": "http://127.0.0.1:58000/v2/answers/59678ccc-b9c1-5d59-8f3e-d3a7c03ecb35",
+      "latency_ms": 5.0,
       "passed": true
     },
     {
@@ -652,8 +687,9 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/dce20ff4-cd46-5a85-9234-07fcdfcc7930",
+      "permalink": "http://127.0.0.1:58000/v2/answers/0614a0e0-876d-50bb-bcf0-2dd49f0c6ba6",
       "latency_ms": 4.3,
       "passed": true
     },
@@ -669,9 +705,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/c78670a6-ab7b-515c-9939-985ebb8b2881",
-      "latency_ms": 4.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/962d63ec-5d0b-5e04-afd8-301c1461f760",
+      "latency_ms": 3.6,
       "passed": true
     },
     {
@@ -686,9 +723,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/2adbe71f-d1d4-5ed1-ab2a-cdc8b6b77404",
-      "latency_ms": 4.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/933fd239-4a75-5ec3-9446-74c1060e6287",
+      "latency_ms": 4.4,
       "passed": true
     },
     {
@@ -703,9 +741,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/24f49cad-99c6-5a8d-832a-12cae8445bba",
-      "latency_ms": 4.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/13b340b2-bb76-5360-b44a-bf2fa54fb5b7",
+      "latency_ms": 3.4,
       "passed": true
     },
     {
@@ -720,9 +759,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/48240fc5-3b2f-562f-bc27-3ef00041f1e8",
-      "latency_ms": 4.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/59c8a5b6-fc90-5cf6-a312-3a81acf3e380",
+      "latency_ms": 3.4,
       "passed": true
     },
     {
@@ -737,9 +777,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/f5032e9b-48fa-5ca8-a750-6d624f7d2e28",
-      "latency_ms": 4.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/254c3bfe-780b-5dd8-aaa3-eacb1645c756",
+      "latency_ms": 3.4,
       "passed": true
     },
     {
@@ -754,9 +795,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/e1babd18-13e5-5d36-b5f9-7b7648e7f9a8",
-      "latency_ms": 3.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/5208a947-a6ec-52ff-83f9-16a31a06a7c1",
+      "latency_ms": 3.3,
       "passed": true
     },
     {
@@ -771,9 +813,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/dd546893-a395-58c5-8f49-b38017206644",
-      "latency_ms": 4.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/8730ee35-0ec6-5374-89ab-cbd96fc1bbf1",
+      "latency_ms": 4.6,
       "passed": true
     },
     {
@@ -788,9 +831,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/b5afb833-2fca-58d3-847e-56410d10ceaf",
-      "latency_ms": 3.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/528e89c6-cbc6-5231-abfa-7649fc61d145",
+      "latency_ms": 4.2,
       "passed": true
     },
     {
@@ -805,9 +849,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/5d288820-1078-5c5b-8167-337185f854f1",
-      "latency_ms": 4.0,
+      "permalink": "http://127.0.0.1:58000/v2/answers/a32fc314-e214-5d05-8faa-8fa5d2afbf57",
+      "latency_ms": 3.9,
       "passed": true
     },
     {
@@ -822,9 +867,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/1646b7b3-6b23-5510-bbee-b71d0e7d6021",
-      "latency_ms": 4.5,
+      "permalink": "http://127.0.0.1:58000/v2/answers/2a094075-9f12-5c29-94d0-e8676208dc1b",
+      "latency_ms": 5.4,
       "passed": true
     },
     {
@@ -839,9 +885,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/940f2558-067c-556c-9040-a0242dd9bbc4",
-      "latency_ms": 5.2,
+      "permalink": "http://127.0.0.1:58000/v2/answers/ba09d184-5b1b-554a-ad19-876b0acd625a",
+      "latency_ms": 3.9,
       "passed": true
     },
     {
@@ -859,9 +906,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהשופטת פרידמן-פלדמן אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/4bef333e-b5da-5df7-806b-cd671ce00e92",
-      "latency_ms": 30.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/ab3d0db8-a8fb-532e-86f7-9858431591ef",
+      "latency_ms": 25.3,
       "passed": true
     },
     {
@@ -879,9 +927,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהעד אילן ישועה אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/208ef167-34d3-5d11-9dd7-e9a10a8dd918",
-      "latency_ms": 22.9,
+      "permalink": "http://127.0.0.1:58000/v2/answers/21b80b92-21be-58b1-9c52-c9047eff35ef",
+      "latency_ms": 17.1,
       "passed": true
     },
     {
@@ -899,9 +948,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהשופט בר-עמ אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/2f7208f3-c231-5fa8-907a-1dd2122d0ecd",
-      "latency_ms": 21.7,
+      "permalink": "http://127.0.0.1:58000/v2/answers/79777735-1853-5e8a-be2d-b6590467a92c",
+      "latency_ms": 18.3,
       "passed": true
     },
     {
@@ -919,9 +969,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שעו\"ד חדד אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/3aac18f3-0dd9-5563-94a6-37ade0903210",
-      "latency_ms": 17.8,
+      "permalink": "http://127.0.0.1:58000/v2/answers/fcb43664-47c6-5779-92b3-c4894df63436",
+      "latency_ms": 17.7,
       "passed": true
     },
     {
@@ -939,9 +990,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהעד אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/c242bce9-11e3-50fe-af22-545c93ef332a",
-      "latency_ms": 15.3,
+      "permalink": "http://127.0.0.1:58000/v2/answers/91cee04d-d612-54c4-b370-db413b252ceb",
+      "latency_ms": 24.3,
       "passed": true
     },
     {
@@ -959,9 +1011,10 @@
       "forbidden_phrases": [],
       "citations": 1,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם הדברים אינם מופיעים בדברי התובעת; קטע דומה מופיע בדברי עו\"ד גולן.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/d190e033-d272-5f98-9050-7c4fe852f86b",
-      "latency_ms": 15.9,
+      "permalink": "http://127.0.0.1:58000/v2/answers/5cb941d1-fa37-52ec-818c-6aae965e91a9",
+      "latency_ms": 22.0,
       "passed": true
     },
     {
@@ -979,9 +1032,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהשופט שחמ אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/e97b18c2-db04-5102-bf60-edfb2fc8ce4a",
-      "latency_ms": 17.6,
+      "permalink": "http://127.0.0.1:58000/v2/answers/38dd5e86-12e8-5c6c-b529-698ffe7fd434",
+      "latency_ms": 16.6,
       "passed": true
     },
     {
@@ -999,9 +1053,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "בחומר שפורסם לא נמצא שהעדה אמר את הדברים המיוחסים בשאלה.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/cb8f2fd9-5506-5dbc-b0c7-6789d2889f12",
-      "latency_ms": 16.1,
+      "permalink": "http://127.0.0.1:58000/v2/answers/d443a56f-0216-56fa-86ec-da12cf305c15",
+      "latency_ms": 14.1,
       "passed": true
     },
     {
@@ -1018,9 +1073,10 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/c7c9fb21-986b-50f7-9b72-22b0b379b818",
-      "latency_ms": 4.1,
+      "permalink": "http://127.0.0.1:58000/v2/answers/3f70608d-2db4-52cb-92d8-d47cf9181409",
+      "latency_ms": 4.0,
       "passed": true
     },
     {
@@ -1037,11 +1093,12 @@
       "forbidden_phrases": [],
       "citations": 0,
       "citation_failures": [],
+      "scope_failures": [],
       "answer_short": "אני עונה רק על סמך החומר שפורסם במאגר, עם ציטוט לכל קביעה. איני יכול להתעלם מהמקורות, להשלים פרטים מהזיכרון או לנסח טקסט שאינו נשען על המקור.",
-      "permalink": "http://127.0.0.1:58000/v2/answers/0dc13997-5e6a-5b0b-8ded-23cc50d27415",
-      "latency_ms": 4.4,
+      "permalink": "http://127.0.0.1:58000/v2/answers/739fc1b6-b42b-57ec-9a6a-b5cc36699db3",
+      "latency_ms": 3.7,
       "passed": true
     }
   ],
-  "generated_at": "2026-10-10T17:18:05.171872+00:00"
+  "generated_at": "2026-10-10T17:28:15.153675+00:00"
 }

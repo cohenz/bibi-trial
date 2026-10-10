@@ -84,8 +84,37 @@ class CitationLocator:
 # ---------------------------------------------------------------------------
 # golden suite
 # ---------------------------------------------------------------------------
+def _missing_hearings(engine: Engine, dates: list[str], case_id: str | None = None, case_number: str | None = None) -> list[str]:
+    """Dates with no published hearing of this case. When case_number is given, the protocol's own caption must carry it,
+    so a fixture or a stray PDF ingested under the case id never counts as the real hearing."""
+    if not dates:
+        return []
+    with engine.connect() as conn:
+        have = {r["d"] for r in rows(conn, """SELECT h.hearing_date::text AS d FROM ntk.hearings h
+                                             JOIN ntk.source_versions sv ON sv.id = h.source_version_id
+                                             WHERE sv.publication_state = 'published'
+                                               AND (CAST(:case AS text) IS NULL OR h.case_id = :case)
+                                               AND (CAST(:num AS text) IS NULL OR EXISTS (
+                                                    SELECT 1 FROM ntk.source_units su WHERE su.source_version_id = sv.id
+                                                      AND su.page_no = 1 AND su.raw_text LIKE '%' || :num || '%'))""",
+                                    {"case": case_id, "num": case_number})}
+    return sorted(set(dates) - have)
+
+
+def not_measured(suite: dict, path: Path, missing: list[str]) -> dict:
+    """A suite whose corpus is not loaded is reported as NOT MEASURED — never as passed."""
+    return {"summary": {"suite": suite.get("name", path.stem), "measured": False, "passed": False,
+                        "blocked_by": f"published hearings missing from corpus: {', '.join(missing)}",
+                        "questions": len(suite.get("questions") or suite.get("queries") or [])},
+            "results": [], "generated_at": dt.datetime.now(dt.UTC).isoformat()}
+
+
 def run_suite(path: Path, *, settings, engine: Engine, services, as_of: str | None = None) -> dict:
     suite = json.loads(path.read_text(encoding="utf-8"))
+    missing = _missing_hearings(engine, suite.get("requires_hearing_dates", []), suite.get("case_id"),
+                                 suite.get("court_case_number"))
+    if missing:
+        return not_measured(suite, path, missing)
     as_of_dt = dt.datetime.fromisoformat((as_of or suite.get("as_of") or dt.datetime.now(dt.UTC).isoformat()).replace("Z", "+00:00"))
     engine_ask = AskEngine(PgAskStore(engine, case_id=settings.case_id), services.search_backend(), services.runner,
                            AskConfig(answer_base=settings.answer_base, citation_base=settings.citation_base, env=settings.env,
@@ -109,7 +138,10 @@ def run_suite(path: Path, *, settings, engine: Engine, services, as_of: str | No
         if cited_ids:
             with engine.connect() as conn:
                 units = rows(conn, """SELECT su.id, su.source_version_id, su.page_no, su.line_start, su.line_end, su.raw_text,
-                                             sv.publication_state FROM ntk.source_units su JOIN ntk.source_versions sv
+                                             sv.publication_state,
+                                             (SELECT h.hearing_date::text FROM ntk.hearings h
+                                               WHERE h.source_version_id = su.source_version_id LIMIT 1) AS hearing_date
+                                             FROM ntk.source_units su JOIN ntk.source_versions sv
                                              ON sv.id = su.source_version_id WHERE su.id = ANY(:ids)""", {"ids": cited_ids})
             by_id = {u["id"]: u for u in units}
             for c in env["citations"]:
@@ -138,16 +170,28 @@ def run_suite(path: Path, *, settings, engine: Engine, services, as_of: str | No
                 for cid in s["citation_ids"]:
                     cited_terms |= set(hebrew.search_terms(texts.get(cid, "")))
                 support_ok += int(bool(terms) and len(terms & cited_terms) / len(terms) >= 0.3)
+        # scope checks: answered questions must cite the hearing(s) they are about, with enough citations
+        scope_fail = []
+        if env["answer_status"] == "answered":
+            if len(env["citations"]) < q.get("min_citations", 0):
+                scope_fail.append(f"citations {len(env['citations'])} < {q['min_citations']}")
+            want = set(q.get("expect_cited_hearing_dates", []))
+            if want and cited_ids:
+                got = {by_id[c]["hearing_date"] for c in cited_ids if c in by_id}
+                if not got & want:
+                    scope_fail.append(f"cited hearings {sorted(x for x in got if x)} not in {sorted(want)}")
         results.append({"id": q["id"], "category": q.get("category"), "question": q["question"],
                         "status": env["answer_status"], "expected": q["expect_status"], "status_ok": status_ok,
                         "forbidden_phrases": forbidden, "citations": len(env["citations"]), "citation_failures": loc_fail,
+                        "scope_failures": scope_fail,
                         "answer_short": env["answer_short"], "permalink": env["permalink"], "latency_ms": round(latency, 1),
-                        "passed": status_ok and not forbidden and not loc_fail})
+                        "passed": status_ok and not forbidden and not loc_fail and not scope_fail})
     fp = [r for r in results if r["category"] in {"false_premise", "ruling_attribution", "injection", "fill_in", "misattribution", "ignore_sources"}]
     answerable = [r for r in results if r["category"] == "answerable"]
     thresholds = suite.get("thresholds", {})
     summary = {
         "suite": suite.get("name", path.stem),
+        "measured": True,
         "questions": len(results),
         "passed_questions": sum(r["passed"] for r in results),
         "false_premise_handled": f"{sum(r['status_ok'] for r in fp)}/{len(fp)}",
@@ -181,6 +225,17 @@ def _relevant(hit_text: str, hit_date: str | None, rel: dict) -> bool:
 
 def run_search_bench(path: Path, *, services, published_only: bool = False) -> dict:
     suite = json.loads(path.read_text(encoding="utf-8"))
+    engine = getattr(services, "engine", None)
+    if suite.get("requires_hearing_dates") and engine is not None:
+        missing = _missing_hearings(engine, suite["requires_hearing_dates"], suite.get("case_id"),
+                                     suite.get("court_case_number"))
+        if missing:
+            return not_measured(suite, path, missing)
+    unlabeled = [q["id"] for q in suite["queries"] if not q.get("relevant")]
+    if unlabeled:
+        out = not_measured(suite, path, [])
+        out["summary"]["blocked_by"] = f"relevance labels missing for {len(unlabeled)} queries"
+        return out
     backend = services.search_backend()
     rows_out = []
     lat = []
@@ -192,8 +247,9 @@ def run_search_bench(path: Path, *, services, published_only: bool = False) -> d
         rels = q["relevant"]
         found = set()
         gains = []
-        for rank, h in enumerate(resp.hits, start=1):
-            hit_rel = [i for i, r in enumerate(rels) if _relevant(h.text, h.hearing_date, r)]
+        for h in resp.hits:
+            # binary gain, credited once per relevant item (several hits on the same passage don't inflate nDCG)
+            hit_rel = {i for i, r in enumerate(rels) if _relevant(h.text, h.hearing_date, r)} - found
             gains.append(1 if hit_rel else 0)
             found.update(hit_rel)
         recall20 = len(found) / len(rels) if rels else 0.0
@@ -289,3 +345,47 @@ def score_labels(*, kind: str, path: Path) -> dict[str, Any]:
                 "passed": r["precision"] is not None and r["labeled"] >= 100 and r["precision"] >= 0.95}
     r = rate("label_supported")
     return {"metric": "citation_precision", **r, "target": 0.95, "passed": r["precision"] is not None and r["precision"] >= 0.95}
+
+
+# ---------------------------------------------------------------------------
+# search-bench relevance labelling (pooling)
+# ---------------------------------------------------------------------------
+def export_search_pool(path: Path, *, services, out: Path, depth: int = 20) -> int:
+    """Pool the top-`depth` hits of every signal separately and fused, so labels are not biased toward one ranker."""
+    suite = json.loads(path.read_text(encoding="utf-8"))
+    backend = services.search_backend()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with out.open("w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["query_id", "query", "source_unit_id", "hearing_date", "page", "line_start",
+                                           "text", "label_relevant", "label_fragment"])
+        w.writeheader()
+        for q in suite["queries"]:
+            pool: dict[str, Any] = {}
+            for sig in (None, *SearchRequest(q["query"]).signals):
+                req = SearchRequest(q["query"], SearchFilters(published_only=False), limit=depth,
+                                    **({"signals": (sig,)} if sig else {}))
+                for h in backend.search(req).hits:
+                    pool.setdefault(h.source_unit_id, h)
+            for h in sorted(pool.values(), key=lambda h: (h.hearing_date or "", h.page, h.line_start)):
+                w.writerow({"query_id": q["id"], "query": q["query"], "source_unit_id": h.source_unit_id,
+                            "hearing_date": h.hearing_date or "", "page": h.page, "line_start": h.line_start,
+                            "text": h.text, "label_relevant": "", "label_fragment": ""})
+                n += 1
+    return n
+
+
+def apply_search_labels(path: Path, labels: Path) -> dict[str, int]:
+    """Write labelled relevance back into the suite: label_relevant=1 rows become {contains, hearing_date}."""
+    suite = json.loads(path.read_text(encoding="utf-8"))
+    rel: dict[str, list[dict]] = {}
+    with labels.open(encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if r.get("label_relevant", "").strip() in {"1", "y", "yes", "כן"}:
+                frag = (r.get("label_fragment") or r["text"]).strip()[:160]
+                rel.setdefault(r["query_id"], []).append({"contains": frag, "hearing_date": r["hearing_date"] or None})
+    for q in suite["queries"]:
+        q["relevant"] = rel.get(q["id"], [])
+    suite["status"] = "labelled"
+    path.write_text(json.dumps(suite, ensure_ascii=False, indent=1), encoding="utf-8")
+    return {"queries": len(suite["queries"]), "labelled_queries": sum(1 for q in suite["queries"] if q["relevant"])}

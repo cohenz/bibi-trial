@@ -1,0 +1,154 @@
+{
+ "name": "search-bench-pilot-v1",
+ "status": "pending_real_pdfs_and_labels",
+ "case_id": "il-jdc-jerusalem-67104-01-20",
+ "court_case_number": "67104-01-20",
+ "description": "Search benchmark for the April 2021 pilot (4 hearings). Queries are fixed in advance; relevance labels are filled in by a human labeller AFTER ingestion, from the pooled top-20 of all signals (bench-pool, then bench-apply-labels). Until both the PDFs and labels exist the bench reports measured=false and never passes.",
+ "corpus": "pilot-april-2021",
+ "requires_hearing_dates": [
+  "2021-04-05",
+  "2021-04-07",
+  "2021-04-12",
+  "2021-04-13"
+ ],
+ "thresholds": {
+  "recall@20": 0.85,
+  "ndcg@10": 0.6,
+  "p95_latency_ms": 800
+ },
+ "queries": [
+  {
+   "id": "sb-pil-01",
+   "query": "פתיחת פרשת התביעה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-02",
+   "query": "דברי הפתיחה של התביעה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-03",
+   "query": "אילן ישועה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-04",
+   "query": "ישועה וואלה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-05",
+   "query": "בקשות סיקור",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-06",
+   "query": "שינוי כותרת בוואלה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-07",
+   "query": "אלוביץ'",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-08",
+   "query": "שאול אלוביץ' הוראות",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-09",
+   "query": "אירית אלוביץ'",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-10",
+   "query": "ניר חפץ",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-11",
+   "query": "זאב רובינשטיין",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-12",
+   "query": "בזק",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-13",
+   "query": "הסיקור באתר וואלה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-14",
+   "query": "משפחת נתניהו",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-15",
+   "query": "התנגדות ההגנה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-16",
+   "query": "החלטת בית המשפט בהתנגדות",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-17",
+   "query": "עו\"ד חדד",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-18",
+   "query": "עו\"ד ז'ק חן",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-19",
+   "query": "עו\"ד ליאת בן ארי",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-20",
+   "query": "תיק 4000",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-21",
+   "query": "הודעות ווטסאפ",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-22",
+   "query": "ראש הממשלה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-23",
+   "query": "כתבות שליליות",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-24",
+   "query": "הורדת כתבה",
+   "relevant": []
+  },
+  {
+   "id": "sb-pil-25",
+   "query": "\"תעשה מה שהם רוצים\"",
+   "relevant": []
+  }
+ ],
+ "label_format": {
+  "relevant": [
+   {
+    "contains": "verbatim fragment from the relevant unit",
+    "hearing_date": "YYYY-MM-DD"
+   }
+  ]
+ }
+}

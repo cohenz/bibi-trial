@@ -1,0 +1,14 @@
+[PASS] ready {"status": "ok", "checks": {"database": true, "schema": true, "redis": true}}
+[PASS] presign sources/sha256/7f/7f96ce46146803396625b1816eaa582f3135852abc5404dedd4104a700b3006d.pdf
+[PASS] create job {'job_id': '1e47828b-8181-5666-82e8-39b66d6b9b09', 'created': True, 'status': 'queued'}
+[PASS] job finished via worker register:succeeded download:succeeded validate:succeeded extract_text:succeeded ocr_fallback:skipped lineize:succeeded segment:succeeded pair:succeeded chunk:succeeded embed:succeeded extract_a:succeeded map_b:skipped verify:succeeded review:succeeded publish:skipped
+[PASS] review tasks opened 5 open
+[PASS] approve {'artifact_id': 'cad941c1-9a8b-5b03-8ac6-2150feaa2c5c', 'review_state': 'approved'}
+[PASS] publish cv-000002
+[PASS] public hearings 1
+[PASS] public hearing digest 
+[PASS] citation permalink p1 l15-15
+[PASS] ask answered
+[PASS] answer permalink 
+[PASS] false premise corrected לא נמצאה בחומר שפורסם קביעה של בית המשפט כי התיק תפור. ההנחה שבשאלה אינה נתמכת במקורות.
+live e2e: all steps passed

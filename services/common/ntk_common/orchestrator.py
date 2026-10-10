@@ -27,7 +27,7 @@ from . import hebrew, ids
 from .config import Settings
 from .db import knowledge as kdb
 from .db import ops, sources
-from .db.core import row, rows
+from .db.core import row, rows, scalar
 from .db.public import units_by_ids
 from .layers import ClaimView, ExchangeView, UnitView, build_claim_bundle, build_hearing_digest
 from .llm.providers import build_provider
@@ -387,6 +387,13 @@ class Pipeline:
         warnings = list(parsed.warnings)
         if doc.get("hearing_date") and parsed.header.hearing_date and doc["hearing_date"] != parsed.header.hearing_date:
             warnings.append(f"manifest date {doc['hearing_date']} differs from protocol header {parsed.header.hearing_date}")
+        expected_no = inp.get("court_case_number") or self.cfg.court_case_number
+        found_no = parsed.header.court_case_number
+        if expected_no and found_no and found_no != expected_no:
+            msg = f"protocol caption names case {found_no}, job is for case {expected_no}"
+            if self.cfg.env not in {"development", "test"}:
+                raise StageError("case_number_mismatch", msg)  # a stray PDF must never enter the corpus under this case
+            warnings.append(msg)
         crs = doc.get("court_record_status", "unknown")
         with self.s.engine.begin() as conn:
             hid = sources.ensure_hearing(conn, case_id=reg["case_id"], hearing_date=hearing_date, source_version_id=svid,
@@ -457,6 +464,18 @@ class Pipeline:
     def stage_extract_a(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
+        out, cp = self.build_hearing_digest(hid, svid)
+        return out, cp, "succeeded"
+
+    def rebuild_hearing_digest(self, hearing_id: str) -> dict:
+        """Rebuild Layer A for a hearing outside a job (sources or judicial statements changed)."""
+        with self.s.engine.connect() as conn:
+            svid = scalar(conn, "SELECT source_version_id FROM ntk.hearings WHERE id = :h", {"h": hearing_id})
+        if svid is None:
+            raise StageError("hearing_not_found", f"hearing {hearing_id} not found")
+        return self.build_hearing_digest(hearing_id, svid)[0]
+
+    def build_hearing_digest(self, hid: str, svid: str) -> tuple[dict, dict]:
         with self.s.engine.connect() as conn:
             unit_rows = sources.units_for_version(conn, svid)
             views = units_by_ids(conn, [r["id"] for r in unit_rows], published_only=False)
@@ -473,7 +492,7 @@ class Pipeline:
             with self.s.engine.begin() as conn:
                 kdb.open_review_task(conn, object_type="hearing_digest_failure", object_id=hid, risk_flags=["contract_failure"],
                                      reason=f"digest generation failed: {str(res.errors)[:300]}")
-            return {"digest": None, "errors": res.errors[:10]}, {}, "succeeded"
+            return {"digest": None, "errors": res.errors[:10]}, {}
         with self.s.engine.begin() as conn:
             kdb.save_layer_a(conn, object_type="hearing", object_key=hid, version_id=res.payload["id"], payload=res.payload,
                              source_unit_ids=[c["source_unit_id"] for c in res.payload["citations"]],
@@ -482,7 +501,7 @@ class Pipeline:
             kdb.save_artifact(conn, artifact_id=art_id, artifact_type="summary", object_type="hearing", object_id=hid,
                               payload=res.payload, decision=res.decision, model_run_id=res.runs[0].id, verifier_run_id=None)  # type: ignore[arg-type]
         return {"digest_id": res.payload["id"], "artifact_id": art_id, "state": res.decision.state,  # type: ignore[union-attr]
-                "risk_flags": res.decision.risk_flags}, {"artifact_id": art_id}, "succeeded"  # type: ignore[union-attr]
+                "risk_flags": res.decision.risk_flags}, {"artifact_id": art_id}  # type: ignore[union-attr]
 
     def stage_map_b(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         claim_ids = inp.get("claim_ids") or []

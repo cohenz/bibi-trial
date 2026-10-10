@@ -13,7 +13,7 @@ from ntk_common.db import ops
 from ntk_common.db.core import row, rows, scalar
 from sqlalchemy import text
 
-from tests.conftest import FIXTURES, make_job
+from tests.conftest import FIXTURES, ROOT, make_job
 
 pytestmark = pytest.mark.db
 
@@ -209,3 +209,35 @@ def test_label_export_and_score(services, ingested, tmp_path):
 
 
 _ = Path
+
+
+def test_search_bench_and_pending_suites(services, ingested, settings):
+    from ntk_common.evaluation import run_search_bench, run_suite
+
+    syn = run_search_bench(ROOT / "golden" / "search-bench-synthetic-v1.json", services=services, published_only=False)
+    assert syn["summary"]["queries"] == 15
+    assert 0.0 <= syn["summary"]["ndcg@10"] <= 1.0  # binary gain credited once per relevant item
+    # the synthetic fixture (case 99999-01-20, dated 2021-04-12) must never count as a real pilot hearing
+    pil = run_search_bench(ROOT / "golden" / "search-bench-pilot-v1.json", services=services)
+    assert pil["summary"]["measured"] is False and pil["summary"]["passed"] is False
+    assert "2021-04-12" in pil["summary"]["blocked_by"]
+    rep = run_suite(ROOT / "golden" / "pilot-hebrew-legal-v1.json", settings=settings, engine=services.engine, services=services)
+    assert rep["summary"]["measured"] is False and rep["summary"]["passed"] is False
+
+
+def test_rebuild_hearing_digest_outside_job(services, pipeline, ingested):
+    with services.engine.connect() as conn:
+        hid = scalar(conn, "SELECT id FROM ntk.hearings ORDER BY created_at LIMIT 1")
+        before = scalar(conn, "SELECT count(*) FROM ntk.generated_artifacts WHERE object_type = 'hearing' AND object_id = :h",
+                        {"h": str(hid)})
+    out1 = pipeline.rebuild_hearing_digest(str(hid))
+    out2 = pipeline.rebuild_hearing_digest(str(hid))
+    assert out1["digest_id"] == out2["digest_id"]  # same corpus + sources → same digest, no duplicate artifact
+    with services.engine.connect() as conn:
+        after = scalar(conn, "SELECT count(*) FROM ntk.generated_artifacts WHERE object_type = 'hearing' AND object_id = :h",
+                       {"h": str(hid)})
+    assert after - before <= 1
+    from ntk_common.orchestrator import StageError
+
+    with pytest.raises(StageError):
+        pipeline.rebuild_hearing_digest("00000000-0000-0000-0000-000000000000")

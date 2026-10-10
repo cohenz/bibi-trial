@@ -1,0 +1,5 @@
+# Nightly logical backup of PostgreSQL to R2 (S3 API). Runs as a Railway cron service.
+FROM postgres:16-alpine
+RUN apk add --no-cache aws-cli
+COPY infra/railway/backup.sh /backup.sh
+RUN chmod +x /backup.sh

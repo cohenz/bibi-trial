@@ -36,21 +36,46 @@ ASK_ENGINE_VERSION = "ask-engine-1.0"
 # ---------------------------------------------------------------------------
 # deterministic detectors
 # ---------------------------------------------------------------------------
+# Patterns are matched on *folded* text: niqqud removed, final letters mapped
+# to regular forms (ם→מ, ן→נ, ך→כ, ף→פ, ץ→צ), geresh/gershayim removed,
+# lower-case Latin. Write patterns in that form.
 INJECTION_PATTERNS = [
-    r"התעלמ\w*\s+(?:מה)?(?:מקורות|הוראות|הנחיות|כללים)", r"ignore\s+(?:all\s+|the\s+|previous\s+|your\s+)*(?:instructions|sources|rules)",
-    r"system\s*prompt", r"הנחיות\s*המערכת", r"מהזיכרון\s*שלך", r"(?:לפי|ממה)\s*(?:מה\s*)?ש?אתה\s*יודע",
-    r"בלי\s*(?:מקורות|ציטוטים)", r"תמציא", r"המצא", r"השלם\s*את\s*(?:ה)?פרט", r"השלם\s*את\s*החסר",
-    r"(?:כתוב|תכתוב|נסח|תנסח)\s*(?:לי\s*)?(?:הודאה|וידוי)", r"act\s+as", r"pretend", r"jailbreak", r"developer\s*mode",
-    r"you\s+are\s+now", r"אתה\s*עכשיו", r"שחק\s*את\s*התפקיד",
+    r"התעלמ\w*\s+(?:מ)?(?:ה)?(?:מקורות|הוראות|הנחיות|כללימ|ציטוטימ)",
+    r"ignore\s+(?:all\s+|the\s+|previous\s+|your\s+|prior\s+)*(?:instructions|sources|rules)",
+    r"system\s*prompt", r"הנחיות\s*(?:ה)?מערכת", r"מהזיכרונ", r"(?:לפי|ממה)\s*(?:מה\s*)?ש?אתה\s*יודע",
+    r"(?:בלי|ללא)\s*(?:מקורות|מקור|ציטוטימ|ציטוט)", r"(?:גמ|אפילו)\s*אמ\s*אינ\s*(?:לה|לזה|לו)?\s*מקור",
+    r"תמציא", r"(?:^|\s)המצא", r"השלמ\s*את\s*(?:ה)?(?:פרט|חסר)", r"(?:כתוב|תכתוב|נסח|תנסח)\s*(?:לי\s*)?(?:הודאה|וידוי)",
+    r"act\s+as", r"pretend", r"jailbreak", r"developer\s*mode", r"you\s+are\s+now", r"אתה\s*עכשיו",
+    r"שחק\s*את\s*(?:ה)?תפקיד", r"דעתכ\s*(?:ה)?אישית", r"(?:תגיד|תגידי)\s*(?:לי\s*)?(?:מה\s*)?דעתכ",
 ]
 OUTCOME_PATTERNS = {
-    "acquittal": [r"זוכה", r"זיכוי", r"זיכו\s*את", r"יצא\s*זכאי", r"נמצא\s*זכאי", r"חף\s*מפשע\s*(?:נקבע|נמצא)"],
-    "conviction": [r"הורשע", r"הרשעה", r"הרשיעו", r"נמצא\s*אשם", r"גזר\s*(?:ה)?דין", r"נגזר\s*דינו", r"נשלח\s*לכלא", r"עונש"],
-    "plea_deal": [r"הסדר\s*(?:ה)?טיעון\s*(?:נחתם|אושר|שנחתם)", r"חתם\s*על\s*הסדר", r"(?:נחתם|אושר)\s*הסדר"],
-    "pardon_granted": [r"(?:קיבל|ניתנה|העניק\w*)\s*(?:לו\s*)?חנינה", r"חנינה\s*(?:ניתנה|אושרה)", r"קיבל\s*חנינה", r"חונן"],
-    "withdrawal": [r"(?:בוטל|בוטלו)\s*(?:ה)?(?:אישום|אישומים|כתב\s*האישום)", r"חזרה\s*מ(?:ה)?אישום", r"התיק\s*נסגר", r"נמחק\s*(?:ה)?אישום"],
-    "verdict": [r"(?:ניתן|לאחר|אחרי)\s*(?:ה)?(?:פסק\s*(?:ה)?דין|הכרעת\s*(?:ה)?דין)", r"בפסק\s*הדין\s*(?:נקבע|קבעו)"],
+    "acquittal": [r"(?:^|\s)(?:ו|ש|כש)?זוכה(?:\s|$|\?)", r"זיכוי", r"זיכו\s*את", r"(?:יצא|נמצא|נמצאה)\s*(?:\S+\s*)?זכאי",
+                  r"חפ\s*מפשע\s*(?:נקבע|נמצא|הוכרז)"],
+    "conviction": [r"הורשע", r"הרשעה", r"הרשיעו", r"(?:^|\s)(?:ה)?אשמ(?:\s|$|\?|,|\.)", r"נמצא\s*(?:\S+\s*)?אשמ", r"נגזר",
+                   r"גזר\s*(?:ה)?דינ", r"(?:נגזר|קיבל|שקיבל|יקבל|הוטל)\w*\s*(?:\S+\s*){0,3}עונש", r"עונשו",
+                   r"(?:נשלח|נידונ|שנות|לריצוי)\s*(?:\S+\s*){0,2}מאסר", r"נשלח\s*(?:ל)?(?:ה)?כלא", r"ישב\s*(?:ב)?(?:ה)?כלא"],
+    "plea_deal": [r"הסדר\s*(?:ה)?טיעונ\s*(?:ש)?(?:נחתמ|אושר)", r"(?:נחתמ|אושר|חתמ\s*על)\s*(?:ה)?הסדר", r"תנאי\s*(?:ה)?הסדר"],
+    "pardon_granted": [r"(?:קיבל|הוענקה|העניק\w*|ניתנה|אושרה|אישר)\b[^?.]{0,30}חנינה", r"חנינה\s*(?:ש)?(?:ניתנה|אושרה|הוענקה)",
+                       r"(?:^|\s)חוננ"],
+    "withdrawal": [r"(?:בוטל|בוטלו|נמחק|נמחקו)\s*(?:ה)?(?:אישומ|אישומימ|כתב\s*(?:ה)?אישומ)", r"חזרה\s*מ(?:ה)?אישומ",
+                   r"(?:ה)?תיק\s*נסגר", r"נסגר\s*(?:ה)?תיק"],
+    "verdict": [],  # definite references are handled by _definite_verdict_reference
 }
+_VERDICT_TERMS = re.compile(r"(?:פסק\s*הדינ|הכרעת\s*הדינ|גזר\s*הדינ)")
+_VERDICT_NEGATORS = re.compile(r"(?:לפני|עד|טרמ|לקראת|האמ|יינתנ|צפוי)\s*(?:\S+\s*){0,2}$")
+
+
+def _fold_q(text: str) -> str:
+    return hebrew.fold(text).replace('"', "").replace("'", "")
+
+
+def _definite_verdict_reference(q: str) -> bool:
+    for m in _VERDICT_TERMS.finditer(q):
+        if not _VERDICT_NEGATORS.search(q[max(0, m.start() - 25):m.start()]):
+            return True
+    return False
+
+
 OUTCOME_OF_EVENT = {"acquittal": {"verdict"}, "conviction": {"verdict"}, "plea_deal": {"plea_deal"},
                     "pardon_granted": {"pardon_granted"}, "withdrawal": {"withdrawal", "dismissal"},
                     "verdict": {"verdict"}}
@@ -58,29 +83,47 @@ RULING_ATTRIBUTION_RE = re.compile(
     r"(?:איזה|איזו|אילו|מי\s*מה)?\s*(?:שופט|שופטת|שופטים|השופט|השופטת|השופטים|בית\s*(?:ה)?משפט|ההרכב)\s*"
     r"(?:\S+\s+){0,3}?(?:קבע|קבעה|קבעו|פסק|פסקה|פסקו|הכריע|הכריעה|הכריעו|החליט|החליטה|החליטו)\s*(?:כי|ש)\s*(?P<prop>.+)"
 )
+_SPEECH_VERBS = r"(?:אמר|אמרה|אמרו|העיד|העידה|טען|טענה|הודה|הודתה|סיפר|סיפרה|הצהיר|הצהירה)"
 SPEAKER_CLAIM_RE = re.compile(
-    r"(?P<who>(?:העד|העדה|השופט|השופטת|עו\"ד|עו״ד|התובע|התובעת|הסנגור)\s+[^\s,]+(?:\s+[^\s,]+)?)\s+"
-    r"(?:אמר|אמרה|העיד|העידה|טען|טענה|הודה|הודתה)\s*(?:כי|ש)\s*(?P<prop>.+)"
+    r"(?P<who>(?:העד|העדה|השופט|השופטת|התובע|התובעת|הסנגור|הסניגור|עו\"ד|הנאשמ|הנאשמת)"
+    r"(?:\s+(?!" + _SPEECH_VERBS + r"(?:\s|$))[^\s,?]+){0,3})\s+" + _SPEECH_VERBS + r"\s*(?:כי|ש)\s*(?P<prop>.+)"
 )
 
 
 def detect_injection(question: str) -> list[str]:
-    q = hebrew.normalize(question).lower()
+    q = _fold_q(question)
     return [p for p in INJECTION_PATTERNS if re.search(p, q)]
 
 
 def detect_outcome_premises(question: str) -> list[str]:
-    q = hebrew.normalize(question)
-    return [name for name, pats in OUTCOME_PATTERNS.items() if any(re.search(p, q) for p in pats)]
+    q = _fold_q(question)
+    out = [name for name, pats in OUTCOME_PATTERNS.items() if any(re.search(p, q) for p in pats)]
+    if _definite_verdict_reference(q) and "verdict" not in out:
+        out.append("verdict")
+    return out
+
+
+RULING_ATTRIBUTION_VS_RE = re.compile(
+    r"(?:קבע|קבעה|קבעו|פסק|פסקה|פסקו|הכריע|הכריעה|הכריעו)\s+(?:כב'\s*)?(?:השופט|השופטת|השופטים|בית\s*(?:ה)?משפט|ההרכב)"
+    r"(?:\s+\S+){0,3}?\s*(?:כי|ש)\s*(?P<prop>.+)"
+)
+RULING_ATTRIBUTION_DASH_RE = re.compile(
+    r"(?:השופט|השופטת|השופטים|בית\s*(?:ה)?משפט|ההרכב)\s+(?:קבע|קבעה|קבעו|פסק|פסקה|פסקו|הכריע|הכריעה|הכריעו)\s+(?:כי|ש)?\s*(?P<prop>[^—\-?]+)"
+)
 
 
 def detect_ruling_attribution(question: str) -> str | None:
-    m = RULING_ATTRIBUTION_RE.search(hebrew.normalize(question).replace("״", '"'))
-    return m.group("prop").strip(" ?.!") if m else None
+    q = hebrew.normalize(question).replace("״", '"').replace("׳", "'")
+    for rx in (RULING_ATTRIBUTION_RE, RULING_ATTRIBUTION_VS_RE, RULING_ATTRIBUTION_DASH_RE):
+        m = rx.search(q)
+        if m and m.group("prop").strip(" ?.!—-"):
+            return m.group("prop").strip(" ?.!—-")
+    return None
 
 
 def detect_speaker_claim(question: str) -> tuple[str, str] | None:
-    m = SPEAKER_CLAIM_RE.search(hebrew.normalize(question).replace("״", '"'))
+    q = hebrew.normalize(question).replace("\u05f4", '"').replace("\u05f3", "'").replace("ם", "מ")
+    m = SPEAKER_CLAIM_RE.search(q)
     return (m.group("who").strip(), m.group("prop").strip(" ?.!")) if m else None
 
 
@@ -367,8 +410,6 @@ class AskEngine:
 
     def _speaker_check(self, base: dict, who: str, prop: str) -> AskResult | None:
         resp = self.search.search(SearchRequest(prop, SearchFilters(published_only=True), limit=8))
-        if not resp.hits:
-            return None
         who_key = hebrew.fold(who.split()[-1])
         terms = set(t for t in query_terms(prop) if len(t) > 2)
         if not terms:
@@ -379,17 +420,17 @@ class AskEngine:
 
         by_named = [h for h in resp.hits if h.speaker_label and who_key in hebrew.fold(h.speaker_label) and overlap(h.text) >= 0.5]
         if by_named:
-            return None
+            return None  # the named speaker did say something close → normal answering path
         others = [h for h in resp.hits if overlap(h.text) >= 0.6 and h.speaker_label]
-        if not others:
-            return None
-        top = others[0]
-        units = self.store.public_units([top.source_unit_id])
-        if not units:
-            return None
-        env = self._envelope(**base, status="false_premise_corrected",
-                             short=f"בחומר שפורסם הדברים אינם מופיעים בדברי {who}; קטע דומה מופיע בדברי {top.speaker_label}.",
-                             sections=[{"kind": "why", "text": f"{top.speaker_label}: \"{_clip(top.text, 30)}\"", "citation_ids": [top.source_unit_id]}],
+        units = self.store.public_units([others[0].source_unit_id]) if others else {}
+        if others and units:
+            top = others[0]
+            short = f"בחומר שפורסם הדברים אינם מופיעים בדברי {who}; קטע דומה מופיע בדברי {top.speaker_label}."
+            sections = [{"kind": "why", "text": f"{top.speaker_label}: \"{_clip(top.text, 30)}\"", "citation_ids": [top.source_unit_id]}]
+        else:
+            short = f"בחומר שפורסם לא נמצא ש{who} אמר את הדברים המיוחסים בשאלה."
+            sections = [{"kind": "limitation", "text": "המאגר מייחס דברים רק לדובר שאמר אותם לפי הפרוטוקול.", "citation_ids": []}]
+        env = self._envelope(**base, status="false_premise_corrected", short=short, sections=sections,
                              cited=list(units.values()), warnings=["false_premise:speaker_attribution"])
         return AskResult(env, False, {"false_premise": ["speaker_attribution"]})
 

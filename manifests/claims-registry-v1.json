@@ -1,0 +1,299 @@
+{
+  "version": "claims-registry-v1",
+  "note": "Seed of thesis registry (spec §8). Claims are drafts until reviewed; claim texts describe who claims what.",
+  "claims": [
+    {
+      "slug": "t01-political-motive",
+      "thesis_code": "T01",
+      "question": "האם יש ראיות לכך שהחקירות והאישום נועדו לסלק את נתניהו מהשלטון?",
+      "title": "מניע פוליטי להליך",
+      "claim_text": "ההגנה טוענת שההליך נבע ממניע פוליטי ונועד להשפיע על כהונתו או בחירתו של נתניהו. יש להבחין בין השפעה פוליטית צפויה של הליך פלילי לבין הוכחת כוונה פוליטית של מקבלי ההחלטות.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [
+        "motive_or_conspiracy"
+      ],
+      "editorial_priority": 20,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t02-ag-approvals",
+      "thesis_code": "T02",
+      "question": "האם החקירות נפתחו בלי האישורים הנדרשים?",
+      "title": "אישורי היועמ״ש לפתיחה בחקירות",
+      "claim_text": "ההגנה טענה שהאישורים הנדרשים לפי סעיף 17 לחוק יסוד: הממשלה לא ניתנו או לא תועדו כדין; בית המשפט בחן את הטענה ולא ביטל את האישום בשלב זה.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 70,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t03-state-witness-pressure",
+      "thesis_code": "T03",
+      "question": "באילו תנאים גויסו עדי המדינה, והאם הלחץ השפיע על גרסאותיהם?",
+      "title": "לחצים על נחקרים ועדי מדינה",
+      "claim_text": "ההגנה טוענת ללחצים פיזיים ופסיכולוגיים חריגים על נחקרים שהפכו לעדי מדינה, ולהשפעתם על גרסאותיהם.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [
+        "investigator_offense"
+      ],
+      "editorial_priority": 80,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t04-coverage-bribery-precedent",
+      "thesis_code": "T04",
+      "question": "עד כמה חריגה בעולם הטענה שסיקור או היענות תקשורתית יכולים להיות מתת שוחד?",
+      "title": "תקדימיות תזת השוחד בסיקור",
+      "claim_text": "ההגנה טוענת שלא קיים תקדים להעמדה לדין של נבחר ציבור על שוחד שטובת ההנאה בו היא סיקור תקשורתי. טענה זו דורשת מחקר משפטי השוואתי לפני שתוצג כעובדה.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 40,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t05-timing",
+      "thesis_code": "T05",
+      "question": "האם העיתוי של ההחלטות המשפטיות היה חריג ובעל אפקט פוליטי?",
+      "title": "עיתוי החלטות האכיפה",
+      "claim_text": "ההגנה טוענת שעיתוי החלטות האכיפה חפף אירועים מדיניים ובחירות. קשר סיבתי יסומן כפרשנות אלא אם קיימת ראיה ישירה.",
+      "claim_type": "interpretation",
+      "stance": null,
+      "sensitivity": [
+        "motive_or_conspiracy"
+      ],
+      "editorial_priority": 30,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t06-mandelblit-nitzan",
+      "thesis_code": "T06",
+      "question": "מה בדיוק אמר מנדלבליט על ניצן, והאם הדבר משליך על החלטתו בתיקי נתניהו?",
+      "title": "הקלטות מנדלבליט וניצן",
+      "claim_text": "יש להפריד בין מה שנאמר בהקלטות שפורסמו (עובדה מתועדת) לבין הטענה שהדבר השפיע על ההחלטה להגיש כתב אישום (הסקה שלא הוכחה מעצם ההקלטה).",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [
+        "motive_or_conspiracy"
+      ],
+      "editorial_priority": 50,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t07-case1000-quantities",
+      "thesis_code": "T07",
+      "question": "מה מוכח במסמכים לגבי הכמויות והמסירות בתיק 1000?",
+      "title": "תיק 1000: כמויות ומסירות",
+      "claim_text": "ההגנה טוענת שהחשבוניות מוכיחות רכישה אך לא בהכרח מסירה לנתניהו של כל הפריטים, במועדים ובכמויות הנטענים.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 75,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t08-bribery-difficulties",
+      "thesis_code": "T08",
+      "question": "מה אמרו השופטים לגבי עבירת השוחד?",
+      "title": "קשיי ההרכב בביסוס עבירת השוחד",
+      "claim_text": "ההרכב מסר לצדדים שקיימים קשיים בביסוס עבירת השוחד והציע למדינה לשקול לחזור ממנה; התביעה חלקה על ההערכה והמשיכה באישום.",
+      "claim_type": "judicial_comment",
+      "stance": null,
+      "sensitivity": [],
+      "editorial_priority": 100,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t09-directive-meeting",
+      "thesis_code": "T09",
+      "question": "האם ניתן למקם בזמן את פגישת ההנחיה כפי שתוארה בכתב האישום?",
+      "title": "פגישת ההנחיה והבעיה הכרונולוגית",
+      "claim_text": "לאחר החקירה הנגדית של פילבר ביקשה התביעה לתקן את טווח הזמן; בית המשפט דחה את התיקון.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 95,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t10-315-events",
+      "thesis_code": "T10",
+      "question": "כמה מתוך 315 האירועים מציגים היענות חריגה, ובכמה נתניהו עצמו היה מעורב?",
+      "title": "315 אירועי הסיקור",
+      "claim_text": "ההגנה ופרויקט 315 טוענים שחלק ניכר מהאירועים אינם מראים היענות חריגה או מעורבות של נתניהו. סיווגי פרויקט 315 מוצגים כעמדת מקור חיצוני.",
+      "claim_type": "external_research",
+      "stance": null,
+      "sensitivity": [],
+      "editorial_priority": 90,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t11-regulatory-actions",
+      "thesis_code": "T11",
+      "question": "אילו פעולות של נתניהו או פילבר היטיבו עם בזק, ומה הייתה התשתית המקצועית לכל פעולה?",
+      "title": "הפעולות הרגולטוריות: תמורה או החלטות מקצועיות",
+      "claim_text": "ההגנה טוענת שהפעולות הרגולטוריות נשענו על תשתית מקצועית ואינן תמורה לסיקור.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 60,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t12-leaks",
+      "thesis_code": "T12",
+      "question": "אילו חומרי חקירה פורסמו לפני שנמסרו להגנה, ומה עשה בית המשפט בעניין?",
+      "title": "הדלפות מחומרי חקירה",
+      "claim_text": "ההגנה טוענת להדלפות שפגעו בהוגנות ההליך. אין להניח את מקור ההדלפה בלי ראיה.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [
+        "investigator_offense"
+      ],
+      "editorial_priority": 35,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t13-digital-tools",
+      "thesis_code": "T13",
+      "question": "האם נעשה שימוש בכלים טכנולוגיים החורג מצווים, ומה המשמעות המשפטית?",
+      "title": "כלי חדירה דיגיטלית",
+      "claim_text": "יש להבחין בין דיווחים ראשוניים, בדיקות רשמיות, צווים, שימוש בפועל וחומר שנכנס לתיק.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [
+        "investigator_offense"
+      ],
+      "editorial_priority": 25,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t14-case2000-intent",
+      "thesis_code": "T14",
+      "question": "האם נתניהו ומוזס התכוונו לבצע את ההבנות שעליהן דיברו?",
+      "title": "תיק 2000: כוונת הצדדים",
+      "claim_text": "ההגנה טוענת שלא הייתה כוונה לבצע את ההבנות שעלו בשיחות.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 55,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t15-version-gaps",
+      "thesis_code": "T15",
+      "question": "אילו עדים שינו, צמצמו או סייגו בבית המשפט דברים שנאמרו בחקירה?",
+      "title": "פערים בין גרסאות בחקירה לעדות",
+      "claim_text": "השוואה בין אמירות בחקירה לבין העדות בבית המשפט, עם שני המקורות זה לצד זה.",
+      "claim_type": "testimony",
+      "stance": null,
+      "sensitivity": [
+        "witness_lied"
+      ],
+      "editorial_priority": 65,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t16-media-norms",
+      "thesis_code": "T16",
+      "question": "מהו benchmark סביר ליחסי דובר או פוליטיקאי מול מערכת חדשות?",
+      "title": "נורמות היחסים בין פוליטיקאים לתקשורת",
+      "claim_text": "ההגנה טוענת שההיענות שתוארה אינה חריגה ביחס לנורמות; נדרש בסיס השוואתי.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 20,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "t17-personal-involvement",
+      "thesis_code": "T17",
+      "question": "כמה מהבקשות לוואלה מיוחסות לנתניהו עצמו, וכמה לאנשים אחרים?",
+      "title": "מעורבות אישית בדרישות לוואלה",
+      "claim_text": "ההגנה טוענת שחלק ניכר מהבקשות לא יוחס לנתניהו עצמו אלא לאחרים בסביבתו או ביוזמתם.",
+      "claim_type": "defense_claim",
+      "stance": "defense",
+      "sensitivity": [],
+      "editorial_priority": 85,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "p-request-attribution",
+      "thesis_code": "P1",
+      "question": "למי מיוחסות בקשות הסיקור שתוארו בעדות בדיוני אפריל 2021?",
+      "title": "פיילוט: ייחוס בקשות הסיקור",
+      "claim_text": "בדיקת ייחוס בקשות הסיקור שתוארו בעדות: מי ביקש, דרך מי הועברה הבקשה, והאם העד ייחס אותה לנתניהו עצמו.",
+      "claim_type": "testimony",
+      "stance": null,
+      "sensitivity": [],
+      "editorial_priority": 110,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    },
+    {
+      "slug": "p-judicial-remarks",
+      "thesis_code": "P2",
+      "question": "מה אמרו השופטים במהלך דיוני אפריל 2021, והאם מדובר בהערות או בהחלטות?",
+      "title": "פיילוט: הערות והחלטות שיפוטיות",
+      "claim_text": "מיפוי אמירות ההרכב בדיוני אפריל 2021 והבחנה בין שאלה או הערה לבין החלטה דיונית.",
+      "claim_type": "judicial_comment",
+      "stance": null,
+      "sensitivity": [],
+      "editorial_priority": 105,
+      "disclosure": "בחינת טענה מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד."
+    }
+  ],
+  "case_events": [
+    {
+      "event_type": "indictment_decision",
+      "occurred_at": "2019-11-21T00:00:00+00:00",
+      "title": "פרסום החלטת היועמ״ש להעמיד לדין",
+      "external_sources": [
+        {
+          "url": "https://www.timesofisrael.com/full-text-ags-announcement-of-decision-to-indict-prime-minister-netanyahu/",
+          "label": "S13"
+        }
+      ],
+      "review_state": "draft"
+    },
+    {
+      "event_type": "indictment_filed",
+      "occurred_at": "2020-01-28T00:00:00+00:00",
+      "title": "הגשת כתב האישום לבית המשפט",
+      "external_sources": [
+        {
+          "url": "https://www.gov.il/he/Departments/Topics/criminal_field",
+          "label": "S14"
+        }
+      ],
+      "review_state": "draft"
+    },
+    {
+      "event_type": "hearing",
+      "occurred_at": "2021-04-05T00:00:00+00:00",
+      "title": "פתיחת שלב ההוכחות",
+      "external_sources": [
+        {
+          "url": "https://www.gov.il/BlobFolder/generalpage/files-general/he/05.04.2021.pdf",
+          "label": "S02"
+        }
+      ],
+      "review_state": "draft"
+    },
+    {
+      "event_type": "pardon_requested",
+      "occurred_at": "2025-11-30T00:00:00+00:00",
+      "title": "הוגשה לנשיא המדינה בקשת חנינה הנוגעת להליך",
+      "description": "אירוע תהליכי; אינו תוצאת ההליך (spec §23.9).",
+      "external_sources": [
+        {
+          "url": "https://www.president.gov.il/",
+          "label": "S19"
+        }
+      ],
+      "review_state": "draft"
+    }
+  ]
+}

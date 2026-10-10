@@ -1,0 +1,31 @@
+{
+  "name": "pilot-april-2021-local",
+  "case_id": "il-jdc-jerusalem-67104-01-20",
+  "court_case_number": "67104-01-20",
+  "authority_tier": 1,
+  "source_owner": "הרשות השופטת",
+  "court_record_status": "filed",
+  "documents": [
+    {
+      "hearing_date": "2021-04-05",
+      "url": "https://www.gov.il/BlobFolder/generalpage/files-general/he/05.04.2021.pdf",
+      "local_path": "../var/pilot/05.04.2021.pdf"
+    },
+    {
+      "hearing_date": "2021-04-07",
+      "url": "https://www.gov.il/BlobFolder/generalpage/files-general/he/07.04.21.pdf",
+      "local_path": "../var/pilot/07.04.21.pdf"
+    },
+    {
+      "hearing_date": "2021-04-12",
+      "url": "https://www.gov.il/BlobFolder/generalpage/files-general/he/12.04.21.pdf",
+      "local_path": "../var/pilot/12.04.21.pdf"
+    },
+    {
+      "hearing_date": "2021-04-13",
+      "url": "https://www.gov.il/BlobFolder/generalpage/files-general/he/13.04.21.pdf",
+      "local_path": "../var/pilot/13.04.21.pdf"
+    }
+  ],
+  "_alternatives": "Each document may instead give s3_uri (s3://bucket/key in R2) or local_path (development only); url stays as the canonical source."
+}

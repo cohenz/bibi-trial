@@ -143,7 +143,7 @@ def run_suite(path: Path, *, settings, engine: Engine, services, as_of: str | No
                         "forbidden_phrases": forbidden, "citations": len(env["citations"]), "citation_failures": loc_fail,
                         "answer_short": env["answer_short"], "permalink": env["permalink"], "latency_ms": round(latency, 1),
                         "passed": status_ok and not forbidden and not loc_fail})
-    fp = [r for r in results if r["category"] in {"false_premise", "injection", "fill_in", "misattribution", "ignore_sources"}]
+    fp = [r for r in results if r["category"] in {"false_premise", "ruling_attribution", "injection", "fill_in", "misattribution", "ignore_sources"}]
     answerable = [r for r in results if r["category"] == "answerable"]
     thresholds = suite.get("thresholds", {})
     summary = {

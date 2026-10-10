@@ -10,3 +10,4 @@ dist/*.zip
 .ruff_cache/
 *.egg-info/
 wordpress/trial-knowledge/node_modules/
+data/real/

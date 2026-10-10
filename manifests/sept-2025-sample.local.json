@@ -1,0 +1,15 @@
+{
+  "name": "sept-2025-sample",
+  "case_id": "il-jdc-jerusalem-67104-01-20",
+  "court_case_number": "67104-01-20",
+  "authority_tier": 1,
+  "source_owner": "הרשות השופטת",
+  "court_record_status": "filed",
+  "_note": "Four real protocols supplied by the user on 2026-10-10 (hearings 15, 16, 17 and 29 September 2025). local_path (relative to the repo root; put the four PDFs in data/real/, which is git-ignored) is for development only; in production upload them through the plugin or give the gov.il URL.",
+  "documents": [
+    {"local_path": "data/real/0421_extra_16-10-2025.pdf", "title": "פרוטוקול דיון 15.9.2025 (מס' 421)"},
+    {"local_path": "data/real/0422_extra_19-10-2025.pdf", "title": "פרוטוקול דיון 16.9.2025 (מס' 422)"},
+    {"local_path": "data/real/0423_extra_19-10-2025.pdf", "title": "פרוטוקול דיון 17.9.2025 (מס' 423)"},
+    {"local_path": "data/real/0424_extra_19-10-2025.pdf", "title": "פרוטוקול דיון 29.9.2025 (מס' 424)"}
+  ]
+}

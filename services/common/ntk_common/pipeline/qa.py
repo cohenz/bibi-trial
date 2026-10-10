@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from .. import ids
 from .protocol import PARSER_VERSION, UnitRecord
 
-PAIRER_VERSION = "qa-pairer-1.0"
+PAIRER_VERSION = "qa-pairer-1.1"
 MAX_INTERVENING = 2
 MAX_INTERVENING_WORDS = 30
 
@@ -28,11 +28,13 @@ _AFFIRM = r"(?:כן|נכון|נכון מאוד|בדיוק|בהחלט|אכן|מא
 _DENY = r"(?:לא|לא נכון|ממש לא|בשום פנים|אף פעם|מעולם לא|שולל|שוללת|זה לא נכון|לא היה דבר כזה|ממש לא נכון|בשום אופן לא)"
 _DKNOW = (
     r"(?:אני\s+)?(?:לא\s+זוכר|לא\s+זוכרת|אינני\s+זוכר|אינני\s+זוכרת|לא\s+זכור\s+לי|לא\s+יודע|לא\s+יודעת|אינני\s+יודע"
-    r"|אינני\s+יודעת|אין\s+לי\s+מושג|לא\s+יכול\s+לומר|לא\s+יכולה\s+לומר|לא\s+יכול\s+לזכור|לא\s+ידוע\s+לי|לא\s+זוכר\s+את\s+זה)"
+    r"|אינני\s+יודעת|אין\s+לי\s+מושג|לא\s+יכול\s+לומר|לא\s+יכולה\s+לומר|לא\s+יכול\s+לזכור|לא\s+ידוע\s+לי|לא\s+זוכר\s+את\s+זה"
+    r"|לא\s+ידעתי|לא\s+היה\s+לי\s+מושג|לא\s+הכרתי|אני\s+צריך\s+לראות|אני\s+צריכה\s+לראות|לא\s+יכול\s+לדעת)"
 )
 _QUALIFIERS = re.compile(
     r"\b(?:אבל|אך|רק|למעט|בערך|בגדול|פחות או יותר|לא בדיוק|במידה מסוימת|יכול להיות|ייתכן|יתכן|נדמה לי|אני חושב|אני חושבת"
-    r"|למיטב זכרוני|למיטב ידיעתי|בהסתייגות|חלקית|לא תמיד|לפעמים|בחלק|זה תלוי|אני מניח|אני מניחה|כנראה|אולי)\b"
+    r"|למיטב זכרוני|למיטב ידיעתי|בהסתייגות|חלקית|לא תמיד|לפעמים|בחלק|זה תלוי|אני מניח|אני מניחה|כנראה|אולי"
+    r"|יכול לקרות|יכול להיות שכן|אפשרי|לא מיד|לא בהכרח)\b"
 )
 _NONRESP = re.compile(
     r"^(?:מה\s+זאת\s+אומרת|לא\s+הבנתי|אני\s+לא\s+מבין|אני\s+לא\s+מבינה|על\s+מה\s+אתה\s+מדבר|איזו?\s+שאלה|אפשר\s+לחזור\s+על\s+השאלה)"
@@ -68,6 +70,9 @@ def _is_open_question(question: str) -> bool:
     return bool(_OPEN_Q.match(last.strip()))
 
 
+_STRONG_DENY_SENTENCE = re.compile(r"^(?:לא|לא נכון|ממש לא|ממש לא נכון|זה הפוך|להפך|ההפך|ההיפך|זה לא נכון|ברור שלא|בוודאי שלא)$")
+
+
 def classify_answer(question: str, answer: str) -> tuple[str, float, str]:
     """Return (relation, confidence, rule) using lexical rules only."""
     a = re.sub(r"\s+", " ", answer).strip()
@@ -76,24 +81,32 @@ def classify_answer(question: str, answer: str) -> tuple[str, float, str]:
     head = _head(a_low)
     if not a_low:
         return "nonresponsive", 0.6, "empty"
-    if _NONRESP.match(a_low) or (a_low.endswith("?") and len(words) <= 8):
+    if _NONRESP.match(a_low) or (a.rstrip(" .").endswith("?") and len(words) <= 8):
         return "nonresponsive", 0.85, "question_back"
-    if re.match(rf"^{_DKNOW}\b", head):
+    if re.match(rf"^{_DKNOW}\b", head) or re.match(rf"^(?:לא|כן)[,.\s]+{_DKNOW}\b", head):
         return "does_not_know", 0.92, "dont_know"
     if re.match(rf"^{_AFFIRM}(?:[\s.,!]|$)", a_low):
         rest = re.sub(rf"^{_AFFIRM}[\s.,!]*", "", a_low)
         if not rest:
             return "affirms", 0.95, "bare_affirmation"
-        if _QUALIFIERS.search(rest) or re.match(r"^(?:אבל|אך|רק)\b", rest):
+        if _QUALIFIERS.search(" ".join(rest.split()[:10])) or re.match(r"^(?:אבל|אך|רק)\b", rest):
             return "qualified_affirmation", 0.85, "affirmation_with_qualifier"
         if len(rest.split()) > 25:
-            return "qualified_affirmation", 0.6, "affirmation_with_long_explanation"
+            return "affirms", 0.65, "affirmation_with_long_explanation"
         return "affirms", 0.8, "affirmation_with_restatement"
     if re.match(rf"^{_DENY}(?:[\s.,!]|$)", a_low) and not re.match(rf"^{_DKNOW}", a_low):
         rest = re.sub(rf"^{_DENY}[\s.,!]*", "", a_low)
-        if _QUALIFIERS.search(rest):
+        strong = re.match(r"^(?:ממש לא|לא נכון|זה לא נכון|ממש לא נכון|בשום|מעולם)", a_low)
+        if _QUALIFIERS.search(" ".join(rest.split()[:6])) and not strong:
             return "ambiguous", 0.55, "denial_with_qualifier"
         return "denies", 0.9 if len(words) <= 6 else 0.75, "denial"
+    sentences = [x.strip(" .,!") for x in re.split(r"(?<=[.!?])\s+", a_low)][:3]
+    if any(_STRONG_DENY_SENTENCE.match(x) for x in sentences[1:]):
+        return "denies", 0.65, "denial_in_second_sentence"
+    if len(words) <= 12 and re.search(rf"{_DKNOW}\b", a_low):
+        return "does_not_know", 0.75, "dont_know_inside"
+    if len(words) <= 8 and re.search(r"[,\s]כן$", a_low) and not _QUALIFIERS.search(a_low):
+        return "affirms", 0.65, "trailing_affirmation"
     if _is_open_question(question):
         return "ambiguous", 0.7, "narrative_answer_to_open_question"
     if _QUALIFIERS.search(" ".join(words[:8])) and len(words) <= 12:
@@ -107,6 +120,16 @@ def _asker_phrase(side: str | None, female: bool = False) -> str:
     if side and side.startswith("defense"):
         return "בשאלת ב״כ ההגנה"
     return "בשאלה שהוצגה לה" if female else "בשאלה שהוצגה לו"
+
+
+def _content(u: UnitRecord, text: str) -> str:
+    """Spoken content without a leading speaker label ("העד, ח"כ משה סעדה: כן." → "כן.")."""
+    if u.speaker_label and text.startswith(u.speaker_label):
+        return text[len(u.speaker_label):].lstrip(" :")
+    m = re.match(r"^[^:\n]{2,60}?\s*:\s*", text)
+    if m and u.speaker_label and u.speaker_label.split()[-1] in m.group(0):
+        return text[m.end():]
+    return text
 
 
 def pair_exchanges(units: list[UnitRecord], *, parser_version: str = PARSER_VERSION) -> tuple[list[Exchange], list[str]]:
@@ -136,7 +159,7 @@ def pair_exchanges(units: list[UnitRecord], *, parser_version: str = PARSER_VERS
                     warnings.append(f"answer {nxt.id} does not match question {q.id} witness/phase")
                     break
                 qtext, atext = texts[q.turn_key], texts[nxt.turn_key]
-                relation, conf, rule = classify_answer(qtext, atext)
+                relation, conf, rule = classify_answer(_content(q, qtext), _content(nxt, atext))
                 flags = []
                 if interrupted:
                     conf = max(0.0, conf - 0.15)
@@ -144,6 +167,12 @@ def pair_exchanges(units: list[UnitRecord], *, parser_version: str = PARSER_VERS
                 if "asker_unknown" in q.flags:
                     conf = max(0.0, conf - 0.2)
                     flags.append("asker_unknown")
+                if "?" not in _content(q, qtext):
+                    # measured on real protocols (Sept 2025 sample): pairs whose "question" has no question mark
+                    # were right only ~56% of the time (remarks, readings, interruptions). Never word them publicly
+                    # without model/human verification.
+                    conf = max(0.0, conf - 0.3)
+                    flags.append("no_question_mark")
                 proposition = qtext if relation in {"affirms", "qualified_affirmation", "denies"} else None
                 wording = None
                 female = bool(q.witness_label and q.witness_label.startswith(("העדה", "עדת")))

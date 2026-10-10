@@ -217,6 +217,13 @@ class PgAskStore:
         with self.engine.connect() as conn:
             return units_by_ids(conn, unit_ids, published_only=True)
 
+    def published_hearings(self) -> list[dict]:
+        with self.engine.connect() as conn:
+            return rows(conn, """SELECT h.hearing_date::text AS hearing_date, h.witnesses FROM ntk.hearings h
+                                 JOIN ntk.source_versions sv ON sv.id = h.source_version_id
+                                 WHERE sv.publication_state = 'published' AND h.case_id = :c ORDER BY h.hearing_date""",
+                        {"c": self.case_id})
+
     def approved_rulings(self) -> list[dict]:
         with self.engine.connect() as conn:
             return rows(conn, """

@@ -24,6 +24,10 @@
 | `nonce already used` / `timestamp outside allowed skew` | שעון השרת של WordPress סוטה | לסנכרן NTP. הטווח המותר הוא ±300 שניות |
 | משימות תקועות ב־`running` | worker נפל באמצע שלב | `acks_late` מחזיר את המשימה לתור. אם לא: "ניסיון חוזר". שלבים שהושלמו לא ירוצו שוב |
 | רשומות ב־`ntk.dead_letters` | 3 כשלים רצופים | לבדוק את `error`, לתקן, ואז retry למשימה. בסוף לסמן `resolved_at` |
+| `segment: case_number_mismatch` (ב־production) | הכותרת של ה־PDF מציינת תיק אחר | לוודא שהקובץ שייך לת"פ 67104‑01‑20. בפיתוח זה מופיע כאזהרה בלבד |
+| אזהרה "bracket glyphs were stored mirrored" | ה־PDF שומר סוגריים משוקפים (נפוץ בייצוא PDFium) | צפוי. התיקון נעשה ברמת המסמך. לבדוק דגימה של `(הפסקה)` |
+| הרבה זוגות ש/ת עם `no_question_mark` | "ש." על משפט שאינו שאלה | צפוי (ADR‑0013). לא מנוסחים ציבורית בלי אימות |
+| תשובת Ask לא השתנתה אחרי שינוי בקוד | מטמון תשובות | המפתח כולל `ASK_ENGINE_VERSION`. מעלים את הגרסה בכל שינוי בגלאים |
 | שחזור DB | — | `gunzip -c ntk-<ts>.sql.gz \| psql "$DATABASE_URL"` לתוך DB ריק, ואז `trial-knowledge migrate` |
 
 **כלל אצבע:** אף פעם לא לעדכן ידנית `source_units` או `source_versions`. triggers חוסמים זאת. תיקון מקור הוא גרסה חדשה של הקובץ.

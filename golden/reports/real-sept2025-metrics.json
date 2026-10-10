@@ -1,0 +1,82 @@
+{
+ "corpus": "4 real protocols, ת\"פ 67104-01-20, hearings 2025-09-15/16/17/29 (550 pages), supplied 2026-10-10",
+ "labeller": "independent AI annotators (fresh agents that saw only the PDF and the sampled rows) — NOT human labellers",
+ "extraction": {
+  "pages": 550,
+  "pages_with_printed_line_numbers": 550
+ },
+ "speaker_attribution": {
+  "round1": {
+   "labelled": 200,
+   "correct": 200
+  },
+  "holdout": {
+   "labelled": 100,
+   "correct": 100
+  },
+  "target": 0.97
+ },
+ "citation_location": {
+  "round1": {
+   "labelled": 200,
+   "correct": 200
+  },
+  "holdout": {
+   "labelled": 100,
+   "correct": 100
+  }
+ },
+ "qa_pairing": {
+  "round1_parser_1.1": {
+   "labelled": 100,
+   "pair_correct": 80,
+   "pair_precision": 0.8,
+   "with_question_mark": {
+    "labelled": 52,
+    "correct": 52
+   },
+   "without_question_mark": {
+    "labelled": 48,
+    "correct": 28
+   },
+   "relation_correct_given_pair": {
+    "labelled": 80,
+    "correct": 53
+   },
+   "affirms_or_denies_correct": {
+    "labelled": 22,
+    "correct": 21
+   }
+  },
+  "holdout_parser_1.2": {
+   "labelled": 100,
+   "pair_correct": 77,
+   "pair_precision": 0.77,
+   "with_question_mark": {
+    "labelled": 60,
+    "correct": 56
+   },
+   "without_question_mark": {
+    "labelled": 40,
+    "correct": 21
+   },
+   "relation_correct_given_pair": {
+    "labelled": 77,
+    "correct": 54
+   },
+   "affirms_or_denies_correct": {
+    "labelled": 37,
+    "correct": 33
+   }
+  },
+  "target": 0.95
+ },
+ "search": {
+  "suite": "search-bench-real-sept2025-v1",
+  "recall@20": 0.7546,
+  "ndcg@10": 0.6508,
+  "p95_latency_ms": 165.5,
+  "meets_thresholds": false,
+  "note": "mock (hash) embeddings — vector signal carries no meaning; pooled relevance labels"
+ }
+}

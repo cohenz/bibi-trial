@@ -25,7 +25,7 @@ make dev                      # postgres+pgvector, redis, minio, api, worker, be
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.lock pytest moto[server] ruff
 pip install -e services/common -e adapters/project315 -e services/api -e services/worker
-NTK_TEST_ADMIN_URL=postgresql+psycopg://ntk:ntk@localhost:5432/postgres pytest     # 155 בדיקות
+NTK_TEST_ADMIN_URL=postgresql+psycopg://ntk:ntk@localhost:5432/postgres pytest     # 179 בדיקות (NTK_REAL_PDF_DIR=data/real מפעיל גם את מבחני ה־PDF האמיתיים)
 php wordpress/trial-knowledge/tests/run.php                                      # בדיקות התוסף
 python tools/e2e_live.py tests/fixtures/synthetic_protocol.pdf                   # בדיקה חיה מול שירותים רצים
 ```

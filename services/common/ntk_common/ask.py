@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.0"
+ASK_ENGINE_VERSION = "ask-engine-1.3"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -40,10 +40,13 @@ ASK_ENGINE_VERSION = "ask-engine-1.0"
 # to regular forms (ם→מ, ן→נ, ך→כ, ף→פ, ץ→צ), geresh/gershayim removed,
 # lower-case Latin. Write patterns in that form.
 INJECTION_PATTERNS = [
-    r"התעלמ\w*\s+(?:מ)?(?:ה)?(?:מקורות|הוראות|הנחיות|כללימ|ציטוטימ)",
+    r"התעלמ\w*\s+(?:מ)?(?:כל\s+)?(?:ה)?(?:מקורות|הוראות|הנחיות|כללימ|ציטוטימ)",
+    # an instruction to write a given assertion: "…וכתוב שאליעז הודה ש…" (not "מה כתוב שם")
+    r"(?:^|\sו)(?:כתוב|תכתוב|כתבי|נסח|תנסח|נסחי)\s+(?:לי\s+)?ש",
     r"ignore\s+(?:all\s+|the\s+|previous\s+|your\s+|prior\s+)*(?:instructions|sources|rules)",
     r"system\s*prompt", r"הנחיות\s*(?:ה)?מערכת", r"מהזיכרונ", r"(?:לפי|ממה)\s*(?:מה\s*)?ש?אתה\s*יודע",
-    r"(?:בלי|ללא)\s*(?:מקורות|מקור|ציטוטימ|ציטוט)", r"(?:גמ|אפילו)\s*אמ\s*אינ\s*(?:לה|לזה|לו)?\s*מקור",
+    r"(?:בלי|ללא)\s*(?:מקורות|מקור|ציטוטימ|ציטוט)", r"(?:בלי|ללא)\s+ל?(?:צטט|ציט|הסתמכ|הביא\s+מקור)",
+    r"אל\s+ת(?:צטט|ביא\s+מקור|סתמכ)", r"(?:גמ|אפילו)\s*אמ\s*אינ\s*(?:לה|לזה|לו)?\s*מקור",
     r"תמציא", r"(?:^|\s)המצא", r"השלמ\s*את\s*(?:ה)?(?:פרט|חסר)", r"(?:כתוב|תכתוב|נסח|תנסח)\s*(?:לי\s*)?(?:הודאה|וידוי)",
     r"act\s+as", r"pretend", r"jailbreak", r"developer\s*mode", r"you\s+are\s+now", r"אתה\s*עכשיו",
     r"שחק\s*את\s*(?:ה)?תפקיד", r"דעתכ\s*(?:ה)?אישית", r"(?:תגיד|תגידי)\s*(?:לי\s*)?(?:מה\s*)?דעתכ",
@@ -86,7 +89,7 @@ RULING_ATTRIBUTION_RE = re.compile(
 _SPEECH_VERBS = r"(?:אמר|אמרה|אמרו|העיד|העידה|טען|טענה|הודה|הודתה|סיפר|סיפרה|הצהיר|הצהירה)"
 SPEAKER_CLAIM_RE = re.compile(
     r"(?P<who>(?:העד|העדה|השופט|השופטת|התובע|התובעת|הסנגור|הסניגור|עו\"ד|הנאשמ|הנאשמת)"
-    r"(?:\s+(?!" + _SPEECH_VERBS + r"(?:\s|$))[^\s,?]+){0,3})\s+" + _SPEECH_VERBS + r"\s*(?:כי|ש)\s*(?P<prop>.+)"
+    r"(?:\s+(?!" + _SPEECH_VERBS + r"(?:\s|$))[^\s,?]+){0,3})\s+" + _SPEECH_VERBS + r"\s*(?:על\s*כך\s*)?(?:כי|ש)\s*(?P<prop>.+)"
 )
 
 
@@ -112,6 +115,51 @@ RULING_ATTRIBUTION_DASH_RE = re.compile(
 )
 
 
+RULING_TOPIC_RE = re.compile(
+    r"(?:מה|האם|אילו\s+\S+)\s+(?:קבע|קבעה|קבעו|פסק|פסקה|פסקו|הכריע|הכריעה|הכריעו)\s+(?:כב'\s*)?"
+    r"(?:בית\s*(?:ה)?משפט|השופט|השופטת|השופטים|ההרכב)(?:\s+\S+){0,5}?\s+"
+    r"(?:לגבי|בעניין|בעניינו\s+של|ביחס\s+ל|בנוגע\s+ל|בשאלת|בשאלה|על)\s*(?P<topic>.+)"
+)
+RULING_TOPIC_NOUN_RE = re.compile(  # "מה הייתה ההכרעה של ההרכב בנוגע ל…"
+    r"(?:ה)?(?:הכרעה|הכרעת|קביעה|קביעת|פסיקה|פסיקת)\s+(?:של\s+)?(?:כב'\s*)?(?:בית\s*(?:ה)?משפט|השופט|השופטת|השופטים|ההרכב)"
+    r"(?:\s+\S+){0,3}?\s+(?:לגבי|בעניין|בנוגע\s+ל|ביחס\s+ל|על|בשאלת)\s*(?P<topic>.+)"
+)
+
+
+def detect_ruling_topic(question: str) -> str | None:
+    """"מה קבע בית המשפט … לגבי X?" presupposes a determination about X."""
+    q = hebrew.normalize(question).replace("״", '"').replace("׳", "'")
+    m = RULING_TOPIC_RE.search(q) or RULING_TOPIC_NOUN_RE.search(q)
+    return m.group("topic").strip(" ?.!") if m else None
+
+
+_TESTIFY_VERBS = r"(?:אמר|אמרה|העיד|העידה|השיב|השיבה|ענה|ענתה|סיפר|סיפרה|טען|טענה)"
+
+
+def detect_witness_date(question: str, hearings: list[dict]) -> tuple[str, str] | None:
+    """A question that has a named witness testify on a given date: (surname, ISO date)."""
+    from .pipeline.protocol import parse_date
+
+    q = hebrew.normalize(question).replace("״", '"').replace("׳", "'")
+    date = parse_date(q.replace("ב-", "").replace("ב־", ""))
+    if not date:
+        m = re.search(r"(\d{1,2})\s+ב(" + "|".join(_HEB_MONTHS) + r")\s+(\d{4})", q)
+        date = f"{m.group(3)}-{_HEB_MONTHS[m.group(2)]:02d}-{int(m.group(1)):02d}" if m else None
+    if not date:
+        return None
+    surnames = {w.split()[-1] for h in hearings for w in (h.get("witnesses") or []) if w and len(w.split()[-1]) > 2}
+    for sn in surnames:
+        if re.search(rf"{_TESTIFY_VERBS}\s+(?:\S+\s+){{0,2}}?{re.escape(sn)}\b|\b{re.escape(sn)}\s+(?:\S+\s+){{0,1}}?{_TESTIFY_VERBS}\b"
+                     rf"|(?:חקירה|חקירת|עדות|עדותו\s+של)\s+(?:\S+\s+){{0,2}}?{re.escape(sn)}\b"
+                     rf"|\b{re.escape(sn)}\s+(?:\S+\s+){{0,3}}?(?:בחקירה|בעדות)", q):
+            return sn, date
+    return None
+
+
+_HEB_MONTHS = {"ינואר": 1, "פברואר": 2, "מרץ": 3, "מרס": 3, "אפריל": 4, "מאי": 5, "יוני": 6, "יולי": 7,
+               "אוגוסט": 8, "ספטמבר": 9, "אוקטובר": 10, "נובמבר": 11, "דצמבר": 12}
+
+
 def detect_ruling_attribution(question: str) -> str | None:
     q = hebrew.normalize(question).replace("״", '"').replace("׳", "'")
     for rx in (RULING_ATTRIBUTION_RE, RULING_ATTRIBUTION_VS_RE, RULING_ATTRIBUTION_DASH_RE):
@@ -121,10 +169,19 @@ def detect_ruling_attribution(question: str) -> str | None:
     return None
 
 
+SPEAKER_CLAIM_VS_RE = re.compile(  # "מה אמר השופט בר-עם על כך שנתניהו צודק?"
+    _SPEECH_VERBS + r"\s+(?P<who>(?:העד|העדה|השופט|השופטת|התובע|התובעת|הסנגור|הסניגור|עו\"ד|הנאשמ|הנאשמת)"
+    r"(?:\s+(?!על\s|כי\s)[^\s,?]+){0,3}?)\s+(?:על\s*כך\s*)?(?:כי|ש)\s*(?P<prop>.+)"
+)
+
+
 def detect_speaker_claim(question: str) -> tuple[str, str] | None:
-    q = hebrew.normalize(question).replace("\u05f4", '"').replace("\u05f3", "'").replace("ם", "מ")
-    m = SPEAKER_CLAIM_RE.search(q)
-    return (m.group("who").strip(), m.group("prop").strip(" ?.!")) if m else None
+    shown = hebrew.normalize(question).replace("\u05f4", '"').replace("\u05f3", "'")
+    q = shown.replace("ם", "מ")  # 1:1 replacement, so spans index both strings
+    m = SPEAKER_CLAIM_RE.search(q) or SPEAKER_CLAIM_VS_RE.search(q)
+    if not m:
+        return None
+    return shown[m.start("who"):m.end("who")].strip(), shown[m.start("prop"):m.end("prop")].strip(" ?.!")
 
 
 def normalize_question(question: str) -> str:
@@ -192,7 +249,8 @@ class AskEngine:
     def _envelope(self, *, question: str, normalized: str, as_of: dt.datetime, cv: str, status: str, short: str,
                   sections: list[dict], cited: list[UnitView], warnings: list[str], locale: str,
                   review_state: str = "machine_verified", flags: list[str] | None = None) -> dict:
-        aid = str(ids.derived_uuid("answer", normalized, as_of.date().isoformat(), cv, ANSWER.version, self._model_version(), locale))
+        aid = str(ids.derived_uuid("answer", normalized, as_of.date().isoformat(), cv, ANSWER.version, ASK_ENGINE_VERSION,
+                                   self._model_version(), locale))
         env = {
             "schema_version": "2.0",
             "answer_id": aid,
@@ -223,8 +281,9 @@ class AskEngine:
         as_of = (as_of or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
         normalized = normalize_question(q)
         cv = self.store.corpus_version()
+        # the engine version is part of the key: a changed detector must not serve answers cached under the old logic
         key = {"normalized_question": normalized, "as_of_date": as_of.date().isoformat(), "corpus_version": cv,
-               "prompt_version": ANSWER.version, "model_version": self._model_version(), "locale": locale}
+               "prompt_version": f"{ANSWER.version}+{ASK_ENGINE_VERSION}", "model_version": self._model_version(), "locale": locale}
         cached = self.store.find_answer(key)
         if cached:
             return AskResult(cached["envelope"], True, cached.get("gate_report", {}), cached.get("retrieval_ids", []))
@@ -264,7 +323,23 @@ class AskEngine:
             if corr is not None:
                 return corr
 
-        # 3c. speaker attribution
+        topic = detect_ruling_topic(q)
+        if topic and not prop:
+            corr = self._ruling_check(base, topic, topic_mode=True)
+            if corr is not None:
+                return corr
+
+        # 3c. witness on a date when they did not testify
+        hearings_fn = getattr(self.store, "published_hearings", None)
+        if hearings_fn is not None:
+            hearings = hearings_fn()
+            wd = detect_witness_date(q, hearings)
+            if wd:
+                corr = self._witness_date_check(base, wd[0], wd[1], hearings)
+                if corr is not None:
+                    return corr
+
+        # 3d. speaker attribution
         sc = detect_speaker_claim(q)
         if sc:
             corr = self._speaker_check(base, *sc)
@@ -378,7 +453,24 @@ class AskEngine:
                              warnings=[f"false_premise:{p}" for p in false])
         return AskResult(env, False, {"false_premise": false})
 
-    def _ruling_check(self, base: dict, prop: str) -> AskResult | None:
+    def _witness_date_check(self, base: dict, surname: str, date: str, hearings: list[dict]) -> AskResult | None:
+        on_date = [h for h in hearings if h["hearing_date"] == date]
+        testified = [h["hearing_date"] for h in hearings if any(w.split()[-1] == surname for w in (h.get("witnesses") or []))]
+        if on_date and any(any(w.split()[-1] == surname for w in (h.get("witnesses") or [])) for h in on_date):
+            return None  # premise holds → normal path
+        when = ", ".join(testified) if testified else "—"
+        if on_date:
+            short = (f"לפי החומר שפורסם, {surname} לא העיד בדיון מיום {date}. "
+                     f"דיונים שפורסמו שבהם העיד: {when}.")
+        else:
+            short = f"לא פורסם במאגר פרוטוקול של דיון מיום {date}. דיונים שפורסמו שבהם העיד {surname}: {when}."
+        env = self._envelope(**base, status="false_premise_corrected", short=short,
+                             sections=[{"kind": "limitation", "text": "התשובה מבוססת על רשימת העדים בכל דיון שפורסם במאגר.",
+                                        "citation_ids": []}],
+                             cited=[], warnings=["false_premise:witness_date"])
+        return AskResult(env, False, {"false_premise": ["witness_date"]})
+
+    def _ruling_check(self, base: dict, prop: str, topic_mode: bool = False) -> AskResult | None:
         terms = [t for t in query_terms(prop) if len(t) > 2]
         if not terms:
             return None
@@ -403,8 +495,10 @@ class AskEngine:
                                      "text": f"בחומר שפורסם יש {level_he.get(r['level'], 'אמירה')} של בית המשפט בנושא קרוב; זו אינה קביעה כי {_clip(prop, 20)}.",
                                      "citation_ids": [r["source_unit_id"]]})
         sections.append({"kind": "limitation", "text": "המאגר מבחין בין שאלה או הערה של שופט לבין החלטה או הכרעה.", "citation_ids": []})
-        env = self._envelope(**base, status="false_premise_corrected",
-                             short=f"לא נמצאה בחומר שפורסם קביעה של בית המשפט כי {_clip(prop, 25)}. ההנחה שבשאלה אינה נתמכת במקורות.",
+        short = (f"לא נמצאה בחומר שפורסם הכרעה של בית המשפט בעניין {_clip(prop, 25)}. שאלה או הערה של שופט במהלך הדיון אינה הכרעה."
+                 if topic_mode else
+                 f"לא נמצאה בחומר שפורסם קביעה של בית המשפט כי {_clip(prop, 25)}. ההנחה שבשאלה אינה נתמכת במקורות.")
+        env = self._envelope(**base, status="false_premise_corrected", short=short,
                              sections=sections, cited=list(units.values()), warnings=["false_premise:ruling_attribution"])
         return AskResult(env, False, {"false_premise": ["ruling_attribution"]})
 
@@ -418,7 +512,9 @@ class AskEngine:
         def overlap(text: str) -> float:
             return len(terms & set(hebrew.search_terms(text))) / len(terms)
 
-        by_named = [h for h in resp.hits if h.speaker_label and who_key in hebrew.fold(h.speaker_label) and overlap(h.text) >= 0.5]
+        # short propositions ("נתניהו צודק") need every content word: "אדוני כמובן צודק" said to counsel is not it
+        need = 0.75 if len(terms) <= 3 else 0.5
+        by_named = [h for h in resp.hits if h.speaker_label and who_key in hebrew.fold(h.speaker_label) and overlap(h.text) >= need]
         if by_named:
             return None  # the named speaker did say something close → normal answering path
         others = [h for h in resp.hits if overlap(h.text) >= 0.6 and h.speaker_label]

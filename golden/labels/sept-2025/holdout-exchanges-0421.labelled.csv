@@ -1,0 +1,19 @@
+id,hearing_date,page_no,line_start,answer_page_no,answer_line_start,asker_label,witness_label,answer_relation,question,answer,label_pair_correct,label_relation_correct,label_notes
+qx_817dca125acef6460b89ae340f,2025-09-15,27,5,27,8,"עו""ד יהודית תירוש",משה סעדה,qualified_affirmation,"אתה מסביר לי למה ואני שאלתי שאלה עובדתית. אנחנו נגיע לזה למה.
+אני שאלתי רגע שאלה עובדתית. אתה יכול לענות על השאלה העובדתית,
+לא היה תיעוד יש לי הסבר לזה, נדבר על זה בהמשך.",אבל אני מסביר.,y,n,"reply ""but I am explaining"" does not answer; should be nonresponsive"
+qx_f7d0ddb5f9ef9bb98b83efd7ac,2025-09-15,5,24,5,25,"עו""ד יהודית תירוש",משה סעדה,ambiguous,"רק רגע. נתתי לך שתי - ,","תביאי לי את התרשומות, אני עניתי לך.",n,n,"""question"" is an interruption (""just a moment, I gave you two -""), not a question; reply is a protest -> nonresponsive"
+qx_88b88d83a57192f6b9f2a296da,2025-09-15,29,29,29,30,"עו""ד יהודית תירוש",משה סעדה,ambiguous,רק שניה. רק רגע.,"אני קראתי את זה, נקצר הליכים.",n,n,"""question"" is an interruption (""just a sec""), not a question; reply -> nonresponsive"
+qx_b162fd950bb092994bb585cd7d,2025-09-15,52,31,53,1,"עו""ד יהודית תירוש",משה סעדה,affirms,כן.,כן. כן.,n,y,"""question"" is Tirosh answering the witness's own question ""אה, זה לפני?""; not a question to the witness"
+qx_95c26e1baee3bcf7e74855f39e,2025-09-15,59,20,59,21,"עו""ד יהודית תירוש",משה סעדה,denies,אוקי. אז אתה כלי שני זה הרושם.,"לא. לא. לא. אני רוצה להמשיך. אני יודע גם שדובי מכיר מה אפשר לעשות
+בלהב, בניגוד אליי. אני עד אז לא דרכה כף רגלי בלהב.",y,y,
+qx_d8ce677b392d6762072cd91ed4,2025-09-15,52,26,52,28,"עו""ד יהודית תירוש",משה סעדה,qualified_affirmation,"באמצע היא כותבת לך האם ידוע לך פרט כלשהו נוסף והאם יש תיעוד
+לעניין.",אין לי. אה. רק רגע.,n,n,"""question"" points to the email text (what Keren asked), not a question to the witness; reply ""אין לי. אה. רק רגע"" is him locating it, not an affirmation -> ambiguous"
+qx_5f63653c74094f9946d08c3661,2025-09-15,62,10,62,11,"עו""ד יהודית תירוש",משה סעדה,ambiguous,על העניין הזה.,אפילו היתה אמירה.,n,n,"""question"" is a clarifying remark continuing her objection (""on this matter""), not a question; reply -> nonresponsive"
+qx_dba96445e7b6ff79868ff2e62f,2025-09-15,2,30,2,31,"עו""ד יהודית תירוש",משה סעדה,ambiguous,מה?,"זה בתיק של - ,",y,y,
+qx_4bc0e4eea0fa37df8f439fd58d,2025-09-15,53,13,53,18,"עו""ד יהודית תירוש",משה סעדה,ambiguous,"הנחו אותך לא לטפל בחקירות או אסרו עליך, אני מבינה. אתה לא אמור
+להיות גורם שמעורב בחקירה, להוביל לטפל, מבינה. אבל אנחנו היינו כולנו
+פרקליטים וגם היינו מנהלים בתוך הפרקליטות וגם אתה למרות שאתה
+לא מוביל או מתעסק בחקירות, אתה עדיין בתפקיד בכיר במח""ש. ואני
+אומרת לך - ,",על הנייר.,n,n,"""question"" is an unfinished statement (cut off ""ואני אומרת לך -""), not a question; reply ""on paper"" qualifies her assertion -> qualified_affirmation"
+qx_40d57c2a1defe77a25fd2488ed,2025-09-15,14,16,14,17,"עו""ד יהודית תירוש",משה סעדה,qualified_affirmation,אבל אני לא שאלתי אותך את זה עכשיו.,רק רגע. אני אומר לך.,n,n,"""question"" is a remark (""but I did not ask you that now""), not a question; reply ""just a moment, I am telling you"" -> nonresponsive"

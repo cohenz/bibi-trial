@@ -125,6 +125,50 @@ def _group_lines(chars: list[dict], y_tol: float = 2.5) -> list[list[dict]]:
     return rows
 
 
+def _split_margin_number(row: list[dict], width: float) -> tuple[int | None, list[dict]]:
+    """Peel a printed line number off the outer edge of a row.
+
+    Court protocols print line numbers in a narrow margin column that can sit
+    closer to the text than a column gap (real files: number ends at 11% of
+    the width, text starts at 14%). A run of digits at the very edge, separated
+    from the text by at least one character width, is the margin number."""
+    row = sorted(row, key=lambda c: c["x0"])
+    solid = [c for c in row if c["text"].strip()]
+    if not solid:
+        return None, row
+    for side in ("left", "right"):
+        seq = solid if side == "left" else solid[::-1]
+        run = []
+        for c in seq:
+            if not c["text"].isdigit():
+                break
+            if run:  # digits of one number touch; a gap means a new token
+                gap = (c["x0"] - run[-1]["x1"]) if side == "left" else (run[-1]["x0"] - c["x1"])
+                if gap > max(c.get("size", 10.0), 1.0) * 0.5:
+                    break
+            run.append(c)
+        if not run or len(run) > 3:
+            continue
+        run_sorted = sorted(run, key=lambda c: c["x0"])
+        x0, x1 = run_sorted[0]["x0"], run_sorted[-1]["x1"]
+        size = max(run_sorted[0].get("size", 10.0), 1.0)
+        rest = [c for c in solid if c not in run]
+        if side == "left":
+            if x1 > width * 0.15:
+                continue
+            if rest and min(c["x0"] for c in rest) - x1 < size * 0.9:
+                continue
+        else:
+            if x0 < width * 0.85:
+                continue
+            if rest and x0 - max(c["x1"] for c in rest) < size * 0.9:
+                continue
+        number = int("".join(c["text"] for c in run_sorted))
+        keep = [c for c in row if c not in run]
+        return number, keep
+    return None, row
+
+
 def _row_segments(row: list[dict], gap_factor: float = 0.25) -> list[tuple[float, float, str]]:
     """Split a row into horizontally separated segments (x0, x1, visual text)."""
     row = sorted(row, key=lambda c: c["x0"])
@@ -180,12 +224,12 @@ def extract_text_layer(data: bytes) -> list[PageText]:
                 continue
             raw_rows = []
             for row in _group_lines(chars):
-                segs = _row_segments(row)
-                margin_no = None
+                margin_no, row = _split_margin_number(row, width)
+                segs = _row_segments(row) if any(c["text"].strip() for c in row) else []
                 body_parts = []
                 for x0, x1, txt in segs:
                     in_margin = x1 < width * 0.12 or x0 > width * 0.88
-                    if in_margin and _NUM_RE.match(txt):
+                    if in_margin and _NUM_RE.match(txt) and margin_no is None:
                         margin_no = int(txt)
                     elif txt:
                         body_parts.append((x0, txt))
@@ -339,8 +383,33 @@ def extract_document(data: bytes, *, allow_ocr: bool = True, ocr_langs: str = "h
             else:
                 warnings.append(f"page {pt.page}: no text layer and OCR unavailable")
     _harmonize_line_numbers(pages)
+    if _fix_bracket_orientation(pages):
+        warnings.append("bracket glyphs were stored mirrored; orientation repaired for the whole document")
     _tag_headers_footers(pages)
     return ExtractedDocument(pages=pages, page_count=len(pages), warnings=warnings)
+
+
+_BRACKET_SWAP = str.maketrans("()[]{}<>", ")(][}{><")
+_OK_PAIR_RE = re.compile(r"\([^()\n]{1,80}\)")
+_BAD_PAIR_RE = re.compile(r"\)[^()\n]{1,80}\(")
+
+
+def _fix_bracket_orientation(pages: list[PageText]) -> bool:
+    """Some exporters store RTL brackets as their mirrored glyphs, so after the
+    visual→logical repair "(הפסקה)" comes out as ")הפסקה(". Decide once per
+    document from paired brackets and swap back if mirrored pairs dominate."""
+    texts = [ln.text for p in pages if p.method == "text" for ln in p.lines]
+    # Net-HaMishpat anchors "<#n#>" are a second, unambiguous orientation signal
+    good = sum(len(_OK_PAIR_RE.findall(t)) + len(re.findall(r"<#\d+#>", t)) for t in texts)
+    bad = sum(len(_BAD_PAIR_RE.findall(t)) + len(re.findall(r">#\d+#<", t)) for t in texts)
+    if bad >= 2 and bad > 2 * good:
+        for p in pages:
+            if p.method != "text":
+                continue
+            for ln in p.lines:
+                ln.text = ln.text.translate(_BRACKET_SWAP)
+        return True
+    return False
 
 
 _PAGE_NO_RE = re.compile(r"^(?:עמוד\s*)?\d{1,4}(?:\s*(?:מתוך|/)\s*\d{1,4})?$|^-\s*\d{1,4}\s*-$")

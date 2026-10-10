@@ -1,0 +1,395 @@
+{
+  "summary": {
+    "suite": "search-bench-real-sept2025-v1",
+    "backend": "postgres-baseline-v1",
+    "queries": 25,
+    "recall@20": 0.7546,
+    "ndcg@10": 0.6508,
+    "p50_latency_ms": 116.1,
+    "p95_latency_ms": 165.5,
+    "thresholds": {
+      "recall@20": 0.85,
+      "ndcg@10": 0.6,
+      "p95_latency_ms": 800
+    },
+    "meets_thresholds": false,
+    "opensearch_recommended": true
+  },
+  "results": [
+    {
+      "id": "sb-real-01",
+      "query": "ההסתרה של אנשי המשטרה בפרשת רוטנברג",
+      "recall@20": 0.9167,
+      "ndcg@10": 0.7273,
+      "latency_ms": 99.5,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-02",
+      "query": "חוות הדעת של מח\"ש על חשד לשיבוש",
+      "recall@20": 0.9375,
+      "ndcg@10": 0.9306,
+      "latency_ms": 121.1,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-03",
+      "query": "המלצה לבדוק את המעורבות של רוטנברג",
+      "recall@20": 0.8333,
+      "ndcg@10": 0.8628,
+      "latency_ms": 140.6,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 3,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-04",
+      "query": "נ/3314/א",
+      "recall@20": 1.0,
+      "ndcg@10": 1.0,
+      "latency_ms": 125.1,
+      "signals": {
+        "exact": 2,
+        "terms": 2,
+        "trgm": 3,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-05",
+      "query": "הארכת הפטור ממס לתושבים חוזרים",
+      "recall@20": 0.7647,
+      "ndcg@10": 0.7534,
+      "latency_ms": 92.7,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 6,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-06",
+      "query": "פנייה לשר האוצר לפיד בעניין הפטור",
+      "recall@20": 0.7895,
+      "ndcg@10": 0.9364,
+      "latency_ms": 139.4,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 7,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-07",
+      "query": "ויזה למילצ'ן בארצות הברית",
+      "recall@20": 0.8,
+      "ndcg@10": 0.3348,
+      "latency_ms": 117.0,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 5,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-08",
+      "query": "מילצ'ן ביקש עזרה בוויזה",
+      "recall@20": 1.0,
+      "ndcg@10": 0.5376,
+      "latency_ms": 116.1,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-09",
+      "query": "הצעה להיות שותף בחברת רשת",
+      "recall@20": 0.7273,
+      "ndcg@10": 0.8007,
+      "latency_ms": 109.7,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-10",
+      "query": "איחוד ערוץ 10 עם רשת",
+      "recall@20": 0.9091,
+      "ndcg@10": 0.5649,
+      "latency_ms": 91.3,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-11",
+      "query": "הפגישה בבית ינאי",
+      "recall@20": 0.7895,
+      "ndcg@10": 0.7799,
+      "latency_ms": 113.4,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 25,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-12",
+      "query": "פילבר עדכן את ראש הממשלה",
+      "recall@20": 0.0,
+      "ndcg@10": 0.0,
+      "latency_ms": 153.3,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 41,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 3
+      }
+    },
+    {
+      "id": "sb-real-13",
+      "query": "יעקב נאמן אמר לו בצורה חזקה",
+      "recall@20": 0.8,
+      "ndcg@10": 0.7227,
+      "latency_ms": 137.6,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-14",
+      "query": "עדותו של אודי אנג'ל",
+      "recall@20": 0.875,
+      "ndcg@10": 0.435,
+      "latency_ms": 165.5,
+      "signals": {
+        "exact": 0,
+        "terms": 38,
+        "trgm": 15,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-15",
+      "query": "סוגי הסיגרים שנרכשו",
+      "recall@20": 0.6364,
+      "ndcg@10": 0.7511,
+      "latency_ms": 154.4,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 18,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-16",
+      "query": "כמה שמפניות נקנו",
+      "recall@20": 0.9167,
+      "ndcg@10": 0.8643,
+      "latency_ms": 110.0,
+      "signals": {
+        "exact": 0,
+        "terms": 34,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-17",
+      "query": "החשבוניות שקיבל עידן אבירם",
+      "recall@20": 0.8,
+      "ndcg@10": 0.8539,
+      "latency_ms": 106.5,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-18",
+      "query": "פגישות עם הדס קליין בחניונים",
+      "recall@20": 0.6667,
+      "ndcg@10": 0.7654,
+      "latency_ms": 118.7,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 4,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-19",
+      "query": "המזכר שכתב פקד אליעז",
+      "recall@20": 0.3077,
+      "ndcg@10": 0.11,
+      "latency_ms": 105.3,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 60
+      }
+    },
+    {
+      "id": "sb-real-20",
+      "query": "ריענון אצל התביעה לפני העדות",
+      "recall@20": 0.5,
+      "ndcg@10": 0.5294,
+      "latency_ms": 109.1,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-21",
+      "query": "העתירה שהגיש שרצר",
+      "recall@20": 0.75,
+      "ndcg@10": 0.5205,
+      "latency_ms": 106.8,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 60
+      }
+    },
+    {
+      "id": "sb-real-22",
+      "query": "סעדה פנה ביוזמתו",
+      "recall@20": 0.625,
+      "ndcg@10": 0.4851,
+      "latency_ms": 96.5,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 60
+      }
+    },
+    {
+      "id": "sb-real-23",
+      "query": "מערכת הדוברות מאשרת שיחות עם עיתונאים",
+      "recall@20": 0.8333,
+      "ndcg@10": 0.5494,
+      "latency_ms": 166.9,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-24",
+      "query": "הפרקליטה מיכל פרידמן ויסמן",
+      "recall@20": 1.0,
+      "ndcg@10": 0.7458,
+      "latency_ms": 104.4,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 1,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    },
+    {
+      "id": "sb-real-25",
+      "query": "פגישה בפטיו באישון לילה",
+      "recall@20": 0.6875,
+      "ndcg@10": 0.7094,
+      "latency_ms": 131.9,
+      "signals": {
+        "exact": 0,
+        "terms": 60,
+        "trgm": 2,
+        "ngram": 60,
+        "vector": 0,
+        "graph": 0
+      }
+    }
+  ]
+}

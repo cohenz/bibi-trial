@@ -4,6 +4,7 @@ deterministic ids); re-running the same pipeline produces no new rows."""
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.engine import Connection
@@ -75,14 +76,14 @@ def insert_source_version(conn: Connection, *, document_id: str, content_sha256:
 
 def ensure_hearing(conn: Connection, *, case_id: str, hearing_date: str, source_version_id: str,
                    judges: list[str], witnesses: list[str], phase: str | None = None,
-                   location: str | None = None) -> str:
+                   location: str | None = None, metadata: dict | None = None) -> str:
     hid = ids.hearing_id(case_id, hearing_date, source_version_id)
     execute(conn, """
-        INSERT INTO ntk.hearings (id, case_id, hearing_date, location, phase, source_version_id, judges, witnesses)
-        VALUES (:id, :case, :d, :loc, :phase, :sv, :judges, :wit)
+        INSERT INTO ntk.hearings (id, case_id, hearing_date, location, phase, source_version_id, judges, witnesses, metadata)
+        VALUES (:id, :case, :d, :loc, :phase, :sv, :judges, :wit, CAST(:meta AS jsonb))
         ON CONFLICT (id) DO NOTHING
     """, {"id": hid, "case": case_id, "d": hearing_date, "loc": location, "phase": phase, "sv": source_version_id,
-          "judges": judges, "wit": witnesses})
+          "judges": judges, "wit": witnesses, "meta": json.dumps(metadata or {}, ensure_ascii=False)})
     return hid
 
 

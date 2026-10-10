@@ -397,7 +397,12 @@ class Pipeline:
         crs = doc.get("court_record_status", "unknown")
         with self.s.engine.begin() as conn:
             hid = sources.ensure_hearing(conn, case_id=reg["case_id"], hearing_date=hearing_date, source_version_id=svid,
-                                         judges=parsed.header.judges, witnesses=parsed.witnesses)
+                                         judges=parsed.header.judges, witnesses=parsed.witnesses,
+                                         metadata={"court_case_number": parsed.header.court_case_number,
+                                                   "court_case_number_source": parsed.header.court_case_number_source,
+                                                   "header_hearing_date": parsed.header.hearing_date,
+                                                   "parser_version": parsed.parser_version,
+                                                   "summary_witnesses": parsed.header.summary_witnesses})
             speaker_entities = {}
             for u in parsed.units:
                 if u.speaker_label and u.speaker_label not in speaker_entities and u.speaker_role in {"judge", "witness", "prosecution", "defense", "counsel"}:

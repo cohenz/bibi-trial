@@ -5,7 +5,7 @@
 - מפרט: "מאגר משפט נתניהו — Public Knowledge Foundation, גרסה 2.1"
 - הכרעות ארכיטקטורה: `docs/adr/` (0001–0012)
 
-> **מצב:** המערכת רצה מקצה לקצה על פרוטוקול סינתטי. פיילוט אפריל 2021 על הפרוטוקולים האמיתיים **טרם נמדד**. ראו `docs/pilot-report.md` ו־`docs/credentials-needed.md`.
+> **מצב:** ארבעה פרוטוקולים אמיתיים (ספטמבר 2025, 550 עמודים) נקלטו ונמדדו. זיהוי הדובר ומיקום הציטוט עברו, צימוד ש/ת (77%) ו־Recall בחיפוש (0.755) **נכשלו**, והתיוג נעשה על ידי AI ולא על ידי בני אדם. ראו `docs/pilot-report.md` ו־`docs/credentials-needed.md`.
 
 ## מבנה
 
@@ -27,7 +27,7 @@ docs/                התקנה, Railway, R2, runbook, Project 315, credentials,
 
 ```bash
 make dev          # Docker: postgres+pgvector, redis, minio, api, worker, beat
-make test         # pytest (155) — דורש Postgres עם pgvector
+make test         # pytest (179) — דורש Postgres עם pgvector
 php wordpress/trial-knowledge/tests/run.php
 make plugin-zip   # dist/trial-knowledge-2.1.0.zip
 ```

@@ -94,7 +94,10 @@ def _missing_hearings(engine: Engine, dates: list[str], case_id: str | None = No
                                              JOIN ntk.source_versions sv ON sv.id = h.source_version_id
                                              WHERE sv.publication_state = 'published'
                                                AND (CAST(:case AS text) IS NULL OR h.case_id = :case)
-                                               AND (CAST(:num AS text) IS NULL OR EXISTS (
+                                               AND (CAST(:num AS text) IS NULL
+                                                    OR (h.metadata->>'court_case_number' = :num
+                                                        AND h.metadata->>'court_case_number_source' = 'document')
+                                                    OR EXISTS (
                                                     SELECT 1 FROM ntk.source_units su WHERE su.source_version_id = sv.id
                                                       AND su.page_no = 1 AND su.raw_text LIKE '%' || :num || '%'))""",
                                     {"case": case_id, "num": case_number})}
@@ -291,15 +294,17 @@ def export_label_sample(engine: Engine, *, kind: str, n: int, out: Path, seed: s
                                  FROM ntk.source_units su LEFT JOIN ntk.hearings h ON h.id = su.hearing_id
                                  WHERE su.unit_type <> 'caption'""")
             cols = ["id", "hearing_date", "page_no", "line_start", "line_end", "speaker_label", "speaker_role", "unit_type",
-                    "text", "label_speaker_correct", "label_true_speaker", "label_notes"]
+                    "text", "label_speaker_correct", "label_true_speaker", "label_location_correct", "label_notes"]
         elif kind == "exchanges":
             data = rows(conn, """SELECT x.id, h.hearing_date::text AS hearing_date, q.page_no, q.line_start, x.asker_label,
+                                        a.page_no AS answer_page_no, a.line_start AS answer_line_start,
                                         x.witness_label, x.answer_relation::text AS answer_relation, q.raw_text AS question,
                                         a.raw_text AS answer
                                  FROM ntk.qa_exchanges x JOIN ntk.source_units q ON q.id = x.question_unit_id
                                  JOIN ntk.source_units a ON a.id = x.answer_unit_id JOIN ntk.hearings h ON h.id = x.hearing_id""")
-            cols = ["id", "hearing_date", "page_no", "line_start", "asker_label", "witness_label", "answer_relation",
-                    "question", "answer", "label_pair_correct", "label_relation_correct", "label_notes"]
+            cols = ["id", "hearing_date", "page_no", "line_start", "answer_page_no", "answer_line_start", "asker_label",
+                    "witness_label", "answer_relation", "question", "answer", "label_pair_correct", "label_relation_correct",
+                    "label_notes"]
         else:
             data = rows(conn, """SELECT a.id AS answer_id, s.ord, s.sec->>'kind' AS kind, s.sec->>'text' AS assertion,
                                         cid AS source_unit_id, su.raw_text AS cited_text
@@ -337,7 +342,9 @@ def score_labels(*, kind: str, path: Path) -> dict[str, Any]:
 
     if kind == "speakers":
         r = rate("label_speaker_correct")
-        return {"metric": "speaker_precision", **r, "target": 0.97, "passed": r["precision"] is not None and r["labeled"] >= 200 and r["precision"] >= 0.97}
+        loc = rate("label_location_correct")
+        return {"metric": "speaker_precision", **r, "target": 0.97, "location_precision": loc,
+                "passed": r["precision"] is not None and r["labeled"] >= 200 and r["precision"] >= 0.97}
     if kind == "exchanges":
         r = rate("label_pair_correct")
         rel = rate("label_relation_correct")

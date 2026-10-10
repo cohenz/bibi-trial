@@ -5,8 +5,8 @@ venv/
 .env
 var/
 node_modules/
-wordpress/trial-knowledge/build/
 dist/*.zip
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+wordpress/trial-knowledge/node_modules/

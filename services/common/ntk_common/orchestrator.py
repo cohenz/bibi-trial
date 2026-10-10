@@ -412,8 +412,8 @@ class Pipeline:
         svid, parsed = self._parse(job_id, inp)
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
         exchanges, warnings = pair_exchanges(parsed.units)
-        from .db.sources import _exchange_row
         from .db.core import execute
+        from .db.sources import _exchange_row
 
         with self.s.engine.begin() as conn:
             n = execute(conn, """

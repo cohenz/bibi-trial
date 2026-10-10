@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 
 from celery import Celery
-
 from ntk_common.config import get_settings
 
 settings = get_settings()

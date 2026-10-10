@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "trial-knowledge/hearing-timeline",
+  "version": "2.1.0",
+  "title": "ציר זמן הדיונים",
+  "category": "widgets",
+  "icon": "calendar-alt",
+  "description": "ציר זמן של אירועי ההליך והדיונים עם בחירת תאריך (as of).",
+  "textdomain": "trial-knowledge",
+  "attributes": {},
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ]
+  },
+  "editorScript": "file:./index.js"
+}

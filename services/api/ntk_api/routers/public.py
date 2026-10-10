@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
-
 from ntk_common import contracts
 from ntk_common.db import public as pub
 from ntk_common.db.core import row

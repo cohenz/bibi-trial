@@ -1,0 +1,78 @@
+# Local development stack: `make dev` (or `docker compose up -d`).
+# Postgres 16 + pgvector, Redis, MinIO (S3-compatible stand-in for R2), API, worker, beat.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ntk
+      POSTGRES_PASSWORD: ntk
+      POSTGRES_DB: ntk
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ntk"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  minio:
+    image: minio/minio:RELEASE.2024-08-17T01-24-54Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ntk-dev
+      MINIO_ROOT_PASSWORD: ntk-dev-secret
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [miniodata:/data]
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-08-17T11-33-50Z
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 ntk-dev ntk-dev-secret; do sleep 1; done;
+      mc mb -p local/ntk-sources;
+      mc anonymous set none local/ntk-sources;
+      exit 0;"
+
+  api:
+    build: { context: ., dockerfile: Dockerfile.base }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://ntk:ntk@postgres:5432/ntk
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
+    command: ["sh", "-c", "trial-knowledge migrate && uvicorn ntk_api.app:app --host 0.0.0.0 --port 8000"]
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v2/ready"]
+      interval: 10s
+
+  worker:
+    build: { context: ., dockerfile: Dockerfile.base }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://ntk:ntk@postgres:5432/ntk
+      REDIS_URL: redis://redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+    command: ["celery", "-A", "ntk_worker.celery_app", "worker", "-Q", "ntk", "--concurrency", "2", "--loglevel", "INFO"]
+    depends_on: [api]
+
+  beat:
+    build: { context: ., dockerfile: Dockerfile.base }
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://ntk:ntk@postgres:5432/ntk
+      REDIS_URL: redis://redis:6379/0
+    command: ["celery", "-A", "ntk_worker.celery_app", "beat", "--loglevel", "INFO"]
+    depends_on: [worker]
+
+volumes:
+  pgdata: {}
+  miniodata: {}

@@ -1,0 +1,46 @@
+/* Trial Knowledge — public styles. RTL-first, logical properties, visible focus. */
+.tk-claim, .tk-source, .tk-timeline, .tk-ask, .tk-answer { direction: rtl; text-align: start; line-height: 1.7; }
+.tk-claim { border: 1px solid #d0d4d9; border-radius: 8px; padding: 1.25rem; margin-block: 1.5rem; background: #fff; }
+.tk-claim__q { margin-block: 0 .5rem; }
+.tk-claim__short { font-size: 1.1em; margin-block: .25rem 1rem; }
+.tk-claim__meta { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center; font-size: .9em; color: #4a5560; }
+.tk-box { border-block-start: 1px solid #e5e8eb; padding-block: .75rem; }
+.tk-box h3, .tk-box h4 { margin-block: .25rem .5rem; font-size: 1em; }
+.tk-box--support { border-inline-start: 4px solid #2e7d32; padding-inline-start: .75rem; }
+.tk-box--weakness { border-inline-start: 4px solid #b23c17; padding-inline-start: .75rem; }
+.tk-box--court { border-inline-start: 4px solid #1f4e79; padding-inline-start: .75rem; }
+.tk-points { list-style: none; margin: 0; padding: 0; }
+.tk-point { margin-block-end: .75rem; }
+.tk-point p { margin: 0; }
+.tk-point__meta { font-size: .85em; color: #4a5560; display: flex; flex-wrap: wrap; gap: .5rem; }
+.tk-badge, .tk-status, .tk-level { display: inline-block; padding: .1em .55em; border-radius: 999px; background: #eef1f4; font-size: .85em; }
+.tk-status--disputed, .tk-status--pending { background: #fff4d6; }
+.tk-status--weakened, .tk-status--rejected { background: #fde8e2; }
+.tk-status--source_backed, .tk-status--multi_source_supported { background: #e6f4ea; }
+.tk-level--question_or_comment, .tk-level--interim_observation { background: #fff4d6; }
+.tk-level--procedural_decision, .tk-level--substantive_ruling { background: #e3ecf7; }
+.tk-cite { text-decoration: underline; text-underline-offset: 2px; }
+.tk-cite__who { color: #4a5560; }
+.tk-claim__disclosure { font-size: .85em; color: #4a5560; border-block-start: 1px dashed #d0d4d9; margin-block-start: 1rem; padding-block-start: .5rem; }
+.tk-empty, .tk-muted { color: #5b6670; }
+.tk-source__quote { margin: 0; padding: 1rem; background: #f7f8fa; border-inline-start: 4px solid #1f4e79; }
+.tk-source__speaker { font-weight: 600; margin: 0 0 .25rem; }
+.tk-exchange { font-weight: 600; }
+.tk-timeline__list { list-style: none; padding: 0; border-inline-start: 2px solid #d0d4d9; }
+.tk-timeline__item { padding-inline-start: 1rem; margin-block: .6rem; position: relative; }
+.tk-timeline__item time { font-variant-numeric: tabular-nums; font-weight: 600; margin-inline-end: .5rem; }
+.tk-timeline__desc { display: block; color: #4a5560; font-size: .9em; }
+.tk-timeline__item--event-outcome, .tk-timeline__item--event-pardon_requested { background: #fff8e6; }
+.tk-ask__form { display: grid; gap: .5rem; }
+.tk-ask__q { width: 100%; font: inherit; padding: .5rem; }
+.tk-ask__btn { justify-self: start; padding: .5rem 1.25rem; font: inherit; cursor: pointer; }
+.tk-ask__out { margin-block: 1rem; }
+.tk-answer__short { font-size: 1.1em; font-weight: 600; }
+.tk-answer--false_premise_corrected .tk-answer__short { border-inline-start: 4px solid #b23c17; padding-inline-start: .5rem; }
+.tk-notice { padding: .5rem .75rem; background: #fff4d6; border-radius: 6px; }
+.tk-notice--error { background: #fde8e2; }
+.tk-claim a:focus-visible, .tk-source a:focus-visible, .tk-timeline a:focus-visible, .tk-ask button:focus-visible,
+.tk-ask textarea:focus-visible, .tk-answer a:focus-visible, .tk-timeline button:focus-visible, .tk-timeline input:focus-visible {
+	outline: 3px solid #1f4e79; outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) { .tk-claim *, .tk-answer * { transition: none !important; } }

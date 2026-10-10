@@ -1,7 +1,6 @@
 """Parser behaviour on the synthetic fixture (fictional names and case)."""
 
 import pytest
-
 from ntk_common import ids
 from ntk_common.pipeline import run_l0
 from ntk_common.pipeline.pdf import PdfValidationError, validate_pdf

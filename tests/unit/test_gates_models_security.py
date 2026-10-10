@@ -2,7 +2,6 @@ import json
 import time
 
 import pytest
-
 from ntk_common import gates
 from ntk_common.ask import detect_injection, detect_outcome_premises, detect_ruling_attribution, detect_speaker_claim
 from ntk_common.config import load_settings

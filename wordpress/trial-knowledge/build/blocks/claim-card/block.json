@@ -1,0 +1,29 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "trial-knowledge/claim-card",
+  "version": "2.1.0",
+  "title": "כרטיס טענה",
+  "category": "widgets",
+  "icon": "media-document",
+  "description": "כרטיס טענה עם מה מחזק, מה מחליש ועמדת בית המשפט, מתוך ה־Knowledge API.",
+  "textdomain": "trial-knowledge",
+  "attributes": {
+    "claimId": {
+      "type": "string",
+      "default": ""
+    },
+    "headingLevel": {
+      "type": "number",
+      "default": 2
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ]
+  },
+  "editorScript": "file:./index.js"
+}

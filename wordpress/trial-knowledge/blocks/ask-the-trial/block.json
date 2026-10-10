@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "trial-knowledge/ask-the-trial",
+  "version": "2.1.0",
+  "title": "שאלו את המשפט",
+  "category": "widgets",
+  "icon": "search",
+  "description": "ממשק שאלות הנשען רק על חומר שפורסם, עם ציטוטים.",
+  "textdomain": "trial-knowledge",
+  "attributes": {
+    "placeholder": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ]
+  },
+  "editorScript": "file:./index.js"
+}

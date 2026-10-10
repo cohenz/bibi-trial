@@ -8,11 +8,11 @@ import json
 from pathlib import Path
 
 import pytest
-from sqlalchemy import text
-
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
 from ntk_common.db.core import row, rows, scalar
+from sqlalchemy import text
+
 from tests.conftest import FIXTURES, make_job
 
 pytestmark = pytest.mark.db

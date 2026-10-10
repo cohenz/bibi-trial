@@ -11,7 +11,6 @@ import time
 
 import pytest
 from fastapi.testclient import TestClient
-
 from ntk_api.app import build_state, create_app
 from ntk_api.security import sign
 from ntk_common.jobs import TASK_BUILD_CLAIM, TASK_RUN_JOB, InlineQueue

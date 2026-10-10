@@ -18,14 +18,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.exceptions import HTTPException as StarletteHTTPException
-
 from ntk_common.ask import AskConfig, AskEngine
 from ntk_common.config import Settings, get_settings
 from ntk_common.db.core import get_engine
 from ntk_common.db.public import PgAskStore
 from ntk_common.jobs import CeleryQueue, JobQueue
 from ntk_common.orchestrator import Services, build_services
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .security import NonceStore, RateLimiter
 

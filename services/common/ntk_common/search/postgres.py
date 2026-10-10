@@ -31,7 +31,7 @@ def _filter_sql(req: SearchRequest, alias: str = "su") -> tuple[str, dict]:
     clauses = []
     params: dict = {}
     if f.published_only:
-        clauses.append(f"sv.publication_state = 'published'")
+        clauses.append("sv.publication_state = 'published'")
     if f.case_id:
         clauses.append("h.case_id = :f_case")
         params["f_case"] = f.case_id

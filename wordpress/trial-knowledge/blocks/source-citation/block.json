@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "trial-knowledge/source-citation",
+  "version": "2.1.0",
+  "title": "ציטוט מקור",
+  "category": "widgets",
+  "icon": "format-quote",
+  "description": "ציטוט מדויק מפרוטוקול עם עמוד ושורות וקישור קבוע.",
+  "textdomain": "trial-knowledge",
+  "attributes": {
+    "sourceUnitId": {
+      "type": "string",
+      "default": ""
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": [
+      "wide",
+      "full"
+    ]
+  },
+  "editorScript": "file:./index.js"
+}

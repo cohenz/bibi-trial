@@ -22,14 +22,13 @@ import io
 import json
 from typing import Any
 
-from sqlalchemy.engine import Connection
-
 from ntk_common import contracts, ids
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import sources
 from ntk_common.db.core import execute, j, row
+from sqlalchemy.engine import Connection
 
-from .mapping import (INVOLVEMENT, PARSER_VERSION, REQUIRED, apply_mapping, as_list, parse_date_or_range, valid_url)
+from .mapping import INVOLVEMENT, PARSER_VERSION, REQUIRED, apply_mapping, as_list, parse_date_or_range, valid_url
 
 SOURCE_OWNER = "Project 315"
 SOURCE_STANCE = "defense-supportive"

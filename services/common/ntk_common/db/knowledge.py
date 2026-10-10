@@ -23,7 +23,6 @@ from ..gates import GateDecision
 from .core import execute, j, row, rows, scalar
 from .ops import audit, bump_corpus_version, enqueue_webhook
 
-
 # Closing a system-time interval must never produce an empty range, even for
 # a row recorded earlier in the same transaction (now() is transaction start).
 CLOSE_RECORDED = ("tstzrange(lower(recorded_during), "

@@ -84,3 +84,41 @@ def test_digest_batch_submit_and_collect(services, fixture_path):
         b = row(conn, "SELECT state, finished_at FROM ntk.model_batches WHERE name = :n", {"n": name})
         assert b["finished_at"] is not None and b["state"].endswith("SUCCEEDED")
         assert batches.listing(conn)[0]["name"]
+
+
+def test_digest_batch_invalid_answer_falls_back_to_direct(services, fixture_path):
+    """The batch endpoint may ignore the response schema: an invalid answer is not resubmitted; the hearing is built
+    with one direct (schema-constrained) call, and the batch prompt carries the schema as text."""
+    import dataclasses
+
+    from ntk_common import batches
+    from ntk_common.llm.providers import ProviderResult
+    from ntk_common.orchestrator import Pipeline
+
+    from tests.conftest import make_job
+
+    assert "<output_json_schema>" in batches.with_schema_text("u", {"type": "object"})
+    assert batches.with_schema_text("u", None) == "u"
+    p = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, hearing_digests="deferred")))
+    job = p.run_job(make_job(services, fixture_path, key="batch-digest-fallback"))
+    hid = {s["stage"]: s for s in job["stages"]}["extract_a"]["output"]["hearing_id"]
+    with services.engine.begin() as conn:
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'hearing' AND object_id = :h",
+                {"h": hid})
+        execute(conn, "UPDATE ntk.model_runs SET status = 'provider_error' WHERE task_type = 'digest'")
+    sent = []
+    prov = p.s.runner.providers["mock"]
+    orig_create, orig_get = prov.create_batch, prov.get_batch
+    prov.create_batch = lambda **kw: (sent.extend(kw["items"]), orig_create(**kw))[1]
+    out = batches.submit_digests(p, hearing_ids=[hid])
+    name = out["batches"][0]["name"]
+    assert "<output_json_schema>" in sent[0]["request"]["contents"][0]["parts"][0]["text"]
+    key = sent[0]["key"]
+    prov.get_batch = lambda n: {"state": "BATCH_STATE_SUCCEEDED", "done": True, "error": None,
+                                "responses": {key: ProviderResult(text='{"summary": "free-form"}', usage={}, model_version="m", raw=None)}}
+    try:
+        res = batches.poll(p)
+    finally:
+        prov.create_batch, prov.get_batch = orig_create, orig_get
+    built = next(b for b in res["batches"] if b["name"] == name)["built"]
+    assert built[0].get("digest_id") and built[0]["via"] == "direct_fallback", built

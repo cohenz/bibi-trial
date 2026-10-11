@@ -23,6 +23,15 @@ MAX_BATCH_BYTES = 15_000_000  # inline batch requests must stay well under the p
 FINAL = ("SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED")
 
 
+def with_schema_text(user: str, schema: dict | None) -> str:
+    """The batch endpoint ignores ``responseJsonSchema`` (pilot 11.10.2026: all 10 answers were free-form JSON), so the
+    output contract is also written into the prompt, as the direct path does when the API rejects the schema. The run
+    id is unchanged (it is derived from the logical input, not the request body)."""
+    if not schema:
+        return user
+    return user + "\n<output_json_schema>\n" + json.dumps(schema, ensure_ascii=False) + "\n</output_json_schema>"
+
+
 def _hearings_without_digest(conn, hearing_ids: list[str] | None, limit: int) -> list[dict]:
     return rows(conn, """
         SELECT h.id, h.source_version_id FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
@@ -49,8 +58,8 @@ def submit_digests(pipeline, *, hearing_ids: list[str] | None = None, limit: int
             pipeline.rebuild_hearing_digest(h["id"])
             continue
         provider = runner.provider_for(req["spec"])
-        body = provider.request_body(system=req["prompt"].system, user=req["user"], temperature=req["spec"].temperature,
-                                     response_schema=req["response_schema"])
+        body = provider.request_body(system=req["prompt"].system, user=with_schema_text(req["user"], req["response_schema"]),
+                                     temperature=req["spec"].temperature, response_schema=req["response_schema"])
         items.append({"key": f"digest|{req['run_id']}", "request": body, "hearing_id": h["id"], "run_id": req["run_id"],
                       "input_hash": req["input_hash"], "role": req["role"], "model_id": req["spec"].model_id,
                       "bytes": len(json.dumps(body, ensure_ascii=False).encode("utf-8"))})
@@ -101,13 +110,13 @@ def poll(pipeline) -> dict:
             with pipeline.s.engine.connect() as conn:
                 cv = ops.current_corpus_version(conn)
             run = runner.record(req, res, payload=None, input_source_ids=[], corpus_version=cv)
-            if not run.ok:
-                built.append({"hearing_id": it["hearing_id"], "error": "invalid output", "details": run.validation_errors[:3]})
-                continue
+            # An invalid batch answer is not resubmitted (the same request would likely fail the same way): the build
+            # below finds no valid run and makes one direct call with schema-constrained decoding.
             try:
                 r = pipeline.rebuild_hearing_digest(it["hearing_id"])
                 built.append({"hearing_id": it["hearing_id"], "digest_id": r.get("digest_id"), "state": r.get("state"),
-                              "auto_published": r.get("auto_published")})
+                              "auto_published": r.get("auto_published"), "via": "batch" if run.ok else "direct_fallback",
+                              **({} if run.ok else {"batch_errors": run.validation_errors[:2]})})
             except Exception as exc:  # noqa: BLE001 - one hearing must not stop the batch
                 built.append({"hearing_id": it["hearing_id"], "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
         with pipeline.s.engine.begin() as conn:

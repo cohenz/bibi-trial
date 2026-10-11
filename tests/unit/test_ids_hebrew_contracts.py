@@ -98,3 +98,18 @@ def test_unknown_major_schema_version_rejected():
 def test_openapi_is_valid_json():
     spec = json.loads((ROOT / "contracts" / "openapi.json").read_text(encoding="utf-8"))
     assert "/v2/ask" in spec["paths"] and "ErrorEnvelope" in spec["components"]["schemas"]
+
+
+def test_rtl_direction_repairs():
+    from ntk_common import hebrew as h
+
+    assert h.display_fix(")הנאשם נתניהו(") == "(הנאשם נתניהו)"
+    assert h.display_fix(')להלן באישום זה:"התקופה הרלוונטית"(') == '(להלן באישום זה:"התקופה הרלוונטית")'
+    assert h.display_fix("בסעיף 34כד)1( לחוק") == "בסעיף 34כד(1) לחוק"
+    assert h.display_fix("1) פריט ראשון") == "1) פריט ראשון" and h.display_fix("א) כך (ב) כך") == "א) כך (ב) כך"
+    assert h.display_fix("שאלה (תשובה) רגילה") == "שאלה (תשובה) רגילה"
+    assert h.display_fix('"בהנחה שיש חוק, utmost my do will I שאתה') == '"בהנחה שיש חוק, I will do my utmost שאתה'
+    assert h.display_fix("Hello world plain") == "Hello world plain"
+    logical = '1. בנימין נתניהו (להלן: "הנאשם נתניהו") כיהן'
+    assert h.reverse_visual_line(logical[::-1]) == logical
+    assert h.display_text(")א ב(", "pdf-extract-1.1") == ")א ב(" and h.display_text(")א ב(", "pdf-extract-1.0") == "(א ב)"

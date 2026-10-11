@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import Engine
 from sqlalchemy.engine import Connection
 
+from .. import hebrew
 from ..layers import UnitView
 from .core import execute, j, row, rows, scalar
 from .ops import audit, current_corpus_version
@@ -75,6 +76,9 @@ def public_citation(conn: Connection, unit_id: str) -> dict | None:
                             FROM ntk.qa_exchanges WHERE (question_unit_id = :id OR answer_unit_id = :id)
                             AND superseded_at IS NULL LIMIT 1""",
                    {"id": unit_id})
+    xv = scalar(conn, "SELECT extractor_version FROM ntk.source_versions WHERE id = :sv", {"sv": r["source_version_id"]})
+    for x in [r, *siblings, *neighbours]:
+        x["raw_text"] = hebrew.display_text(x["raw_text"], xv)
     return {"unit": r, "turn_continuations": siblings, "context": neighbours, "exchange": exchange}
 
 
@@ -309,9 +313,10 @@ LABEL_STATES = ("machine_verified", "approved", "published")
 def source_text(conn: Connection, source_version_id: str, *, page_from: int, page_to: int) -> list[dict]:
     """Units of a published source version on pages [page_from, page_to], in reading order, each with its Q/A
     exchange (question→answer link) and, when verified, the affirmed/denied label."""
-    return rows(conn, """
+    out = rows(conn, """
         SELECT su.id, su.page_no AS page, su.line_start, su.line_end, su.speaker_label AS speaker, su.speaker_role,
                su.unit_type, su.examination_phase::text AS phase, su.raw_text AS text, su.witness_label AS witness,
+               sv.extractor_version AS _xv,
                x.id AS exchange_id, x.question_unit_id, x.answer_unit_id, x.answer_relation::text AS answer_relation,
                CASE WHEN x.review_state::text = ANY(:ls) THEN x.public_wording END AS exchange_label
         FROM ntk.source_units su
@@ -320,6 +325,9 @@ def source_text(conn: Connection, source_version_id: str, *, page_from: int, pag
         WHERE su.source_version_id = :sv AND su.page_no BETWEEN :a AND :b AND su.superseded_at IS NULL
         ORDER BY su.unit_ordinal
     """, {"sv": source_version_id, "a": page_from, "b": page_to, "ls": list(LABEL_STATES)})
+    for r in out:
+        r["text"] = hebrew.display_text(r["text"], r.pop("_xv"))
+    return out
 
 
 _BRIEF_JOIN = """

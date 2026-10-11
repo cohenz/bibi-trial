@@ -218,10 +218,51 @@ def order_score(line: str) -> int:
     return score
 
 
+_OPEN, _CLOSE = "([{", ")]}"
+_LATIN_RUN_RE = re.compile(r"[A-Za-z][A-Za-z0-9.,'’\-]*(?:[ ]+[A-Za-z][A-Za-z0-9.,'’\-]*)+")
+
+
+def fix_bracket_direction(line: str) -> str:
+    """'(הנאשם נתניהו)' printed in RTL may come out of a PDF as ')הנאשם נתניהו(' (or mirrored twice). A line whose
+    first bracket closes and whose last bracket opens is reversed: swap every bracket on it. Lines like '1) …' or
+    'א) … (ב)' are left alone."""
+    brackets = [c for c in line if c in _OPEN or c in _CLOSE]
+    if len(brackets) < 2 or brackets[0] not in _CLOSE or brackets[-1] not in _OPEN:
+        return line
+    return line.translate(_MIRROR)
+
+
+def fix_latin_runs(line: str) -> str:
+    """Reversing a visual RTL line puts a run of Latin words in reverse word order ('utmost my do will I'); restore
+    it. Only applies to lines that are mostly Hebrew."""
+    if hebrew_ratio(line) < 0.3:
+        return line
+    return _LATIN_RUN_RE.sub(lambda m: " ".join(reversed(m.group(0).split())), line)
+
+
+def display_fix(text: str) -> str:
+    """Repair direction artefacts of extractor versions before pdf-extract-1.1, line by line (display only: stored
+    citation text never changes)."""
+    if not text:
+        return text
+    return "\n".join(fix_latin_runs(fix_bracket_direction(ln)) for ln in text.split("\n"))
+
+
+FIXED_EXTRACTOR = "pdf-extract-1.1"
+
+
+def display_text(text: str, extractor_version: str | None) -> str:
+    """Text as shown to readers: units extracted before ``FIXED_EXTRACTOR`` get ``display_fix``."""
+    if extractor_version and extractor_version >= FIXED_EXTRACTOR:
+        return text
+    return display_fix(text)
+
+
 def reverse_visual_line(line: str) -> str:
     """Convert a visually ordered RTL line to logical order."""
     rev = line[::-1].translate(_MIRROR)
-    return _LTR_RUN_RE.sub(lambda m: m.group(0)[::-1], rev)
+    rev = _LTR_RUN_RE.sub(lambda m: m.group(0)[::-1], rev)
+    return fix_latin_runs(fix_bracket_direction(rev))
 
 
 def fix_visual_order(lines: Iterable[str]) -> tuple[list[str], bool]:

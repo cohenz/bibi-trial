@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from sqlalchemy.engine import Connection
 
-from .. import guides
+from .. import guides, hebrew
 from ..guide_service import witnesses as all_witnesses
 from .core import row, rows
 from .public import public_documents, public_hearings, units_by_ids
+
+
+def _brackets(text: str) -> str:
+    return "\n".join(hebrew.fix_bracket_direction(ln) for ln in (text or "").split("\n"))
+
 
 CASE_ORDER = {"4000": 0, "2000": 1, "1000": 2}
 
@@ -151,7 +156,7 @@ def witness_page(conn: Connection, slug: str) -> dict | None:
                     q, a = views.get(e["question_unit_id"]), views.get(e["answer_unit_id"])
                     if q and a and a.speaker_label and guides.name_matches(w["name"], a.speaker_label or ""):
                         notable.append({"hearing_id": h["id"], "hearing_date": h["hearing_date"], **e,
-                                        "question": q.text[:600], "answer": a.text[:600],
+                                        "question": _brackets(q.text[:600]), "answer": _brackets(a.text[:600]),
                                         "question_speaker": q.speaker_label, "answer_speaker": a.speaker_label})
         hearings.append({"id": h["id"], "hearing_date": h["hearing_date"], "digest_sentences": sents})
     wcases = _witness_cases(cases, [w]).get(slug, [])

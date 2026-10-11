@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from .. import hebrew
 
-EXTRACTOR_VERSION = "pdf-extract-1.0"
+EXTRACTOR_VERSION = "pdf-extract-1.1"  # 1.1: bracket direction and Latin word order in RTL lines
 
 PDF_MAGIC = b"%PDF-"
 MIN_TEXT_CHARS_PER_PAGE = 40  # below this the text layer is considered unusable

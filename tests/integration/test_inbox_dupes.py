@@ -122,3 +122,70 @@ def test_release_possible_duplicate_as_different_document(svc):
     it = _item(svc, PREFIX + "c/variant.pdf")
     assert it["source_key"] and svc.storage.head(it["source_key"]) is not None
     assert base != variant
+
+
+def test_archive_name_wins_and_copies_follow_the_decision(svc, pipeline):
+    """Pairs like '0051_1.pdf' + '0051 — 2026-06-30 — החלטה — תיאור.pdf' (same bytes): whichever copy is kept, the stored
+    document takes its title and date from the archive name."""
+    from ntk_common.db.core import scalar
+
+    body = [[ln.replace("12 באוקטובר", "19 באוקטובר") for ln in NOTICE[0]] + ["16. פסקה ייחודית למסמך הזה בלבד."], NOTICE[1]]
+    data = make_pdf(body)
+    svc.storage.put_bytes(PREFIX + "d/0051_1.pdf", data, mime_type="application/pdf")
+    _scan(svc)
+    q = InlineQueue({TASK_RUN_JOB: lambda jid: pipeline.run_job(jid)})
+    first = _item(svc, PREFIX + "d/0051_1.pdf")
+    if first["status"] != "classified":
+        pytest.skip(f"first copy is {first['status']} in this database")
+    inbox.queue_items(svc, q, task_name=TASK_RUN_JOB, item_ids=[str(first["id"])])
+    with svc.engine.begin() as conn:
+        inbox.sync_job_status(conn, str(_item(svc, PREFIX + "d/0051_1.pdf")["job_id"]), "succeeded")
+    named = PREFIX + "d/0051 — 2026-06-30 — הודעה — המאשימה מעדכנת על העברת חומרים.pdf"
+    svc.storage.put_bytes(named, data, mime_type="application/pdf")
+    _scan(svc)
+    assert _item(svc, named)["status"] == "removed"
+    with svc.engine.connect() as conn:
+        d = row(conn, """SELECT d.canonical_title, sv.metadata FROM ntk.source_versions sv
+                         JOIN ntk.source_documents d ON d.id = sv.document_id WHERE sv.content_sha256 = :s""",
+                {"s": first["content_sha256"]})
+        assert d["canonical_title"] == "הודעה: המאשימה מעדכנת על העברת חומרים"
+        assert d["metadata"]["document_date"] == "2026-06-30" and d["metadata"]["archive_number"] == "0051"
+        assert d["metadata"]["name_from"] == named
+        assert inbox_dupes.refresh_names(conn)["retitled"] == 0  # idempotent
+        assert scalar(conn, "SELECT count(*) FROM ntk.inbox_items WHERE content_sha256 = :s", {"s": first["content_sha256"]}) == 2
+
+
+def test_copy_of_a_held_item_follows_its_decision(svc):
+    near = make_pdf([NOTICE[0], NOTICE[1] + ["חותמת שנייה"]])
+    svc.storage.put_bytes(PREFIX + "e/held.pdf", near, mime_type="application/pdf")
+    svc.storage.put_bytes(PREFIX + "e/held-again.pdf", near, mime_type="application/pdf")
+    _scan(svc)
+    a, b = _item(svc, PREFIX + "e/held.pdf"), _item(svc, PREFIX + "e/held-again.pdf")
+    held, copy = (a, b) if a["status"] == "possible_duplicate" else (b, a)
+    if held["status"] != "possible_duplicate":
+        pytest.skip("no original to be near")
+    # an identical copy of a held item is removed at once: one copy is enough to decide on
+    assert copy["status"] == "removed" and svc.storage.head(copy["object_key"]) is None
+    res = inbox_dupes.remove_copy(svc, str(held["id"]), actor="op", reason="operator")
+    assert res["removed"] and svc.storage.head(held["object_key"]) is None
+
+
+def test_copy_left_behind_follows_the_held_items_removal(svc):
+    """A copy recorded as 'duplicate' of a held item (auto-delete off at the time) is removed with it."""
+    near = make_pdf([NOTICE[0], NOTICE[1] + ["חותמת שלישית"]])
+    off = dataclasses.replace(svc.settings, inbox_delete_duplicates=False)
+    svc.settings, on = off, svc.settings
+    try:
+        svc.storage.put_bytes(PREFIX + "f/held.pdf", near, mime_type="application/pdf")
+        svc.storage.put_bytes(PREFIX + "f/held-again.pdf", near, mime_type="application/pdf")
+        _scan(svc)
+    finally:
+        svc.settings = on
+    a, b = _item(svc, PREFIX + "f/held.pdf"), _item(svc, PREFIX + "f/held-again.pdf")
+    held, copy = (a, b) if a["status"] == "possible_duplicate" else (b, a)
+    if held["status"] != "possible_duplicate":
+        pytest.skip("no original to be near")
+    assert copy["status"] == "duplicate"
+    res = inbox_dupes.remove_copy(svc, str(held["id"]), actor="op", reason="operator")
+    assert res["removed"] and res["copies_removed"] == [str(copy["id"])]
+    assert svc.storage.head(copy["object_key"]) is None and svc.storage.head(held["object_key"]) is None

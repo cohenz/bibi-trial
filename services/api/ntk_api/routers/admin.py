@@ -301,6 +301,19 @@ def inbox_duplicates(st: AppState = Depends(get_state), limit: int = Query(200, 
                   "threshold": inbox_dupes.POSSIBLE_THRESHOLD}, cache="no-store")
 
 
+@router.post("/inbox/refresh-names")
+def inbox_refresh_names(request: Request, st: AppState = Depends(get_state),
+                        p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Retitle documents that were named from a less informative copy when another copy carries the archive name."""
+    from ntk_common import inbox_dupes
+
+    with st.services.engine.begin() as conn:
+        out = inbox_dupes.refresh_names(conn)
+        ops.audit(conn, actor=p.label, action="inbox.refresh_names", object_type="inbox", object_id="names",
+                  request_id=_rid(request), details=out)
+    return _json(out, cache="no-store")
+
+
 @router.post("/inbox/items/{item_id}/duplicate")
 def inbox_duplicate_decision(item_id: str, body: DuplicateDecision, request: Request, st: AppState = Depends(get_state),
                              p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:

@@ -120,12 +120,33 @@ def kept_copy_key(conn, storage, item: dict) -> str | None:
     return None
 
 
-def remove_copy(services, item_id: str, *, actor: str, reason: str) -> dict:
-    """Delete the intake copy of a duplicate. Refuses unless the kept copy exists (and, for exact duplicates, has the
-    same size). The row is kept as ``removed``."""
+def _delete(services, it: dict, *, kept: str, actor: str, reason: str) -> dict:
     from .db import ops
 
-    s = services.settings
+    existed = services.storage.delete_intake_copy(it["object_key"], prefix=services.settings.inbox_prefix,
+                                                  expected_etag=it["etag"] or None)
+    with services.engine.begin() as conn:
+        execute(conn, """UPDATE ntk.inbox_items SET status = 'removed', removed_at = now(), removed_by = :by, updated_at = now(),
+                         error = CAST(:e AS jsonb) WHERE id = CAST(:id AS uuid)""",
+                {"id": str(it["id"]), "by": actor, "e": j({"removed_reason": reason, "previous_status": it["status"],
+                                                           "kept_copy": kept, "object_existed": existed})})
+        ops.audit(conn, actor=actor, action="inbox.copy_removed", object_type="inbox_item", object_id=str(it["id"]),
+                  details={"object_key": it["object_key"], "etag": it["etag"], "sha256": it["content_sha256"],
+                           "duplicate_of": it["duplicate_of"], "kept_copy": kept, "reason": reason})
+        if it.get("content_sha256"):
+            apply_best_name(conn, it["content_sha256"])
+    return {"item_id": str(it["id"]), "removed": True, "kept_copy": kept, "object_existed": existed}
+
+
+def _exact_copies_of(conn, item_id: str) -> list[dict]:
+    return rows(conn, """SELECT * FROM ntk.inbox_items WHERE status = 'duplicate' AND duplicate_of = :ref""",
+                {"ref": f"inbox:{item_id}"})
+
+
+def remove_copy(services, item_id: str, *, actor: str, reason: str) -> dict:
+    """Delete the intake copy of a duplicate. Refuses unless the kept copy exists (and, for exact duplicates, has the
+    same size). The row is kept as ``removed``. Removing a held near-duplicate also removes its exact copies (same bytes,
+    same decision)."""
     with services.engine.connect() as conn:
         it = row(conn, "SELECT * FROM ntk.inbox_items WHERE id = CAST(:id AS uuid)", {"id": item_id})
         if it is None:
@@ -133,18 +154,72 @@ def remove_copy(services, item_id: str, *, actor: str, reason: str) -> dict:
         if it["status"] not in {"duplicate", "possible_duplicate"}:
             return {"item_id": item_id, "removed": False, "reason": f"status is {it['status']}"}
         kept = kept_copy_key(conn, services.storage, it)
+        if kept is None and it["status"] == "duplicate" and (it["duplicate_of"] or "").startswith("inbox:"):
+            # a copy of a held near-duplicate: it follows the decision about that item
+            parent = row(conn, "SELECT * FROM ntk.inbox_items WHERE id = CAST(:id AS uuid)", {"id": it["duplicate_of"][6:]})
+            if parent and parent["status"] in {"possible_duplicate", "removed"} and parent["duplicate_of"]:
+                kept = kept_copy_key(conn, services.storage, {**parent, "status": "possible_duplicate"})
+        copies = _exact_copies_of(conn, item_id) if it["status"] == "possible_duplicate" else []
     if kept is None:
         return {"item_id": item_id, "removed": False, "reason": "kept_copy_not_found"}
-    existed = services.storage.delete_intake_copy(it["object_key"], prefix=s.inbox_prefix, expected_etag=it["etag"] or None)
-    with services.engine.begin() as conn:
-        execute(conn, """UPDATE ntk.inbox_items SET status = 'removed', removed_at = now(), removed_by = :by, updated_at = now(),
-                         error = CAST(:e AS jsonb) WHERE id = CAST(:id AS uuid)""",
-                {"id": item_id, "by": actor, "e": j({"removed_reason": reason, "previous_status": it["status"],
-                                                      "kept_copy": kept, "object_existed": existed})})
-        ops.audit(conn, actor=actor, action="inbox.copy_removed", object_type="inbox_item", object_id=item_id,
-                  details={"object_key": it["object_key"], "etag": it["etag"], "sha256": it["content_sha256"],
-                           "duplicate_of": it["duplicate_of"], "kept_copy": kept, "reason": reason})
-    return {"item_id": item_id, "removed": True, "kept_copy": kept, "object_existed": existed}
+    out = _delete(services, it, kept=kept, actor=actor, reason=reason)
+    out["copies_removed"] = [_delete(services, c, kept=kept, actor=actor, reason=reason + " (identical copy)")["item_id"]
+                             for c in copies]
+    return out
+
+
+def best_named_item(conn, sha: str) -> dict | None:
+    """Among intake copies of the same bytes, the one whose file name follows the archive pattern (number — date —
+    type — description) carries the most information."""
+    from .inbox import filename_meta
+
+    best, score = None, 0
+    for it in rows(conn, "SELECT id, object_key, doc_kind, classification FROM ntk.inbox_items WHERE content_sha256 = :s",
+                   {"s": sha}):
+        fm = filename_meta(it["object_key"])
+        sc = (2 if fm.get("description") else 0) + (1 if fm.get("date") else 0)
+        if sc > score:
+            best, score = it, sc
+    return best
+
+
+def apply_best_name(conn, sha: str) -> bool:
+    """If the stored document was named from a less informative copy (e.g. '0051_1.pdf') while another copy of the same
+    bytes has the archive name, retitle the document and fill its date and archive number from that name. Content,
+    citations and the stored file are untouched."""
+    from .inbox import _title, document_date_for, filename_meta
+
+    sv = row(conn, """SELECT sv.id, sv.document_id, sv.metadata, d.source_type::text AS st FROM ntk.source_versions sv
+                      JOIN ntk.source_documents d ON d.id = sv.document_id WHERE sv.content_sha256 = :s
+                      ORDER BY sv.created_at DESC LIMIT 1""", {"s": sha})
+    if sv is None:
+        return False
+    meta = sv["metadata"] or {}
+    if meta.get("name_from") or filename_meta(meta.get("original_filename") or "").get("description"):
+        return False
+    best = best_named_item(conn, sha)
+    if best is None or best["object_key"] == meta.get("original_filename"):
+        return False
+    it = {"doc_kind": sv["st"], "object_key": best["object_key"]}
+    c = best["classification"] or {}
+    fm = filename_meta(best["object_key"])
+    patch = {"name_from": best["object_key"], "archive_number": fm.get("number")}
+    if sv["st"] != "protocol":
+        d = document_date_for(it, c)
+        if d:
+            patch["document_date"] = d
+        execute(conn, "UPDATE ntk.source_documents SET canonical_title = :t WHERE id = :id",
+                {"t": _title(it, c), "id": sv["document_id"]})
+    execute(conn, "UPDATE ntk.source_versions SET metadata = metadata || CAST(:p AS jsonb) WHERE id = :id",
+            {"p": j({k: v for k, v in patch.items() if v}), "id": sv["id"]})
+    return True
+
+
+def refresh_names(conn) -> dict:
+    shas = [r["s"] for r in rows(conn, """SELECT DISTINCT content_sha256 AS s FROM ntk.inbox_items
+                                          WHERE content_sha256 IS NOT NULL AND status IN ('ingested', 'removed', 'duplicate')""")]
+    changed = [s for s in shas if apply_best_name(conn, s)]
+    return {"checked": len(shas), "retitled": len(changed)}
 
 
 def _ref_info(conn, ref: str | None) -> dict[str, Any] | None:
@@ -211,4 +286,11 @@ def release(services, item_id: str, *, actor: str) -> dict:
                          "similarity": it["similarity"], "by": actor})})
         ops.audit(conn, actor=actor, action="inbox.possible_duplicate_released", object_type="inbox_item",
                   object_id=item_id, details={"similar_to": it["duplicate_of"], "similarity": it["similarity"]})
-    return {"item_id": item_id, "released": True, "status": status}
+    removed = []
+    if s.inbox_delete_duplicates:
+        with services.engine.connect() as conn:
+            copies = _exact_copies_of(conn, item_id)
+        for cp in copies:
+            if remove_copy(services, str(cp["id"]), actor="inbox:auto", reason="exact duplicate (same SHA-256)").get("removed"):
+                removed.append(str(cp["id"]))
+    return {"item_id": item_id, "released": True, "status": status, "copies_removed": removed}

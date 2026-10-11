@@ -434,6 +434,13 @@ def sync_job_status(conn, job_id: str, status: str) -> None:
         execute(conn, """UPDATE ntk.inbox_items SET status = :s, updated_at = now()
                          WHERE job_id = CAST(:j AS uuid) AND status IN ('queued', 'ingest_failed', 'ingested')""",
                 {"s": new, "j": job_id})
+    if new == "ingested":
+        from .inbox_dupes import apply_best_name
+
+        for r in rows(conn, "SELECT DISTINCT content_sha256 AS s FROM ntk.inbox_items WHERE job_id = CAST(:j AS uuid)",
+                      {"j": job_id}):
+            if r["s"]:
+                apply_best_name(conn, r["s"])
 
 
 def summary(conn) -> dict:

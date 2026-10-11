@@ -206,6 +206,7 @@ class DigestBatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     hearing_ids: list[str] | None = Field(default=None, max_length=1000)
     limit: int = Field(default=200, ge=1, le=1000)
+    now: bool = False  # run in this request instead of the worker queue (the queue may be busy for hours)
 
 
 class BriefBuildRequest(BaseModel):

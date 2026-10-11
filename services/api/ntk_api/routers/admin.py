@@ -208,9 +208,16 @@ def submit_digest_batch(body: DigestBatchRequest, request: Request, st: AppState
     """Hearing digests through the provider's Batch API: half price, results within 24 hours (collected every 10
     minutes by beat; GET /v2/admin/batches shows progress)."""
     spec = body.model_dump(exclude_none=True)
+    now = spec.pop("now", False)
     with st.services.engine.begin() as conn:
         ops.audit(conn, actor=p.label, action="batch.requested", object_type="model_batch", object_id="digest",
-                  request_id=_rid(request), details=spec)
+                  request_id=_rid(request), details={**spec, "now": now})
+    if now:
+        from ntk_common import batches
+        from ntk_common.orchestrator import Pipeline
+
+        out = batches.submit_digests(Pipeline(st.services), hearing_ids=spec.get("hearing_ids"), limit=spec.get("limit", 200))
+        return _json(out, cache="no-store", status=200)
     tid = st.queue.enqueue(TASK_SUBMIT_DIGEST_BATCH, json.dumps(spec))
     return _json({"queued": TASK_SUBMIT_DIGEST_BATCH, "task_id": tid, **spec}, cache="no-store", status=202)
 
@@ -225,7 +232,13 @@ def list_batches(st: AppState = Depends(get_state), limit: int = Query(50, le=50
 
 
 @router.post("/batches/poll", status_code=202)
-def poll_batches_now(st: AppState = Depends(get_state), p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+def poll_batches_now(st: AppState = Depends(get_state), p: Principal = Depends(admin("admin:ingest")),
+                     now: bool = Query(False, description="collect in this request instead of the worker queue")) -> JSONResponse:
+    if now:
+        from ntk_common import batches
+        from ntk_common.orchestrator import Pipeline
+
+        return _json(batches.poll(Pipeline(st.services)), cache="no-store", status=200)
     tid = st.queue.enqueue(TASK_POLL_BATCHES)
     return _json({"queued": TASK_POLL_BATCHES, "task_id": tid}, cache="no-store", status=202)
 

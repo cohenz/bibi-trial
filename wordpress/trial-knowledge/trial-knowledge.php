@@ -3,7 +3,7 @@
  * Plugin Name:       Trial Knowledge
  * Plugin URI:        https://example.org/trial-knowledge
  * Description:       Displays the Netanyahu trial knowledge base (claim cards, citations, hearing timeline, Ask the Trial) from the Knowledge API, and provides upload, ingestion and review screens. WordPress is a presentation layer only: claims, evidence and citations live in the Knowledge API (PostgreSQL).
- * Version:           2.2.1
+ * Version:           2.2.2
  * Requires at least: 6.4
  * Requires PHP:      8.1
  * Author:            Trial Knowledge
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'TK_VERSION', '2.2.1' );
+define( 'TK_VERSION', '2.2.2' );
 define( 'TK_FILE', __FILE__ );
 define( 'TK_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TK_URL', plugin_dir_url( __FILE__ ) );

@@ -72,6 +72,22 @@ class TK_Render {
 		return TK_Public_Pages::url( 'source', $source_unit_id );
 	}
 
+	/** Compact citation for running text (digests): "עמ׳ 118", details in the tooltip. */
+	public static function citation_chip( array $c ) {
+		$title = sprintf( __( 'עמ׳ %1$d, שורות %2$d–%3$d', 'trial-knowledge' ), (int) $c['page'], (int) $c['line_start'], (int) $c['line_end'] ) .
+			( ! empty( $c['speaker'] ) ? ' · ' . $c['speaker'] : '' );
+		return '<a class="tk-chip" href="' . esc_url( self::citation_url( $c['source_unit_id'] ) ) . '" title="' . esc_attr( $title ) . '">' .
+			esc_html( sprintf( __( 'עמ׳ %d', 'trial-knowledge' ), (int) $c['page'] ) ) . '</a>';
+	}
+
+	/** Short form of a verified Q/A label: "אישר" / "הכחיש", the full wording in the tooltip. */
+	public static function qa_badge( $label ) {
+		$label = (string) $label;
+		$short = false !== strpos( $label, 'הכחיש' ) ? 'הכחיש' : ( false !== strpos( $label, 'אישר' ) ? 'אישר' : $label );
+		$cls   = 'הכחיש' === $short ? 'deny' : 'affirm';
+		return '<span class="tk-badge tk-badge--qa tk-badge--' . $cls . '" title="' . esc_attr( $label ) . '">' . esc_html( $short ) . '</span>';
+	}
+
 	public static function citation_link( array $c ) {
 		$label = sprintf(
 			/* translators: 1: page 2: line start 3: line end */
@@ -254,7 +270,7 @@ class TK_Render {
 			}
 			$out .= '<span class="tk-u__text">' . nl2br( esc_html( $u['text'] ) ) . '</span>';
 			if ( ! empty( $u['exchange_label'] ) ) {
-				$out .= ' <span class="tk-badge tk-badge--qa">' . esc_html( $u['exchange_label'] ) . '</span>';
+				$out .= ' ' . self::qa_badge( $u['exchange_label'] );
 			}
 			$out .= '</li>';
 		}
@@ -302,7 +318,9 @@ class TK_Render {
 			if ( empty( $doc['document_date'] ) ) {
 				continue;
 			}
-			$items[] = array( $doc['document_date'], 'document-' . preg_replace( '/[^a-z_]/', '', $doc['source_type'] ), self::type_label( $doc['source_type'] ) . ': ' . $doc['title'], '', TK_Public_Pages::url( 'document', $doc['source_version_id'] ) );
+			$label   = self::type_label( $doc['source_type'] );
+			$title   = 0 === strpos( $doc['title'], $label ) ? $doc['title'] : $label . ': ' . $doc['title'];
+			$items[] = array( $doc['document_date'], 'document-' . preg_replace( '/[^a-z_]/', '', $doc['source_type'] ), $title, '', TK_Public_Pages::url( 'document', $doc['source_version_id'] ) );
 		}
 		foreach ( (array) $t['hearings'] as $h ) {
 			$w       = ! empty( $h['witnesses'] ) ? implode( ', ', $h['witnesses'] ) : '';

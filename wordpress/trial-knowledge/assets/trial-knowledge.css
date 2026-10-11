@@ -71,3 +71,8 @@
 .tk-timeline__item--document-decision { border-inline-start: 3px solid #1f4e79; }
 .tk-transcript a:focus-visible, .tk-documents a:focus-visible, .tk-pager a:focus-visible { outline: 3px solid #1f4e79; outline-offset: 2px; }
 @media (max-width: 600px) { .tk-u { grid-template-columns: 2.75rem 1fr; column-gap: .5rem; } }
+/* 2.2.2: compact citations and Q/A badges */
+.tk-chip { display: inline-block; font-size: .78em; padding: 0 .45em; margin-inline-start: .15em; border-radius: 4px; background: #eef1f4; color: #1f4e79; text-decoration: none; vertical-align: .1em; white-space: nowrap; }
+.tk-chip:hover, .tk-chip:focus-visible { background: #dfe7f0; }
+.tk-badge--affirm { background: #e6f4ea; }
+.tk-badge--deny { background: #fde8e2; }

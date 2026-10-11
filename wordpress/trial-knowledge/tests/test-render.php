@@ -34,7 +34,7 @@ $h = TK_Render::transcript( $t, 'https://site.test/trial/hearing/hr_x/' );
 TK_T::ok( false === strpos( $h, '<script>' ) && false === strpos( $h, '<b>' ), 'transcript escapes text and speakers' );
 TK_T::ok( false !== strpos( $h, 'id="' . $su . '"' ) && false !== strpos( $h, 'עמוד 1' ) && false !== strpos( $h, 'עמוד 2' ), 'units anchored and grouped by page' );
 TK_T::ok( false !== strpos( $h, 'tk_p=26' ) && false !== strpos( $h, 'עמודים 1–2 מתוך 60' ) && false !== strpos( $h, 'PDF המקורי' ), 'pager with next page and PDF link' );
-TK_T::ok( false !== strpos( $h, 'העד הכחיש את הנטען' ), 'verified Q/A label shown' );
+TK_T::ok( false !== strpos( $h, 'tk-badge--deny' ) && false !== strpos( $h, 'title="העד הכחיש את הנטען"' ), 'verified Q/A label shown as a short badge' );
 $docs = TK_Render::documents( array( 'items' => array( array( 'source_version_id' => 'sv_' . str_repeat( 'e', 26 ), 'title' => 'החלטה <i>x</i>', 'source_type' => 'decision', 'document_date' => '2025-10-12', 'page_count' => 3 ) ) ) );
 TK_T::ok( false !== strpos( $docs, '/trial/document/sv_eeee' ) && false !== strpos( $docs, 'החלטה' ) && false === strpos( $docs, '<i>' ), 'documents list links document pages, escaped' );
 TK_T::ok( false !== strpos( TK_Render::documents( array( 'items' => array() ) ), 'עדיין לא פורסמו' ), 'empty documents list' );
@@ -44,3 +44,8 @@ $tl = TK_Render::timeline( array( 'events' => array(), 'hearings' => array(), 'd
 TK_T::ok( false !== strpos( $tl, '2025-10-12' ) && false !== strpos( $tl, '/trial/document/sv_ffff' ), 'timeline lists dated documents' );
 $dup = TK_Render::transcript( array( 'page_from' => 1, 'page_to' => 1, 'page_count' => 1, 'units' => array( array( 'id' => 'su_' . str_repeat( '9', 26 ), 'page' => 1, 'line_start' => 1, 'line_end' => 1, 'speaker' => 'עו"ד תירוש', 'unit_type' => 'speech_turn', 'text' => 'עו"ד תירוש: אוקי.', 'exchange_label' => null ) ) ), 'https://site.test/x/' );
 TK_T::ok( false === strpos( $dup, 'tk-u__speaker' ), 'speaker printed in the text is not repeated' );
+
+$chip = TK_Render::citation_chip( array( 'source_unit_id' => $su, 'page' => 118, 'line_start' => 3, 'line_end' => 5, 'speaker' => 'עו"ד <x>' ) );
+TK_T::ok( false !== strpos( $chip, '>עמ׳ 118<' ) && false === strpos( $chip, '<x>' ), 'compact citation chip, escaped tooltip' );
+$tl2 = TK_Render::timeline( array( 'events' => array(), 'hearings' => array(), 'documents' => array( array( 'source_version_id' => 'sv_' . str_repeat( 'a', 26 ), 'title' => 'החלטה: על בקשה', 'source_type' => 'decision', 'document_date' => '2025-01-01' ) ) ) );
+TK_T::ok( false === strpos( $tl2, 'החלטה: החלטה' ), 'timeline does not repeat the type label' );

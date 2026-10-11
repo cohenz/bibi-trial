@@ -34,7 +34,7 @@ $tk_cur = TK_Public_Pages::$current;
 				<?php
 				foreach ( $tk_s['citation_ids'] as $tk_id ) {
 					if ( isset( $tk_cits[ $tk_id ] ) ) {
-						echo ' ' . TK_Render::citation_link( $tk_cits[ $tk_id ] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+						echo ' ' . TK_Render::citation_chip( $tk_cits[ $tk_id ] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 					}
 				}
 				?>

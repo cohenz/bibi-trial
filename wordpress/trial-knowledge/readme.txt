@@ -4,7 +4,7 @@ Tags: knowledge base, legal, citations, rtl
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 2.2.1
+Stable tag: 2.2.2
 License: GPLv2 or later
 
 Presentation and editorial layer for the Netanyahu trial Knowledge API.
@@ -28,6 +28,9 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 5. Settings → Permalinks → Save (refreshes rewrite rules) if the public URLs return 404.
 
 == Changelog ==
+
+= 2.2.2 =
+* Compact citations in digests, short affirmed/denied badges, no repeated type label in the timeline.
 
 = 2.2.1 =
 * Hearing pages show the full protocol page by page (speakers, line numbers, verified Q/A labels, link to the original PDF).

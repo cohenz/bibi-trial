@@ -301,3 +301,27 @@ def test_gemini_structured_output_schema_from_contract():
         model_id="m", system="s", user="u", temperature=0, task_type="qa_relation", response_schema=schema)
     assert len(sess.calls) == 2 and "responseJsonSchema" not in sess.calls[1]["body"]["generationConfig"]
     assert "<output_json_schema>" in sess.calls[1]["body"]["contents"][0]["parts"][0]["text"]
+
+
+def test_digest_drops_unknown_judicial_candidates_but_not_unknown_citations():
+    from ntk_common.layers import UnitView, build_hearing_digest
+
+    units = [UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                      speaker_label="השופט", speaker_role="judge", unit_type="statement",
+                      text=f"השופט אמר דבר מספר {i} בדיון הזה") for i in range(1, 4)]
+    ghost = "su_" + "f" * 26
+
+    def out(cite):
+        return json.dumps({"schema_version": "2.0", "summary_sentences": [{"text": "השופט אמר דבר מספר 1 בדיון הזה",
+                           "source_unit_ids": [cite]}], "topics": ["דיון"], "persons": ["השופט"],
+                           "notable_exchange_ids": [], "judicial_candidate_unit_ids": [units[1].id, ghost]})
+
+    def build(text):
+        runner = ModelRunner(_registry(), {"mock": BadProvider(text)}, MemoryRunStore(), sleep=lambda _: None)
+        return build_hearing_digest(hearing_id="hr_" + "b" * 26, units=units, exchanges=[], runner=runner, corpus_version="cv",
+                                    citation_base="https://x.test/c/", env="test")
+
+    res = build(out(units[0].id))
+    assert res.payload is not None and res.payload["judicial_candidates"] == [units[1].id]
+    res = build(out(ghost))
+    assert res.payload is None and any(e["validator"] == "unknown_id" for e in res.errors)

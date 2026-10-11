@@ -2542,6 +2542,1439 @@
         ]
       }
     },
+    "/v2/admin/ingestion-jobs/{job_id}/rerun": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Rerun Stages",
+        "description": "Re-run the named stages (e.g. embed, extract_a, verify after switching models). Earlier stages keep their results.",
+        "operationId": "rerun_stages_v2_admin_ingestion_jobs__job_id__rerun_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StageRerunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/evaluations": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Evaluation",
+        "operationId": "create_evaluation_v2_admin_evaluations_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Evaluations",
+        "operationId": "list_evaluations_v2_admin_evaluations_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/evaluations/{run_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Evaluation",
+        "operationId": "get_evaluation_v2_admin_evaluations__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          },
+          {
+            "name": "report",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Report"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/inbox/scan": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Inbox Scan",
+        "operationId": "inbox_scan_v2_admin_inbox_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/inbox": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Inbox Status",
+        "operationId": "inbox_status_v2_admin_inbox_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/inbox/process": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Inbox Process",
+        "operationId": "inbox_process_v2_admin_inbox_process_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxProcessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
+    "/v2/admin/inbox/items/{item_id}": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Inbox Override",
+        "operationId": "inbox_override_v2_admin_inbox_items__item_id__post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxItemOverride"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict / review_required / unpublished_object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "payload_too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "internal_error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "citation_gate_failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                },
+                "example": {
+                  "code": "invalid_request",
+                  "message": "request validation failed",
+                  "request_id": "3f2a…",
+                  "details": null
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "ServiceKeyId": [],
+            "ServiceTimestamp": [],
+            "ServiceNonce": [],
+            "ServiceActor": [],
+            "ServiceSignature": []
+          }
+        ]
+      }
+    },
     "/v2/admin/review-tasks": {
       "get": {
         "tags": [
@@ -6191,6 +7624,60 @@
         ],
         "title": "DocumentIn"
       },
+      "EvaluationRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "search_bench",
+              "ask_suite"
+            ],
+            "title": "Kind"
+          },
+          "suite": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Suite"
+          },
+          "published_only": {
+            "type": "boolean",
+            "title": "Published Only",
+            "default": false
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "suite"
+        ],
+        "title": "EvaluationRequest",
+        "description": "Run a golden suite on the worker against the deployed corpus and models.",
+        "examples": [
+          {
+            "kind": "search_bench",
+            "published_only": false,
+            "suite": "search-bench-real-sept2025-v1"
+          },
+          {
+            "kind": "ask_suite",
+            "suite": "real-sept2025-v1"
+          }
+        ]
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -6203,6 +7690,170 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "InboxItemOverride": {
+        "properties": {
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "protocol",
+                  "decision",
+                  "motion",
+                  "response",
+                  "notice",
+                  "affidavit",
+                  "indictment",
+                  "exhibit",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
+          },
+          "hearing_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hearing Date"
+          },
+          "document_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Date"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "skip": {
+            "type": "boolean",
+            "title": "Skip",
+            "default": false
+          },
+          "case_number_verified": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Number Verified"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InboxItemOverride",
+        "description": "A reviewer's correction of an item's classification, or a decision to skip it."
+      },
+      "InboxProcessRequest": {
+        "properties": {
+          "kinds": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "protocol",
+                    "decision",
+                    "motion",
+                    "response",
+                    "notice",
+                    "affidavit",
+                    "indictment",
+                    "exhibit",
+                    "other"
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kinds"
+          },
+          "item_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 5000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Ids"
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 20000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 5000
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InboxProcessRequest",
+        "description": "Turn classified inbox items into ingestion jobs.",
+        "examples": [
+          {
+            "kinds": [
+              "protocol",
+              "decision"
+            ]
+          }
+        ]
+      },
+      "InboxScanRequest": {
+        "properties": {
+          "process": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InboxScanRequest"
       },
       "IngestionJobRequest": {
         "properties": {
@@ -6635,6 +8286,40 @@
             },
             "limit": 20,
             "query": "פגישת ההנחיה"
+          }
+        ]
+      },
+      "StageRerunRequest": {
+        "properties": {
+          "stages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 15,
+            "minItems": 1,
+            "title": "Stages"
+          },
+          "force_stale": {
+            "type": "boolean",
+            "title": "Force Stale",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "stages"
+        ],
+        "title": "StageRerunRequest",
+        "description": "Re-run named stages of an existing job (e.g. after a model change). Other stages keep their results.",
+        "examples": [
+          {
+            "stages": [
+              "embed",
+              "extract_a",
+              "verify"
+            ]
           }
         ]
       },

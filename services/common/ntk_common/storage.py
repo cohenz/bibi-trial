@@ -35,6 +35,14 @@ class ObjectInfo:
 
 
 @dataclass
+class ListedObject:
+    key: str
+    size: int
+    etag: str
+    last_modified: str | None
+
+
+@dataclass
 class PresignedUpload:
     url: str
     method: str
@@ -58,6 +66,7 @@ class Storage(Protocol):
     def get_bytes(self, key: str, *, max_bytes: int) -> bytes: ...
     def put_bytes(self, key: str, data: bytes, *, mime_type: str) -> ObjectInfo: ...
     def uri(self, key: str) -> str: ...
+    def list(self, prefix: str) -> list[ListedObject]: ...
 
 
 def content_key(prefix: str, sha256: str, ext: str = "pdf") -> str:
@@ -145,6 +154,17 @@ class S3Storage:
         assert info is not None
         return info
 
+    def list(self, prefix: str) -> list[ListedObject]:
+        out: list[ListedObject] = []
+        for page in self._client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
+            for o in page.get("Contents", []) or []:
+                if o["Key"].endswith("/"):
+                    continue  # folder placeholder created by the dashboard
+                lm = o.get("LastModified")
+                out.append(ListedObject(o["Key"], int(o.get("Size", 0)), (o.get("ETag") or "").strip('"'),
+                                        lm.isoformat() if lm is not None else None))
+        return out
+
 
 class LocalStorage:
     """Filesystem storage for tests and offline development (no presign)."""
@@ -194,6 +214,21 @@ class LocalStorage:
         info = self.head(key)
         assert info is not None
         return info
+
+    def list(self, prefix: str) -> list[ListedObject]:
+        import datetime as _dt
+        import hashlib as _hl
+
+        base = self.root.resolve()
+        out = []
+        for p in sorted(base.rglob("*")):
+            if p.is_file():
+                key = p.relative_to(base).as_posix()
+                if key.startswith(prefix):
+                    st = p.stat()
+                    etag = _hl.md5(p.read_bytes()).hexdigest()  # noqa: S324 - mirrors S3 ETag semantics for tests
+                    out.append(ListedObject(key, st.st_size, etag, _dt.datetime.fromtimestamp(st.st_mtime, _dt.UTC).isoformat()))
+        return out
 
 
 def build_storage(settings: Settings) -> Storage:

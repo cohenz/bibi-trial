@@ -35,6 +35,7 @@ from .llm.registry import ModelRegistry
 from .llm.runner import ModelRunner
 from .pipeline import pdf as pdfmod
 from .pipeline.chunking import build_chunks
+from .pipeline.document import parse_document
 from .pipeline.pdf import ExtractedDocument, Line, PageText
 from .pipeline.protocol import PARSER_VERSION, parse_protocol
 from .pipeline.qa import pair_exchanges
@@ -321,7 +322,9 @@ class Pipeline:
                                                 "etag": dcp.get("etag")} if dcp.get("key") else None),
                 page_count=facts["page_count"], parser_version=PARSER_VERSION, extractor_version=pdfmod.EXTRACTOR_VERSION,
                 court_record_status=doc.get("court_record_status", "unknown"), published_at=doc.get("published_at"),
-                metadata={"hearing_date": doc.get("hearing_date"), "manifest": inp.get("manifest")})
+                metadata={"hearing_date": doc.get("hearing_date"), "manifest": inp.get("manifest"),
+                          **{k: doc[k] for k in ("document_date", "original_filename") if doc.get(k)},
+                          **({"source_type": doc["source_type"]} if doc.get("source_type") else {})})
             ops.set_job_source_version(conn, job_id, svid, reg["document_id"])
             if inp["source"].get("upload_id"):
                 ops.set_upload_status(conn, inp["source"]["upload_id"], "consumed")
@@ -372,16 +375,39 @@ class Pipeline:
                     {"s": doc.synthetic_lines, "id": svid})
         return out, {"pages": _pages_to_cp(pages)}, "succeeded"
 
+    @staticmethod
+    def _is_protocol(inp: dict) -> bool:
+        return inp["document"].get("source_type", "protocol") == "protocol"
+
     def _parse(self, job_id: str, inp: dict):
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]
+        if not self._is_protocol(inp):
+            return svid, parse_document(self._lines(job_id), source_version_id=svid,
+                                        source_type=inp["document"]["source_type"])
         parsed = parse_protocol(self._lines(job_id), source_version_id=svid, case_number_hint=self.cfg.court_case_number)
         return svid, parsed
 
+    def _segment_document(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
+        """Decisions, motions, notices …: paragraph units, no hearing, no speakers or Q/A."""
+        svid, parsed = self._parse(job_id, inp)
+        doc = inp["document"]
+        with self.s.engine.begin() as conn:
+            from .pipeline import L0Result
+
+            l0 = L0Result(svid, (self._cp(job_id, "validate") or {})["content_sha256"], 0,
+                          ExtractedDocument([], 0), parsed, [], [])
+            counts = sources.write_l0(conn, l0, hearing_id=None, court_record_status=doc.get("court_record_status", "unknown"))
+        out = {"hearing_id": None, "source_type": doc["source_type"], "document_date": doc.get("document_date"),
+               "units": len(parsed.units), "units_inserted": counts["units_inserted"], "warnings": parsed.warnings}
+        return out, {"hearing_id": None}, "succeeded"
+
     def stage_segment(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
+        if not self._is_protocol(inp):
+            return self._segment_document(job_id, inp)
         svid, parsed = self._parse(job_id, inp)
         reg = self._cp(job_id, "register") or {}
         doc = inp["document"]
-        hearing_date = doc.get("hearing_date") or parsed.header.hearing_date
+        hearing_date = doc.get("hearing_date") or parsed.header.hearing_date or doc.get("hearing_date_hint")
         if not hearing_date:
             raise StageError("hearing_date_unknown", "hearing date not found in document or manifest")
         warnings = list(parsed.warnings)
@@ -421,6 +447,8 @@ class Pipeline:
         return out, {"hearing_id": hid}, "succeeded"
 
     def stage_pair(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
+        if not self._is_protocol(inp):
+            return {"note": f"no Q/A in a {inp['document']['source_type']} document"}, {}, "skipped"
         svid, parsed = self._parse(job_id, inp)
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
         exchanges, warnings = pair_exchanges(parsed.units)
@@ -469,6 +497,8 @@ class Pipeline:
     def stage_extract_a(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
+        if hid is None:
+            return {"note": "hearing digests are built for protocols only"}, {}, "skipped"
         out, cp = self.build_hearing_digest(hid, svid)
         return out, cp, "succeeded"
 
@@ -591,6 +621,8 @@ class Pipeline:
         after switching to a real model replaces the placeholder verdict.
         Exchanges a person already reviewed are never touched."""
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
+        if hid is None:
+            return {"note": "no Q/A exchanges outside protocols"}, {}, "skipped"
         with self.s.engine.connect() as conn:
             exs = rows(conn, """
                 SELECT x.id, x.question_unit_id, x.answer_unit_id, x.answer_relation::text AS rel, x.public_wording,
@@ -649,8 +681,23 @@ class Pipeline:
         return {"open_review_tasks": {r["object_type"]: r["n"] for r in open_tasks}}, {}, "succeeded"
 
     def stage_publish(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
-        # publication is an explicit, audited admin action; the pipeline never auto-publishes
-        return {"note": "publication requires an approved review and an explicit publish action"}, {}, "skipped"
+        """AI layers are never published here. The *source* itself may be, when the operator's intake policy says so
+        (``auto_publish_source``: protocols and decisions whose own pages carry this case's number)."""
+        if not inp.get("auto_publish_source"):
+            return {"note": "publication requires an approved review and an explicit publish action"}, {}, "skipped"
+        svid = (self._cp(job_id, "validate") or {})["source_version_id"]
+        hid = (self._cp(job_id, "segment") or {}).get("hearing_id")
+        verified = bool(inp.get("case_number_verified"))
+        if hid is not None:
+            with self.s.engine.connect() as conn:
+                meta = scalar(conn, "SELECT metadata FROM ntk.hearings WHERE id = :h", {"h": hid}) or {}
+            verified = verified and meta.get("court_case_number") == self.cfg.court_case_number \
+                and meta.get("court_case_number_source") == "document"
+        if not verified:
+            return {"note": "case number not verified on the document; source left unpublished"}, {}, "skipped"
+        with self.s.engine.begin() as conn:
+            cv = kdb.publish_source_version(conn, svid, actor="inbox:auto-publish")
+        return {"source_version_id": svid, "published": True, "corpus_version": cv}, {}, "succeeded"
 
 
 def doc_input_from_manifest(manifest: dict, doc: dict) -> dict:

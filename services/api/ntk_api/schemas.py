@@ -187,3 +187,30 @@ class EvaluationRequest(BaseModel):
     suite: str = Field(min_length=1, max_length=120)
     published_only: bool = False
     as_of: dt.datetime | None = None
+
+
+class InboxScanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # None: follow NTK_INBOX_AUTO_PROCESS; False: classify only (a map of the documents); True: classify and ingest
+    process: bool | None = False
+
+
+class InboxProcessRequest(BaseModel):
+    """Turn classified inbox items into ingestion jobs."""
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"kinds": ["protocol", "decision"]}]})
+    kinds: list[Literal["protocol", "decision", "motion", "response", "notice", "affidavit", "indictment", "exhibit",
+                        "other"]] | None = None
+    item_ids: list[str] | None = Field(default=None, max_length=5000)
+    limit: int = Field(default=5000, ge=1, le=20000)
+
+
+class InboxItemOverride(BaseModel):
+    """A reviewer's correction of an item's classification, or a decision to skip it."""
+    model_config = ConfigDict(extra="forbid")
+    source_type: Literal["protocol", "decision", "motion", "response", "notice", "affidavit", "indictment", "exhibit",
+                         "other"] | None = None
+    hearing_date: dt.date | None = None
+    document_date: dt.date | None = None
+    title: str | None = Field(default=None, max_length=300)
+    skip: bool = False
+    case_number_verified: bool | None = None

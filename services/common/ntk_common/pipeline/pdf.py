@@ -208,12 +208,18 @@ def _to_logical(visual: str) -> str:
     return visual
 
 
-def extract_text_layer(data: bytes) -> list[PageText]:
+def extract_text_layer(data: bytes, only_pages: set[int] | None = None) -> list[PageText]:
+    """Text layer per page. ``only_pages`` (1-based; negative counts from the end) limits extraction, e.g. {1, 2, -1}
+    for classifying a document without reading all of it."""
     import pdfplumber
 
     pages: list[PageText] = []
     with pdfplumber.open(io.BytesIO(data)) as pdf:
+        total = len(pdf.pages)
+        wanted = None if only_pages is None else {p if p > 0 else total + 1 + p for p in only_pages}
         for idx, page in enumerate(pdf.pages, start=1):
+            if wanted is not None and idx not in wanted:
+                continue
             chars = [c for c in page.chars if c.get("text", "").strip() or c.get("text") == " "]
             width = float(page.width or 600)
             pt = PageText(page=idx)

@@ -258,3 +258,31 @@ def test_rerun_stale_running_job(client, fixture_pdf, services):
     r = signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["verify", "review"], "force_stale": True})
     assert r.status_code == 202, r.text
     assert signed(client, "GET", f"/v2/admin/ingestion-jobs/{job_id}").json()["status"] == "succeeded"
+
+
+def test_inbox_endpoints(client, services):
+    pytest.importorskip("reportlab")
+    from ntk_common import inbox
+    from ntk_common.jobs import TASK_SCAN_INBOX
+
+    from tests.doc_fixtures import MOTION, make_pdf
+
+    r = signed(client, "POST", "/v2/admin/inbox/scan", {"process": False})
+    assert r.status_code == 202 and client.queue.calls[-1] == (TASK_SCAN_INBOX, ("manual", "0"))
+    # what the worker would do
+    services.storage.put_bytes("inbox/e2e/motion-variant.pdf", make_pdf([MOTION[0] + ["4. נימוק נוסף לבקשה."]]),
+                               mime_type="application/pdf")
+    sid = inbox.start_scan(services.engine, trigger="e2e")
+    for iid in inbox.list_new(services, prefix="inbox/e2e/", scan_id=sid)["pending_ids"]:
+        inbox.classify_item(services, iid)
+    body = signed(client, "GET", "/v2/admin/inbox?kind=motion&status=classified")
+    assert body.status_code == 200, body.text
+    data = body.json()
+    item = next(i for i in data["items"] if i["object_key"] == "inbox/e2e/motion-variant.pdf")
+    assert data["summary"]["by_kind"]["motion"] >= 1 and data["auto_process"] is False
+    # reviewer corrects the type, then processes only that item
+    assert signed(client, "POST", f"/v2/admin/inbox/items/{item['id']}", {"source_type": "response"}).json()["doc_kind"] == "response"
+    r = signed(client, "POST", "/v2/admin/inbox/process", {"item_ids": [item["id"]]})
+    assert r.status_code == 202 and r.json()["queued"] == 1
+    assert signed(client, "POST", f"/v2/admin/inbox/items/{item['id']}", {"skip": True}).status_code == 409  # already queued
+    assert signed(client, "POST", "/v2/admin/inbox/items/not-a-uuid", {"skip": True}).status_code == 400

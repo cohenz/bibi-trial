@@ -113,7 +113,23 @@ QA_RELATION = Prompt(
     "affirms only what the question clearly asserted; any hedge makes it qualified_affirmation.",
 )
 
-ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION)}
+CLASSIFY_DOCUMENT = Prompt(
+    task_type="classify_document",
+    version="classify-document-2026-10-11.1",
+    schema="ModelDocumentClassification",
+    system=_COMMON
+    + "Task: identify what kind of court-file document this is from its first and last pages. source_type: protocol "
+    "(a hearing transcript: 'פרוטוקול', attendance list, speakers), decision (a decision, ruling, verdict or sentence "
+    "issued by the court: 'החלטה', 'הכרעת דין', 'גזר דין', 'פסק דין'), motion (a request by a party: 'בקשה'), response "
+    "(a party's reply to a motion: 'תגובה', 'תשובה'), notice (a party's or the court's notice or update: 'הודעה', "
+    "'עדכון'), affidavit ('תצהיר', 'הצהרה'), indictment ('כתב אישום'), exhibit (a document submitted as evidence), "
+    "other. title: a short Hebrew title as printed on the document (for example 'בקשה לדחיית מועד דיון'). "
+    "document_date: the date the document was signed, issued or filed, YYYY-MM-DD, or null. hearing_date: for a "
+    "protocol, the hearing date. court_case_numbers: every case number printed on the pages (e.g. 67104-01-20). "
+    "author: the court or party that issued or filed it. Never guess: use null when the pages do not say.",
+)
+
+ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION, CLASSIFY_DOCUMENT)}
 ROLE_FOR_TASK = {
     "digest": "extractor",
     "judicial": "judicial_classifier",
@@ -121,4 +137,5 @@ ROLE_FOR_TASK = {
     "verify": "verifier",
     "answer": "writer",
     "qa_relation": "qa_relation",
+    "classify_document": "extractor",
 }

@@ -700,6 +700,9 @@
             "protocol",
             "decision",
             "motion",
+            "response",
+            "notice",
+            "affidavit",
             "exhibit",
             "article",
             "recording",
@@ -2903,6 +2906,77 @@
               }
             }
           }
+        }
+      }
+    },
+    "ModelDocumentClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "source_type",
+        "title",
+        "confidence"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "2.0"
+        },
+        "source_type": {
+          "enum": [
+            "indictment",
+            "protocol",
+            "decision",
+            "motion",
+            "response",
+            "notice",
+            "affidavit",
+            "exhibit",
+            "article",
+            "recording",
+            "regulatory",
+            "project315",
+            "other"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "court_case_numbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "author": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hearing_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rationale": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }

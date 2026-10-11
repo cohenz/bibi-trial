@@ -13,11 +13,17 @@ from __future__ import annotations
 import logging
 
 from celery import Celery
+from celery.schedules import crontab
 from ntk_common.config import get_settings
 
 settings = get_settings()
 
 app = Celery("ntk-worker", broker=settings.redis_url, backend=None, include=["ntk_worker.tasks"])
+_schedule = {"deliver-webhooks": {"task": "ntk.deliver_webhooks", "schedule": 30.0}}
+if settings.inbox_enabled:
+    # daily look for new documents in the object-store inbox (classify; ingest when NTK_INBOX_AUTO_PROCESS)
+    _schedule["inbox-daily"] = {"task": "ntk.scan_inbox", "args": ("schedule",),
+                                "schedule": crontab(hour=settings.inbox_scan_hour_utc, minute=settings.inbox_scan_minute)}
 app.conf.update(
     task_default_queue="ntk",
     task_acks_late=True,
@@ -28,9 +34,7 @@ app.conf.update(
     task_soft_time_limit=55 * 60,
     broker_connection_retry_on_startup=True,
     broker_transport_options={"visibility_timeout": 2 * 60 * 60},
-    beat_schedule={
-        "deliver-webhooks": {"task": "ntk.deliver_webhooks", "schedule": 30.0},
-    },
+    beat_schedule=_schedule,
     timezone="UTC",
 )
 

@@ -28,7 +28,8 @@ JUDICIAL_LEVELS = ["question_or_comment", "interim_observation", "procedural_dec
 PHASES = ["preliminary", "direct", "cross", "redirect", "recross", "court_questions", "argument", "unknown"]
 ANSWER_REL = ["affirms", "qualified_affirmation", "denies", "does_not_know", "nonresponsive", "ambiguous"]
 OUTCOMES = ["verdict", "plea_deal", "withdrawal", "dismissal", "pardon_granted", "pardon_denied", "stay", "mistrial", "other"]
-SOURCE_TYPES = ["indictment", "protocol", "decision", "motion", "exhibit", "article", "recording", "regulatory", "project315", "other"]
+SOURCE_TYPES = ["indictment", "protocol", "decision", "motion", "response", "notice", "affidavit", "exhibit", "article",
+                "recording", "regulatory", "project315", "other"]
 DIRECTIONS = ["supports", "weakens", "contextual", "neutral"]
 VERIFICATION_315 = ["unreviewed", "source_checked", "transcript_confirmed", "contradicted", "inconclusive"]
 INVOLVEMENT = ["direct", "inferred", "staff", "third_party", "unknown"]
@@ -733,6 +734,20 @@ defs["ModelQARelationOutput"] = obj(
                 },
             )
         ),
+    },
+)
+defs["ModelDocumentClassification"] = obj(
+    ["schema_version", "source_type", "title", "confidence"],
+    {
+        "schema_version": {"const": SV},
+        "source_type": {"enum": SOURCE_TYPES},
+        "title": NESTR,
+        "document_date": nullable("string"),
+        "court_case_numbers": arr({"type": "string"}),
+        "author": nullable("string"),
+        "hearing_date": nullable("string"),
+        "confidence": CONF,
+        "rationale": nullable("string"),
     },
 )
 

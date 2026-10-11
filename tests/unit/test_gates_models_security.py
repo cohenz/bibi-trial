@@ -325,3 +325,13 @@ def test_digest_drops_unknown_judicial_candidates_but_not_unknown_citations():
     assert res.payload is not None and res.payload["judicial_candidates"] == [units[1].id]
     res = build(out(ghost))
     assert res.payload is None and any(e["validator"] == "unknown_id" for e in res.errors)
+
+
+def test_daily_inbox_scan_is_scheduled():
+    import ntk_worker.tasks  # noqa: F401 - registers the task names
+    from ntk_worker.celery_app import app
+
+    entry = app.conf.beat_schedule["inbox-daily"]
+    assert entry["task"] == "ntk.scan_inbox" and entry["args"] == ("schedule",)
+    assert entry["schedule"].hour == {2} and entry["schedule"].minute == {47}
+    assert "ntk.scan_inbox" in app.tasks and "ntk.classify_inbox_batch" in app.tasks

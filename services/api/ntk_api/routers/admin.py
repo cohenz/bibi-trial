@@ -6,16 +6,24 @@ Scopes: admin:read, admin:ingest, admin:review, admin:publish, admin:claims
 from __future__ import annotations
 
 import datetime as dt
+import json
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from ntk_common import ids
+from ntk_common import inbox as inboxmod
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
-from ntk_common.db.core import row, rows
+from ntk_common.db.core import execute, row, rows
 from ntk_common.db.public import units_by_ids
 from ntk_common.evaluation import SuiteNotFound, resolve_suite
-from ntk_common.jobs import TASK_BUILD_CLAIM, TASK_RUN_EVALUATION, TASK_RUN_JOB, TASK_VERIFY_ARTIFACT
+from ntk_common.jobs import (
+    TASK_BUILD_CLAIM,
+    TASK_RUN_EVALUATION,
+    TASK_RUN_JOB,
+    TASK_SCAN_INBOX,
+    TASK_VERIFY_ARTIFACT,
+)
 from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempotency_key
 
 from ..app import ApiError, AppState
@@ -24,6 +32,9 @@ from ..schemas import (
     CaseEventIn,
     ClaimIn,
     EvaluationRequest,
+    InboxItemOverride,
+    InboxProcessRequest,
+    InboxScanRequest,
     IngestionJobRequest,
     ObjectReviewRequest,
     PresignRequest,
@@ -211,6 +222,86 @@ def get_evaluation(run_id: str, st: AppState = Depends(get_state), report: bool 
     if run is None:
         raise ApiError(404, "not_found", "evaluation run not found")
     return _json(run, cache="no-store")
+
+
+# ------------------------------------------------------------------ object-store inbox
+@router.post("/inbox/scan", status_code=202)
+def inbox_scan(body: InboxScanRequest, request: Request, st: AppState = Depends(get_state),
+               p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    flag = "" if body.process is None else ("1" if body.process else "0")
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="inbox.scan", object_type="inbox", object_id=st.settings.inbox_prefix,
+                  request_id=_rid(request), details={"process": body.process})
+    tid = st.queue.enqueue(TASK_SCAN_INBOX, "manual", flag)
+    return _json({"status": "queued", "task_id": tid, "prefix": st.settings.inbox_prefix,
+                  "process": body.process if body.process is not None else st.settings.inbox_auto_process},
+                 cache="no-store", status=202)
+
+
+@router.get("/inbox")
+def inbox_status(st: AppState = Depends(get_state), status: str | None = None, kind: str | None = None,
+                 limit: int = Query(100, le=5000), offset: int = Query(0, ge=0),
+                 p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    with st.services.engine.connect() as conn:
+        summ = inboxmod.summary(conn)
+        items = rows(conn, """SELECT id, object_key, size_bytes, status, doc_kind, content_sha256, duplicate_of, job_id,
+                                     classification, error, first_seen_at, updated_at
+                              FROM ntk.inbox_items
+                              WHERE (CAST(:st AS text) IS NULL OR status = :st) AND (CAST(:k AS text) IS NULL OR doc_kind = :k)
+                              ORDER BY object_key LIMIT :lim OFFSET :off""",
+                     {"st": status, "k": kind, "lim": limit, "off": offset})
+    return _json({"prefix": st.settings.inbox_prefix, "auto_process": st.settings.inbox_auto_process,
+                  "summary": summ, "items": items}, cache="no-store")
+
+
+@router.post("/inbox/process", status_code=202)
+def inbox_process(body: InboxProcessRequest, request: Request, st: AppState = Depends(get_state),
+                  p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    res = inboxmod.queue_items(st.services, st.queue, task_name=TASK_RUN_JOB, kinds=body.kinds, limit=body.limit,
+                               item_ids=body.item_ids, requested_by=p.label)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="inbox.process", object_type="inbox", object_id=st.settings.inbox_prefix,
+                  request_id=_rid(request), details={"kinds": body.kinds, "limit": body.limit, **res})
+    return _json(res, cache="no-store", status=202)
+
+
+@router.post("/inbox/items/{item_id}")
+def inbox_override(item_id: str, body: InboxItemOverride, request: Request, st: AppState = Depends(get_state),
+                   p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    try:
+        import uuid
+
+        uuid.UUID(item_id)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_request", "item_id must be a UUID") from exc
+    with st.services.engine.begin() as conn:
+        it = row(conn, "SELECT * FROM ntk.inbox_items WHERE id = CAST(:id AS uuid)", {"id": item_id})
+        if it is None:
+            raise ApiError(404, "not_found", "inbox item not found")
+        if it["status"] in {"queued", "ingested"}:
+            raise ApiError(409, "conflict", f"item is already {it['status']}")
+        if it["status"] in {"discovered", "unsupported", "failed"} and not body.skip:
+            raise ApiError(409, "conflict", f"item is {it['status']}; only skip is possible")
+        c = dict(it["classification"] or {})
+        if body.skip:
+            new_status, kind = "skipped", it["doc_kind"]
+        else:
+            kind = body.source_type or it["doc_kind"]
+            for k in ("hearing_date", "document_date"):
+                if getattr(body, k) is not None:
+                    c[k] = getattr(body, k).isoformat()
+            if body.title:
+                c["title"] = body.title
+            if body.case_number_verified is not None:
+                c["case_found"] = body.case_number_verified
+            c.update({"source_type": kind, "method": "manual", "confidence": 1.0, "reviewed_by": p.label})
+            new_status = "foreign_case" if c.get("case_found") is False else "classified"
+        execute(conn, """UPDATE ntk.inbox_items SET status = :s, doc_kind = :k, classification = CAST(:c AS jsonb),
+                         updated_at = now() WHERE id = CAST(:id AS uuid)""",
+                {"s": new_status, "k": kind, "c": json.dumps(c, ensure_ascii=False, default=str), "id": item_id})
+        ops.audit(conn, actor=p.label, action="inbox.override", object_type="inbox_item", object_id=item_id,
+                  request_id=_rid(request), details=body.model_dump(mode="json"))
+    return _json({"id": item_id, "status": new_status, "doc_kind": kind}, cache="no-store")
 
 
 @router.get("/review-tasks")

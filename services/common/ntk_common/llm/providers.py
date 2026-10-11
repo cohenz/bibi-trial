@@ -335,6 +335,14 @@ class MockProvider:
                 "answer_short": f"{who}: \"{self._first_words(lead['text'], 20)}\"",
                 "answer_short_citation_ids": [lead["id"]], "sections": sections, "premise_issues": []}
 
+    def _task_classify_document(self, p: dict) -> dict:
+        from ..inbox import classify_by_rules
+
+        c = classify_by_rules(p.get("first_pages", ""), p.get("last_page", ""), p.get("filename", ""))
+        return {"schema_version": "2.0", "source_type": c.source_type, "title": c.title or "מסמך",
+                "document_date": c.document_date, "court_case_numbers": c.case_numbers, "author": None,
+                "hearing_date": c.hearing_date, "confidence": c.confidence, "rationale": "mock: rules"}
+
     def _task_qa_relation(self, p: dict) -> dict:
         from ..pipeline.qa import classify_answer
 

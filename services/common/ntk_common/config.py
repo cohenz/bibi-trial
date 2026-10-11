@@ -96,6 +96,13 @@ class Settings:
 
     # pipeline
     ocr_enabled: bool = True
+    # object-store inbox (bulk and daily intake)
+    inbox_prefix: str = "inbox/"
+    inbox_enabled: bool = True
+    inbox_auto_process: bool = False  # false: scans only classify (a "map"); true: classified items are ingested
+    inbox_scan_hour_utc: int = 2
+    inbox_scan_minute: int = 47
+    inbox_batch_size: int = 25
     ocr_langs: str = "heb+eng"
     fetch_allowlist: tuple[str, ...] = ("www.gov.il", "gov.il", "supremedecisions.court.gov.il", "the315.org", "www.the315.org")
     log_level: str = "INFO"
@@ -201,6 +208,12 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         wp_callback_url=g("WP_CALLBACK_URL"),
         wp_callback_secret=g("WP_CALLBACK_SECRET"),
         ocr_enabled=_bool(g("NTK_OCR_ENABLED"), True),
+        inbox_prefix=g("NTK_INBOX_PREFIX", "inbox/"),
+        inbox_enabled=_bool(g("NTK_INBOX_ENABLED"), True),
+        inbox_auto_process=_bool(g("NTK_INBOX_AUTO_PROCESS"), False),
+        inbox_scan_hour_utc=_int(g("NTK_INBOX_SCAN_HOUR_UTC"), 2),
+        inbox_scan_minute=_int(g("NTK_INBOX_SCAN_MINUTE"), 47),
+        inbox_batch_size=_int(g("NTK_INBOX_BATCH_SIZE"), 25),
         ocr_langs=g("NTK_OCR_LANGS", "heb+eng"),
         log_level=g("NTK_LOG_LEVEL", "INFO"),
     )

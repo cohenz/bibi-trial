@@ -16,9 +16,11 @@ from ntk_common.db import ops
 from ntk_common.db.core import get_engine
 from ntk_common.jobs import (
     TASK_BUILD_CLAIM,
+    TASK_CLASSIFY_INBOX,
     TASK_DELIVER_WEBHOOKS,
     TASK_RUN_EVALUATION,
     TASK_RUN_JOB,
+    TASK_SCAN_INBOX,
     TASK_VERIFY_ARTIFACT,
 )
 from ntk_common.orchestrator import Pipeline, StageError, build_services
@@ -50,6 +52,7 @@ def run_ingestion_job(self, job_id: str) -> dict:
     p = _pipeline()
     try:
         job = p.run_job(job_id)
+        _sync_inbox(p, job_id, job["status"])
         return {"job_id": job_id, "status": job["status"]}
     except StageError as exc:
         if exc.retryable and self.request.retries < MAX_RETRIES:
@@ -57,6 +60,7 @@ def run_ingestion_job(self, job_id: str) -> dict:
                 ops.reset_failed_stages(conn, job_id)
             raise self.retry(exc=exc, countdown=30 * 2 ** self.request.retries) from exc
         _dead_letter(TASK_RUN_JOB, job_id, {"job_id": job_id}, exc)
+        _sync_inbox(p, job_id, "failed")
         return {"job_id": job_id, "status": "failed"}
     except Exception as exc:  # noqa: BLE001
         log.error("job %s failed: %s: %s", job_id, type(exc).__name__, str(exc)[:300])
@@ -65,6 +69,7 @@ def run_ingestion_job(self, job_id: str) -> dict:
                 ops.reset_failed_stages(conn, job_id)
             raise self.retry(exc=exc, countdown=30 * 2 ** self.request.retries) from exc
         _dead_letter(TASK_RUN_JOB, job_id, {"job_id": job_id}, exc)
+        _sync_inbox(p, job_id, "failed")
         return {"job_id": job_id, "status": "failed"}
 
 
@@ -96,6 +101,66 @@ def verify_artifact(artifact_id: str) -> dict:
         out = p.build_claim(str(art["object_id"]))
         return {"artifact_id": artifact_id, "status": "rebuilt", "new": out}
     return {"artifact_id": artifact_id, "status": "unsupported", "object_type": art["object_type"]}
+
+
+def _sync_inbox(p: Pipeline, job_id: str, status: str) -> None:
+    from ntk_common.inbox import sync_job_status
+
+    try:
+        with p.s.engine.begin() as conn:
+            sync_job_status(conn, job_id, status)
+    except Exception as exc:  # noqa: BLE001 - bookkeeping must not fail the job
+        log.warning("inbox status sync failed for job %s: %s", job_id, type(exc).__name__)
+
+
+class _CeleryJobQueue:
+    def enqueue(self, task: str, *args: str) -> str:
+        return app.send_task(task, args=list(args), queue="ntk").id
+
+
+@app.task(name=TASK_SCAN_INBOX)
+def scan_inbox(trigger: str = "schedule", process: str = "") -> dict:
+    """List the inbox, register new objects, and fan classification out in batches.
+
+    ``process``: "1"/"0" from an operator; empty → NTK_INBOX_AUTO_PROCESS (scheduled runs)."""
+    from ntk_common import inbox
+
+    p = _pipeline()
+    s = p.cfg
+    if trigger == "schedule" and not s.inbox_enabled:
+        return {"skipped": "inbox disabled"}
+    do_process = s.inbox_auto_process if process == "" else process == "1"
+    if p.s.storage is None:
+        return {"error": "storage not configured"}
+    sid = inbox.start_scan(p.s.engine, trigger=trigger)
+    try:
+        res = inbox.list_new(p.s, prefix=s.inbox_prefix, scan_id=sid)
+    except Exception as exc:  # noqa: BLE001
+        inbox.finish_scan(p.s.engine, sid, stats={}, error={"type": type(exc).__name__, "message": str(exc)[:500]})
+        raise
+    ids_ = res["pending_ids"]
+    size = max(1, s.inbox_batch_size)
+    for i in range(0, len(ids_), size):
+        app.send_task(TASK_CLASSIFY_INBOX, args=[ids_[i:i + size], "1" if do_process else "0"], queue="ntk")
+    stats = {"listed": res["listed"], "new": res["new"], "to_classify": len(ids_), "batches": -(-len(ids_) // size),
+             "process": do_process, "prefix": s.inbox_prefix}
+    inbox.finish_scan(p.s.engine, sid, stats=stats)
+    return {"scan_id": sid, **stats}
+
+
+@app.task(name=TASK_CLASSIFY_INBOX)
+def classify_inbox_batch(item_ids: list[str], process: str = "0") -> dict:
+    from ntk_common import inbox
+
+    p = _pipeline()
+    out: dict[str, int] = {}
+    for iid in item_ids:
+        st = inbox.classify_item(p.s, iid)
+        out[st] = out.get(st, 0) + 1
+    if process == "1":
+        q = inbox.queue_items(p.s, _CeleryJobQueue(), task_name=TASK_RUN_JOB, item_ids=item_ids, requested_by="inbox:auto")
+        out["jobs_created"] = q["jobs_created"]
+    return out
 
 
 @app.task(name=TASK_RUN_EVALUATION)

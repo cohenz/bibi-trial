@@ -85,10 +85,15 @@ class TK_Admin_Review {
 			wp_send_json_error( array( 'message' => 'invalid decision' ), 400 );
 		}
 		try {
-			wp_send_json_success( tk_api()->post( '/v2/admin/artifacts/' . $id . '/review', array( 'decision' => $map[ $decision ], 'notes' => $notes ), true ) );
+			$res = tk_api()->post( '/v2/admin/artifacts/' . $id . '/review', array( 'decision' => $map[ $decision ], 'notes' => $notes ), true );
 		} catch ( TK_Api_Error $e ) {
 			self::fail( $e );
 		}
+		if ( 'approve' === $decision ) {
+			// approved guides and digests publish immediately (ADR-0014/0015); do not wait for the webhook
+			TK_Cache::purge( array( 'lists', 'guide', 'timeline' ) );
+		}
+		wp_send_json_success( $res );
 	}
 
 	public static function ajax_publish() {
@@ -107,7 +112,7 @@ class TK_Admin_Review {
 		} catch ( TK_Api_Error $e ) {
 			self::fail( $e );
 		}
-		TK_Cache::purge( array( 'lists', 'claims' ) );
+		TK_Cache::purge( array( 'lists', 'claims', 'guide', 'timeline' ) );
 		wp_send_json_success( $res );
 	}
 

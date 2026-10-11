@@ -6,6 +6,11 @@
  *   /{slug}/source/{su_id}/  citation         (templates/single-source.php)
  *   /{slug}/hearing/{hr_id}/ hearing: digest + full protocol (templates/single-hearing.php)
  *   /{slug}/document/{sv_id}/ decision, motion, notice … (templates/single-document.php)
+ *   /{slug}/case/{1000|2000|4000}/ case guide          (templates/single-case.php)
+ *   /{slug}/witness/{w_slug}/ witness page             (templates/single-witness.php)
+ *   /{slug}/timeline/         dual zoomable timeline   (templates/single-timeline.php)
+ *   /{slug}/witnesses/        all witnesses            (templates/single-witnesses.php)
+ *   /{slug}/glossary/         glossary                 (templates/single-glossary.php)
  *
  * @package TrialKnowledge
  */
@@ -39,6 +44,34 @@ class TK_Public_Pages {
 		add_rewrite_rule( '^' . $s . '/source/(su_[0-9a-f]{26})/?$', 'index.php?tk_type=source&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/hearing/(hr_[0-9a-f]{26})/?$', 'index.php?tk_type=hearing&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/document/(sv_[0-9a-f]{26})/?$', 'index.php?tk_type=document&tk_id=$matches[1]', 'top' );
+		add_rewrite_rule( '^' . $s . '/case/(1000|2000|4000)/?$', 'index.php?tk_type=case&tk_id=$matches[1]', 'top' );
+		add_rewrite_rule( '^' . $s . '/witness/(w_[0-9a-f]{10})/?$', 'index.php?tk_type=witness&tk_id=$matches[1]', 'top' );
+		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
+	}
+
+	/** Section pages without an id: /{slug}/timeline/, /{slug}/witnesses/, /{slug}/glossary/. */
+	public static function section_url( $name ) {
+		return home_url( '/' . self::slug() . '/' . $name . '/' );
+	}
+
+	/** Canonical URL of the current virtual page. */
+	public static function current_url( array $cur ) {
+		return 'all' === $cur['id'] ? self::section_url( $cur['type'] ) : self::url( $cur['type'], $cur['id'] );
+	}
+
+	/** Hearing tab requested with ?tk_tab= (summary|qa|full|source); a transcript page request opens "full". */
+	public static function tab_param() {
+		$t = isset( $_GET['tk_tab'] ) ? sanitize_key( wp_unslash( $_GET['tk_tab'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only navigation
+		if ( in_array( $t, array( 'summary', 'qa', 'full', 'source' ), true ) ) {
+			return $t;
+		}
+		return isset( $_GET['tk_p'] ) ? 'full' : 'summary'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+	}
+
+	/** Case filter for the timeline (?tk_case=4000). */
+	public static function case_param() {
+		$c = isset( $_GET['tk_case'] ) ? preg_replace( '/[^0-9]/', '', (string) wp_unslash( $_GET['tk_case'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- digits only
+		return in_array( $c, array( '1000', '2000', '4000' ), true ) ? $c : '';
 	}
 
 	/** New URL patterns after a plugin update take effect without re-activating the plugin. */
@@ -90,11 +123,21 @@ class TK_Public_Pages {
 			'hearing'  => array( '/v2/hearings/' . $id, array( 'hearing:' . $id ) ),
 			'document' => array( '/v2/documents/' . $id . '?page_from=' . self::page_param(), array( 'document:' . $id, 'lists' ) ),
 		);
+		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary' );
+		if ( in_array( $type, $guides, true ) ) {
+			try {
+				$data          = self::load_guide( $type, $id );
+				self::$current = array( 'type' => $type, 'id' => $id, 'data' => $data, 'error' => null === $data ? 404 : null );
+			} catch ( TK_Api_Error $e ) {
+				self::$current = array( 'type' => $type, 'id' => $id, 'data' => null, 'error' => $e->status ? $e->status : 503 );
+			}
+			return self::$current;
+		}
 		if ( ! isset( $paths[ $type ] ) ) {
 			return null;
 		}
 		try {
-			$data          = TK_Rest_Proxy::cached_get( $paths[ $type ][0], $paths[ $type ][1] );
+			$data         = TK_Rest_Proxy::cached_get( $paths[ $type ][0], $paths[ $type ][1] );
 			self::$current = array( 'type' => $type, 'id' => $id, 'data' => $data, 'error' => null );
 		} catch ( TK_Api_Error $e ) {
 			self::$current = array( 'type' => $type, 'id' => $id, 'data' => null, 'error' => $e->status ? $e->status : 503 );
@@ -102,12 +145,42 @@ class TK_Public_Pages {
 		return self::$current;
 	}
 
+	/**
+	 * Data of a guide page; null → not found (a case guide that is not published yet).
+	 *
+	 * @throws TK_Api_Error On API errors.
+	 */
+	private static function load_guide( $type, $id ) {
+		switch ( $type ) {
+			case 'case':
+				return TK_Guides::case_guide( $id );
+			case 'witness':
+				try {
+					return TK_Guides::witness( $id );
+				} catch ( TK_Api_Error $e ) {
+					if ( 404 === $e->status ) {
+						return null;
+					}
+					throw $e;
+				}
+			case 'timeline':
+				return TK_Guides::timeline();
+			case 'witnesses':
+				return TK_Guides::home();
+			case 'glossary':
+				return TK_Guides::glossary();
+		}
+		return null;
+	}
+
 	public static function template( $template ) {
 		$cur = self::load();
 		if ( ! $cur ) {
 			return $template;
 		}
-		if ( 404 === $cur['error'] ) {
+		if ( 404 === $cur['error'] && 'case' === $cur['type'] ) {
+			status_header( 404 ); // friendly "guide in preparation" page, still a 404 for crawlers
+		} elseif ( 404 === $cur['error'] ) {
 			global $wp_query;
 			$wp_query->set_404();
 			status_header( 404 );
@@ -136,6 +209,16 @@ class TK_Public_Pages {
 				return sprintf( 'דיון %s | %s', $d['hearing']['hearing_date'], get_bloginfo( 'name' ) );
 			case 'document':
 				return $d['document']['title'] . ' | ' . get_bloginfo( 'name' );
+			case 'case':
+				return trim( ( $d['title'] ?? '' ) . ( ! empty( $d['subtitle'] ) ? ' — ' . $d['subtitle'] : '' ) ) . ' | ' . get_bloginfo( 'name' );
+			case 'witness':
+				return $d['name'] . ' — עדות במשפט | ' . get_bloginfo( 'name' );
+			case 'timeline':
+				return 'ציר הזמן של המשפט | ' . get_bloginfo( 'name' );
+			case 'witnesses':
+				return 'העדים במשפט | ' . get_bloginfo( 'name' );
+			case 'glossary':
+				return 'מילון מונחים | ' . get_bloginfo( 'name' );
 		}
 		return $title;
 	}
@@ -172,8 +255,13 @@ class TK_Public_Pages {
 			}
 		} elseif ( 'source' === $cur['type'] ) {
 			$desc = wp_trim_words( $d['text'], 30 );
+		} elseif ( 'case' === $cur['type'] ) {
+			$one  = TK_Render_Guides::block( $d, 'one_line' );
+			$desc = $one ? $one[0]['text'] : '';
+		} elseif ( 'witness' === $cur['type'] && ! empty( $d['hearings'][0]['digest_sentences'][0]['text'] ) ) {
+			$desc = $d['hearings'][0]['digest_sentences'][0]['text'];
 		}
-		echo '<link rel="canonical" href="' . esc_url( self::url( $cur['type'], $cur['id'] ) ) . '">' . "\n";
+		echo '<link rel="canonical" href="' . esc_url( self::current_url( $cur ) ) . '">' . "\n";
 		if ( $desc ) {
 			echo '<meta name="description" content="' . esc_attr( wp_trim_words( $desc, 40 ) ) . '">' . "\n";
 		}

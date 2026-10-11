@@ -78,6 +78,21 @@ class TK_Webhooks {
 		if ( isset( $evt['event'] ) && 0 === strpos( (string) $evt['event'], 'case_event' ) ) {
 			$tags[] = 'timeline';
 		}
-		return $tags;
+		// 2.3 reader guides: a published/unpublished guide changes the start page, the case or
+		// witness page and the story track; any published summary or source changes witness
+		// pages and the trial track (those are also tagged 'lists', which every purge clears).
+		$ot    = isset( $p['object_type'] ) ? (string) $p['object_type'] : '';
+		$guide = ( $p['artifact_type'] ?? '' ) === 'guide' || in_array( $ot, array( 'case', 'witness', 'indictment' ), true );
+		if ( $guide ) {
+			$tags = array_merge( $tags, array( 'guide', 'guide:home', 'timeline' ) );
+			if ( 'case' === $ot && ! empty( $p['object_id'] ) ) {
+				$tags[] = 'guide:case:' . preg_replace( '/[^0-9]/', '', (string) $p['object_id'] );
+			}
+		}
+		$event = (string) ( $evt['event'] ?? '' );
+		if ( 0 === strpos( $event, 'source_version.' ) || ( 0 === strpos( $event, 'artifact.' ) && 'hearing' === $ot ) ) {
+			$tags = array_merge( $tags, array( 'guide', 'timeline' ) );
+		}
+		return array_values( array_unique( $tags ) );
 	}
 }

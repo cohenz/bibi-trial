@@ -138,7 +138,7 @@ def split_indictment(units: list[UnitView]) -> IndictmentParts:
             if h := _heading(ln):
                 enter(h)
     for letter, aunits in appendices_raw:
-        ref = re.compile(rf"נספח\s*{re.escape(letter)}")
+        ref = re.compile(rf"נספח\s*[\"״'׳]?\s*{re.escape(letter)}(?![א-ת])")
         owner = next((k for k in parts.count_order if any(ref.search(x.text) for x in parts.counts[k])), None)
         if owner is None:  # fall back to the case number written in the appendix itself
             hit = _CASE_NO.search(" ".join(x.text for x in aunits[:3]))

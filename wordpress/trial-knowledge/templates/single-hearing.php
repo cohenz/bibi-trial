@@ -1,6 +1,8 @@
 <?php
 /**
- * Hearing page: published digest with citations, then the full protocol page by page.
+ * Hearing page: date, witnesses (linked), judges; tabs "בקצרה" (digest),
+ * "שאלות ותשובות מרכזיות", "הפרוטוקול המלא" (paged; pager links keep the tab)
+ * and "מסמך המקור". Without JS the tabs are anchors and all sections are shown.
  *
  * @package TrialKnowledge
  */
@@ -8,57 +10,39 @@
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
+TK_Guides::enqueue_glossary();
+TK_Guides::enqueue_tabs();
 get_header();
 $tk_cur = TK_Public_Pages::$current;
 ?>
 <main id="primary" class="site-main tk-page tk-page--hearing" dir="rtl">
 	<?php
-	if ( $tk_cur && $tk_cur['data'] ) :
-		$tk_h    = $tk_cur['data']['hearing'];
-		$tk_d    = $tk_cur['data']['digest'];
-		$tk_cits = array();
-		if ( $tk_d ) {
-			foreach ( $tk_d['citations'] as $tk_c ) {
-				$tk_cits[ $tk_c['source_unit_id'] ] = $tk_c;
-			}
-		}
-		?>
-		<h1><?php echo esc_html( sprintf( __( 'דיון מיום %s', 'trial-knowledge' ), $tk_h['hearing_date'] ) ); ?></h1>
-		<?php if ( ! empty( $tk_h['witnesses'] ) ) : ?>
-			<p><?php echo esc_html( __( 'עדים:', 'trial-knowledge' ) . ' ' . implode( ', ', $tk_h['witnesses'] ) ); ?></p>
-		<?php endif; ?>
-		<?php if ( $tk_d ) : ?>
-			<section class="tk-box"><h2><?php esc_html_e( 'סיכום הדיון', 'trial-knowledge' ); ?></h2><ul>
-			<?php foreach ( $tk_d['summary_sentences'] as $tk_s ) : ?>
-				<li><?php echo esc_html( $tk_s['text'] ); ?>
-				<?php
-				foreach ( $tk_s['citation_ids'] as $tk_id ) {
-					if ( isset( $tk_cits[ $tk_id ] ) ) {
-						echo ' ' . TK_Render::citation_chip( $tk_cits[ $tk_id ] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-					}
-				}
-				?>
-				</li>
-			<?php endforeach; ?>
-			</ul></section>
-		<?php else : ?>
-			<p class="tk-muted"><?php esc_html_e( 'טרם פורסם סיכום לדיון זה.', 'trial-knowledge' ); ?></p>
-		<?php endif; ?>
-		<h2 id="protocol"><?php esc_html_e( 'הפרוטוקול', 'trial-knowledge' ); ?></h2>
-		<?php
+	if ( $tk_cur && $tk_cur['data'] ) {
+		$tk_h     = $tk_cur['data']['hearing'];
+		$tk_slugs = TK_Guides::slug_map( TK_Guides::witnesses() );
+		$tk_t     = null;
 		try {
 			$tk_t = TK_Rest_Proxy::cached_get(
 				'/v2/hearings/' . $tk_h['id'] . '/transcript?page_from=' . TK_Public_Pages::page_param(),
 				array( 'hearing:' . $tk_h['id'], 'citations' )
 			);
-			echo TK_Render::transcript( $tk_t, TK_Public_Pages::url( 'hearing', $tk_h['id'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		} catch ( TK_Api_Error $e ) {
-			echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			$tk_t = null;
 		}
-		?>
-	<?php else : ?>
-		<?php echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
-	<?php endif; ?>
+		echo TK_Render_Guides::hearing_page( // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in renderer
+			$tk_cur['data'],
+			array(
+				'transcript' => $tk_t,
+				'slugs'      => $tk_slugs,
+				'exchanges'  => TK_Guides::hearing_exchanges( $tk_h, $tk_slugs ),
+				'tab'        => TK_Public_Pages::tab_param(),
+				'base_url'   => TK_Public_Pages::url( 'hearing', $tk_h['id'] ),
+			)
+		);
+	} else {
+		echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+	}
+	?>
 </main>
 <?php
 get_footer();

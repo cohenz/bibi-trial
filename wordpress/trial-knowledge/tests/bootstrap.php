@@ -55,6 +55,8 @@ require TK_DIR . 'includes/class-cache.php';
 require TK_DIR . 'includes/class-webhooks.php';
 require TK_DIR . 'includes/class-public-pages.php';
 require TK_DIR . 'includes/class-render.php';
+require TK_DIR . 'includes/class-guides.php';
+require TK_DIR . 'includes/class-render-guides.php';
 
 /** Tiny assertion helpers (PHPUnit-like names). */
 final class TK_T {

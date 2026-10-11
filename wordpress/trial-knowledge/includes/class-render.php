@@ -230,14 +230,15 @@ class TK_Render {
 		return add_query_arg( 'tk_p', $from, $url ) . '#' . rawurlencode( $cit['source_unit_id'] );
 	}
 
-	private static function pager( array $t, $base_url ) {
-		$out = '<nav class="tk-pager" aria-label="' . esc_attr__( 'עמודי המסמך', 'trial-knowledge' ) . '">';
+	private static function pager( array $t, $base_url, $fragment = '' ) {
+		$frag = $fragment ? '#' . rawurlencode( $fragment ) : '';
+		$out  = '<nav class="tk-pager" aria-label="' . esc_attr__( 'עמודי המסמך', 'trial-knowledge' ) . '">';
 		if ( ! empty( $t['prev_page_from'] ) ) {
-			$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['prev_page_from'], $base_url ) ) . '">' . esc_html__( '→ עמודים קודמים', 'trial-knowledge' ) . '</a> ';
+			$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['prev_page_from'], $base_url ) . $frag ) . '">' . esc_html__( '→ עמודים קודמים', 'trial-knowledge' ) . '</a> ';
 		}
 		$out .= '<span class="tk-pager__where">' . esc_html( sprintf( __( 'עמודים %1$d–%2$d מתוך %3$d', 'trial-knowledge' ), $t['page_from'], $t['page_to'], $t['page_count'] ) ) . '</span>';
 		if ( ! empty( $t['next_page_from'] ) ) {
-			$out .= ' <a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['next_page_from'], $base_url ) ) . '">' . esc_html__( 'עמודים הבאים ←', 'trial-knowledge' ) . '</a>';
+			$out .= ' <a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['next_page_from'], $base_url ) . $frag ) . '">' . esc_html__( 'עמודים הבאים ←', 'trial-knowledge' ) . '</a>';
 		}
 		if ( ! empty( $t['pdf_url'] ) ) {
 			$out .= ' <a class="tk-button tk-button--pdf" href="' . esc_url( $t['pdf_url'] ) . '" rel="nofollow">' . esc_html__( 'PDF המקורי', 'trial-knowledge' ) . '</a>';
@@ -249,10 +250,11 @@ class TK_Render {
 	 * Full text of a protocol or document, page by page, every unit linkable.
 	 *
 	 * @param array  $t        Response of /v2/hearings/{id}/transcript or /v2/documents/{sv}.
-	 * @param string $base_url Page URL without tk_p.
+	 * @param string $base_url Page URL without tk_p (may carry tk_tab).
+	 * @param string $fragment Anchor appended to pager links (keeps the hearing tab open).
 	 */
-	public static function transcript( array $t, $base_url ) {
-		$out  = '<section class="tk-transcript" dir="rtl" lang="he">' . self::pager( $t, $base_url );
+	public static function transcript( array $t, $base_url, $fragment = '' ) {
+		$out  = '<section class="tk-transcript" dir="rtl" lang="he">' . self::pager( $t, $base_url, $fragment );
 		$page = null;
 		foreach ( (array) $t['units'] as $u ) {
 			if ( $u['page'] !== $page ) {
@@ -279,7 +281,7 @@ class TK_Render {
 		} else {
 			$out .= '<p class="tk-muted">' . esc_html__( 'אין טקסט בעמודים אלה.', 'trial-knowledge' ) . '</p>';
 		}
-		return $out . self::pager( $t, $base_url ) . '</section>';
+		return $out . self::pager( $t, $base_url, $fragment ) . '</section>';
 	}
 
 	/**

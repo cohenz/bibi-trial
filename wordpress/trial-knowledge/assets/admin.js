@@ -187,6 +187,9 @@
 			if ((d.artifact.risk_flags || []).length) {
 				box.appendChild(el('p', { class: 'tk-flags', text: 'דגלי סיכון: ' + d.artifact.risk_flags.join(', ') }));
 			}
+			if (d.artifact.artifact_type === 'guide') {
+				box.appendChild(guideView(d));
+			}
 			var sources = el('ol', { class: 'tk-sources' });
 			(d.sources || []).forEach(function (s) {
 				sources.appendChild(el('li', {}, [
@@ -199,9 +202,15 @@
 				section('פלט המאמת', pre(d.verifier_output || 'לא הופעל מאמת')),
 				section('המקורות', sources)
 			]);
-			box.appendChild(cols);
-			box.appendChild(section('שערים', pre(d.gate_report)));
-			box.appendChild(section('מודלים והנחיות', pre(d.model_runs)));
+			if (d.artifact.artifact_type === 'guide') {
+				// the readable view above is what the reviewer approves; raw JSON stays one click away
+				box.appendChild(el('details', { class: 'tk-raw' }, [el('summary', { text: 'נתונים גולמיים (JSON, מקורות, שערים, מודלים)' }), cols,
+					section('שערים', pre(d.gate_report)), section('מודלים והנחיות', pre(d.model_runs))]));
+			} else {
+				box.appendChild(cols);
+				box.appendChild(section('שערים', pre(d.gate_report)));
+				box.appendChild(section('מודלים והנחיות', pre(d.model_runs)));
+			}
 			var notes = el('textarea', { rows: '3', class: 'large-text', 'aria-label': 'הערות' });
 			var actions = el('p', { class: 'tk-actions' }, [
 				el('button', { type: 'button', class: 'button button-primary', text: 'אישור', onclick: function () { review(id, 'approve', notes.value); } }),
@@ -216,6 +225,121 @@
 			box.appendChild(actions);
 			box.focus();
 		});
+	}
+
+	// ------------------------------------------------------------- guide review (2.3)
+	var BLOCK_HE = {
+		one_line: 'בשורה אחת', overview: 'סקירה', defendants: 'הנאשמים', alleged: 'מה טוען כתב האישום', people: 'מי מעורב',
+		charges: 'האישומים', events: 'ציר הזמן של התיק', role: 'מי העד או העדה', testimony: 'עיקרי העדות'
+	};
+	var GATE_HE = {
+		citation: 'ציטוטים', support: 'תמיכה לשונית במקור', judicial_wording: 'ניסוח של קביעה שיפוטית', absolute_wording: 'ניסוח מוחלט',
+		provenance: 'מקור המודל', allegation_framing: 'טענה שמוצגת כעובדה', verifier: 'המאמת'
+	};
+	var PROBLEM_HE = {
+		missing_citation: 'אין ציטוט', unknown_source_unit: 'ציטוט ליחידה לא מוכרת', unpublished_source_unit: 'ציטוט ליחידה שלא פורסמה',
+		low_lexical_support: 'חפיפה נמוכה בין הניסוח למקור', verifier_not_confirmed: 'המאמת לא אישר', not_verified: 'המאמת לא רץ',
+		allegation_stated_as_fact: 'טענה מכתב האישום מנוסחת כעובדה'
+	};
+	var KIND_HE = { indictment: 'סקירת כתב האישום', case: 'מדריך לתיק', witness: 'מדריך לעד' };
+
+	function fmtDate(it) {
+		if (!it.date) { return ''; }
+		var p = it.date.split('-');
+		if (it.date_precision === 'year') { return p[0]; }
+		if (it.date_precision === 'month') { return p[1] + '/' + p[0]; }
+		return (+p[2]) + '.' + (+p[1]) + '.' + p[0];
+	}
+
+	/** path "blocks/2/items/3" → list of problems from failed gates (and the verifier's per-item verdict). */
+	function problemsByPath(d) {
+		var out = {};
+		function add(path, text) { (out[path] = out[path] || []).push(text); }
+		var gates = (d.gate_report && d.gate_report.gates) || [];
+		gates.forEach(function (g) {
+			if (g.passed) { return; }
+			(g.details || []).forEach(function (det) {
+				var label = (GATE_HE[g.gate] || g.gate) + ': ' + (PROBLEM_HE[det.problem] || det.problem || '');
+				if (det.overlap !== undefined) { label += ' (חפיפה ' + Math.round(det.overlap * 100) + '%)'; }
+				if (det.phrases) { label += ' — ' + [].concat(det.phrases).join(', '); }
+				if (det.id) { label += ' — ' + det.id; }
+				if (det.path) { add(det.path, label); }
+				(det.paths || []).forEach(function (p) { add(p, label); });
+			});
+		});
+		var v = d.verifier_output;
+		((v && v.assertions) || []).forEach(function (a) {
+			var bad = a.supported !== 'yes' || !a.attribution_ok || a.judicial_overstatement || a.false_premise;
+			if (!bad) { return; }
+			var t = 'המאמת: נתמך=' + ({ yes: 'כן', partial: 'חלקית', no: 'לא' }[a.supported] || a.supported) +
+				(a.attribution_ok ? '' : ', ייחוס שגוי') + (a.judicial_overstatement ? ', הגזמה שיפוטית' : '') + (a.false_premise ? ', הנחה שגויה' : '') +
+				(a.note ? ' — ' + a.note : '');
+			add(a.path, t);
+		});
+		return out;
+	}
+
+	function gateList(d) {
+		var gr = d.gate_report || {};
+		var ul = el('ul', { class: 'tk-gates' });
+		(gr.gates || []).forEach(function (g) {
+			var n = (g.details || []).reduce(function (s, det) { return s + (det.paths ? det.paths.length : 1); }, 0);
+			ul.appendChild(el('li', { class: g.passed ? 'tk-gate tk-gate--ok' : 'tk-gate tk-gate--fail tk-gate--' + (g.severity || 'error') }, [
+				el('strong', { text: (g.passed ? '✓ ' : '✗ ') + (GATE_HE[g.gate] || g.gate) }),
+				g.passed ? null : el('span', { text: ' — ' + n + ' בעיות' + (g.severity === 'review' ? ' (לבדיקה אנושית)' : ' (חוסם)') })
+			]));
+		});
+		var wrap = el('div', { class: 'tk-gatebox' }, [
+			el('p', { text: 'מצב: ' + (gr.state || '—') + ((gr.risk_flags || []).length ? ' · דגלים: ' + gr.risk_flags.join(', ') : '') }), ul
+		]);
+		var v = d.verifier_output;
+		if (v && v.verdict) { wrap.appendChild(el('p', { text: 'הכרעת המאמת: ' + v.verdict })); }
+		((v && v.omitted_counterevidence) || []).forEach(function (o) {
+			wrap.appendChild(el('p', { class: 'tk-flags', text: 'ראיה נגדית שהושמטה: ' + (o.note || '') + ' [' + o.source_unit_ids.join(', ') + ']' }));
+		});
+		return wrap;
+	}
+
+	function guideView(d) {
+		var g = d.writer_output || {};
+		var cits = {};
+		(g.citations || []).forEach(function (c) { cits[c.source_unit_id] = c; });
+		var texts = {};
+		(d.sources || []).forEach(function (s) { texts[s.source_unit_id] = s; });
+		var probs = problemsByPath(d);
+		var flagged = Object.keys(probs).length;
+		var root = el('div', { class: 'tk-guide-review' }, [
+			el('p', { class: 'tk-muted', text: (KIND_HE[g.kind] || g.kind || '') + (g.key ? ' · ' + g.key : '') }),
+			el('h2', { text: (g.title || '') + (g.subtitle ? ' — ' + g.subtitle : '') }),
+			el('p', { class: flagged ? 'tk-flags' : 'tk-ok', text: flagged ? flagged + ' פריטים מסומנים לבדיקה (מודגשים למטה).' : 'כל הפריטים עברו את השערים ואת המאמת.' }),
+			section('שערים', gateList(d))
+		]);
+		(g.blocks || []).forEach(function (b, bi) {
+			var ol = el('ol', { class: 'tk-gitems' });
+			(b.items || []).forEach(function (it, ii) {
+				var path = 'blocks/' + bi + '/items/' + ii;
+				var p = probs[path] || [];
+				var head = [it.label ? el('strong', { text: it.label + ': ' }) : null, fmtDate(it) ? el('span', { class: 'tk-gdate', text: fmtDate(it) + ' · ' }) : null, it.text || ''];
+				var srcs = el('ul', { class: 'tk-gsrc' });
+				(it.citation_ids || []).forEach(function (id) {
+					var c = cits[id], s = texts[id];
+					var loc = c ? 'עמ׳ ' + c.page + ' שורות ' + c.line_start + '–' + c.line_end : (s ? 'עמ׳ ' + s.page + ' שורות ' + s.line_start + '–' + s.line_end : id);
+					var who = (s && s.speaker) || (c && c.speaker) || '';
+					srcs.appendChild(el('li', {}, [
+						el('span', { class: 'tk-gloc', text: loc + (who ? ' · ' + who : '') + (s && !s.published ? ' · לא פורסם' : '') }),
+						s ? el('q', { text: (s.text || '').length > 500 ? s.text.slice(0, 500) + '…' : (s.text || '') }) : el('span', { class: 'tk-err', text: ' (טקסט המקור לא הוחזר)' })
+					]));
+				});
+				if (!(it.citation_ids || []).length) { srcs.appendChild(el('li', { class: 'tk-err', text: 'ללא ציטוט' })); }
+				ol.appendChild(el('li', { class: 'tk-gitem' + (p.length ? ' tk-gitem--flag' : '') }, [
+					el('p', { class: 'tk-gtext' }, head),
+					p.length ? el('ul', { class: 'tk-gprob' }, p.map(function (t) { return el('li', { text: t }); })) : null,
+					el('details', p.length ? { open: 'open' } : {}, [el('summary', { text: 'מקורות (' + (it.citation_ids || []).length + ')' }), srcs])
+				]));
+			});
+			root.appendChild(el('section', { class: 'tk-gblock' }, [el('h3', { text: BLOCK_HE[b.block] || b.block }), ol]));
+		});
+		return root;
 	}
 
 	function showObject(t) {

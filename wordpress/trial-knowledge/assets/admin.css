@@ -15,3 +15,23 @@
 .tk-stage--skipped { color: #646970; }
 .tk-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
 @media (max-width: 1100px) { .tk-review, .tk-cols { grid-template-columns: 1fr; } }
+/* 2.3: readable guide review */
+.tk-guide-review { margin-block: 1rem; }
+.tk-guide-review h2 { margin-block: .25rem; }
+.tk-gblock { border-block-start: 1px solid #dcdcde; margin-block: 1rem; padding-block-start: .5rem; }
+.tk-gitems { padding-inline-start: 1.5rem; }
+.tk-gitem { padding: .5rem .6rem; margin-block-end: .5rem; border-radius: 4px; }
+.tk-gitem--flag { background: #fcf0f1; border-inline-start: 4px solid #b32d2e; }
+.tk-gtext { font-size: 14px; line-height: 1.7; margin: 0 0 .3rem; }
+.tk-gdate { color: #646970; }
+.tk-gprob { margin: .2rem 0; color: #b32d2e; font-weight: 600; list-style: disc; padding-inline-start: 1.2rem; }
+.tk-gsrc { margin: .3rem 0; padding-inline-start: 1.2rem; list-style: disc; }
+.tk-gsrc li { margin-block-end: .35rem; }
+.tk-gloc { display: block; color: #50575e; font-size: 12px; }
+.tk-gsrc q { display: block; background: #f6f7f7; padding: .3rem .5rem; quotes: none; white-space: pre-wrap; }
+.tk-gates { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.tk-gate { padding: .2rem .6rem; border-radius: 999px; background: #edfaef; }
+.tk-gate--fail { background: #fcf0f1; color: #b32d2e; }
+.tk-gate--fail.tk-gate--review { background: #fcf9e8; color: #8a6100; }
+.tk-raw { margin-block: 1rem; }
+.tk-raw > summary { cursor: pointer; font-weight: 600; }

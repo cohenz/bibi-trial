@@ -108,3 +108,20 @@ def test_process_ingests_documents_and_applies_publication_policy(services, pipe
     with services.engine.connect() as conn:
         s = inbox.summary(conn)
     assert s["by_status"]["ingested"] == 2 and s["by_kind"]["decision"] >= 2
+
+
+def test_archive_file_names_give_titles_and_dates():
+    fm = inbox.filename_meta("inbox/2021/0903 — 2021-05-19 — פרוטוקול — הדיון מיום 19_05_2021.pdf")
+    assert fm == {"number": "0903", "date": "2021-05-19", "type_label": "פרוטוקול", "description": "הדיון מיום 19/05/2021"}
+    assert inbox.filename_meta("inbox/x/0043 — 2026-05-25 — החלטה — שניתנה ע_י רבקה.pdf")["description"] == 'שניתנה ע"י רבקה'
+    assert "description" not in inbox.filename_meta("inbox/0532 — 2026-10-04 — מסמך — מסמך.pdf")
+    assert inbox.filename_meta("inbox/random name.pdf") == {}
+    it = {"doc_kind": "notice", "object_key": "inbox/0938 — 2021-08-29 — הודעה — המדינה תעבור על התכתובות.pdf"}
+    assert inbox.document_date_for(it, {"document_date": "7071-06-09"}) == "2021-08-29"
+    assert inbox._title(it, {"title": "הודעה לבית המשפט הנכבד"}) == "הודעה: המדינה תעבור על התכתובות"
+    it = {"doc_kind": "motion", "object_key": "inbox/scan.pdf"}
+    assert inbox.document_date_for(it, {"document_date": "2014-07-14"}) is None  # older than the case
+    assert inbox._title(it, {"title": "בקשה לדחייה"}) == "בקשה לדחייה — scan.pdf"
+    prot = {"doc_kind": "protocol", "object_key": "inbox/0243 — 2023-09-21 — מסמך — מסמך.pdf"}
+    assert inbox.document_date_for(prot, {"hearing_date": "2023-09-06"}) == "2023-09-06"
+    assert inbox._title(prot, {"hearing_date": "2023-09-06"}) == "פרוטוקול דיון — 2023-09-06"

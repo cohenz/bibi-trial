@@ -323,7 +323,7 @@ class Pipeline:
                 page_count=facts["page_count"], parser_version=PARSER_VERSION, extractor_version=pdfmod.EXTRACTOR_VERSION,
                 court_record_status=doc.get("court_record_status", "unknown"), published_at=doc.get("published_at"),
                 metadata={"hearing_date": doc.get("hearing_date"), "manifest": inp.get("manifest"),
-                          **{k: doc[k] for k in ("document_date", "original_filename") if doc.get(k)},
+                          **{k: doc[k] for k in ("document_date", "original_filename", "archive_number") if doc.get(k)},
                           **({"source_type": doc["source_type"]} if doc.get("source_type") else {})})
             ops.set_job_source_version(conn, job_id, svid, reg["document_id"])
             if inp["source"].get("upload_id"):

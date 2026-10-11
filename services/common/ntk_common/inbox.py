@@ -295,16 +295,60 @@ def classify_item(services, item_id: str) -> str:
         return "failed"
 
 
+# File names in the operator's archive follow "NNNN — YYYY-MM-DD — <type> — <description>.pdf" (underscores stand
+# for characters a file name cannot hold, e.g. "ע_י" = "ע\"י", "19_05_2021" = "19/05/2021").
+_FNAME_RE = re.compile(r"^\s*(?P<num>\d{1,6})\s*[—–-]\s*(?P<date>\d{4}-\d{2}-\d{2})\s*[—–-]\s*(?P<type>[^—–]+?)\s*[—–]\s*(?P<desc>.+?)\s*$")
+_GENERIC_TYPES = {"מסמך", "extra_document", "court_document", "document"}
+DATE_MIN, DATE_MAX = "2016-01-01", "2035-12-31"
+
+
+def filename_meta(object_key: str) -> dict:
+    name = object_key.rsplit("/", 1)[-1]
+    if name.lower().endswith(".pdf"):
+        name = name[:-4]
+    m = _FNAME_RE.match(name)
+    if not m:
+        return {}
+    desc = m.group("desc").strip()
+    desc = re.sub(r"(?<=[א-ת])_(?=[א-ת])", '"', desc)            # ע_י → ע"י, עו_ד → עו"ד
+    desc = re.sub(r"(?<=\d)_(?=\d)", "/", desc)                  # 19_05_2021 → 19/05/2021
+    desc = desc.replace("_", " ").strip(" .")
+    typ = m.group("type").strip()
+    out = {"number": m.group("num"), "date": m.group("date"), "type_label": None if typ in _GENERIC_TYPES else typ}
+    if desc and desc not in _GENERIC_TYPES:
+        out["description"] = desc
+    return out
+
+
+def plausible_date(d: str | None) -> str | None:
+    """Dates read by OCR or from attachments can be absurd (year 7071) or far older than the case; drop those."""
+    if not d or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return None
+    return d if DATE_MIN <= d <= DATE_MAX else None
+
+
+def document_date_for(it: dict, c: dict) -> str | None:
+    kind = it["doc_kind"] or "other"
+    fm = filename_meta(it["object_key"])
+    if kind == "protocol":
+        return plausible_date(c.get("hearing_date")) or plausible_date(fm.get("date"))
+    # the archive's own date is the filing/issue date; dates inside a document may belong to its attachments
+    return plausible_date(fm.get("date")) or plausible_date(c.get("document_date"))
+
+
 def _title(it: dict, c: dict) -> str:
     kind = it["doc_kind"] or "other"
-    date = c.get("hearing_date") if kind == "protocol" else c.get("document_date")
-    base = c.get("title") if kind != "protocol" else KIND_HE["protocol"]
-    name = it["object_key"].rsplit("/", 1)[-1]
-    parts = [base or KIND_HE.get(kind, "מסמך")]
-    if date:
-        parts.append(date)
-    parts.append(name)
-    return " — ".join(parts)[:300]
+    fm = filename_meta(it["object_key"])
+    heading = KIND_HE["protocol"] if kind == "protocol" else (c.get("title") or KIND_HE.get(kind, "מסמך"))
+    desc = fm.get("description")
+    if desc:
+        # the archive's description says what the document is about; the printed heading (often OCR'd) stays in metadata
+        label = KIND_HE.get(kind, "מסמך")
+        title = f"{label}: {desc}" if not desc.startswith(label) else desc
+    else:
+        date = document_date_for(it, c)
+        title = f"{heading} — {date}" if date else f"{heading} — {it['object_key'].rsplit('/', 1)[-1]}"
+    return title[:300]
 
 
 def job_input_for(it: dict, settings) -> dict:
@@ -320,8 +364,9 @@ def job_input_for(it: dict, settings) -> dict:
             "canonical_key": f"inbox-sha256:{it['content_sha256']}",
             # the protocol parser reads the hearing date from the caption; the classifier's guess is only a fallback
             "hearing_date": None,
-            "hearing_date_hint": c.get("hearing_date") if kind == "protocol" else None,
-            "document_date": c.get("document_date"),
+            "hearing_date_hint": document_date_for(it, c) if kind == "protocol" else None,
+            "document_date": document_date_for(it, c),
+            "archive_number": filename_meta(it["object_key"]).get("number"),
             "source_type": kind,
             "authority_tier": 1,
             "source_owner": "הרשות השופטת" if kind in {"protocol", "decision"} else "צד להליך / תיק בית המשפט",

@@ -317,8 +317,9 @@ def test_public_transcript_documents_and_pdf(client, services, pipeline):
     inbox.queue_items(services, InlineQueue({TASK_RUN_JOB: lambda j: pipeline.run_job(j)}), task_name=TASK_RUN_JOB,
                       kinds=["decision"])
     docs = client.get("/v2/documents?type=decision").json()["items"]
-    mine = [d for d in docs if "decision-b.pdf" in d["title"]]
-    assert mine and mine[0]["document_date"] == "2025-10-12"
+    mine = [d for d in docs if d["document_date"] == "2025-10-12" and d["title"] == "החלטה — 2025-10-12"
+            and any("נימוק נוסף להחלטה" in u["text"] for u in client.get(f"/v2/documents/{d['source_version_id']}").json()["units"])]
+    assert mine
     d = client.get(f"/v2/documents/{mine[0]['source_version_id']}").json()
     assert d["document"]["source_type"] == "decision" and d["units"][0]["speaker"] == "בית המשפט"
     assert any(x["source_version_id"] == mine[0]["source_version_id"] for x in client.get("/v2/timeline").json()["documents"])

@@ -263,3 +263,14 @@ def test_gemini_embeddings_batch_and_normalise():
     req = sess.calls[0]["body"]["requests"][0]
     assert req["taskType"] == "RETRIEVAL_DOCUMENT" and req["outputDimensionality"] == 2
     assert "x-goog-api-key" not in sess.calls[0]["headers"]  # empty key → header omitted (egress proxy may inject it)
+
+
+def test_extra_service_keys_merge_without_overriding():
+    from ntk_common.config import Settings
+
+    s = Settings(service_keys_json='{"wp": {"secret": "a", "scopes": ["admin:all"]}}',
+                 service_keys_extra_json='{"ops": {"secret": "ops-secret-xyz", "scopes": ["admin:read"]}, "wp": {"secret": "evil"}}')
+    keys = s.service_keys
+    assert keys["ops"]["secret"] == "ops-secret-xyz" and keys["wp"]["secret"] == "a"
+    assert "ops-secret-xyz" not in str(s.safe_dict())
+    assert Settings(service_keys_extra_json="not json").service_keys == {}

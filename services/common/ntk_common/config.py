@@ -13,7 +13,7 @@ from functools import lru_cache
 
 SECRET_FIELDS = {
     "database_url", "redis_url", "s3_secret_access_key", "gemini_api_key", "verifier_api_key",
-    "wp_callback_secret", "service_keys_json", "ip_hash_salt", "embedding_api_key",
+    "wp_callback_secret", "service_keys_json", "service_keys_extra_json", "ip_hash_salt", "embedding_api_key",
 }
 
 
@@ -79,6 +79,8 @@ class Settings:
 
     # auth / security
     service_keys_json: str = "{}"  # {"key_id": {"secret": "...", "scopes": [...]}}
+    # additional, separately revocable keys (e.g. an operator session); same format, cannot replace a key above
+    service_keys_extra_json: str = "{}"
     signature_max_skew_seconds: int = 300
     cors_origins: str = ""
     ip_hash_salt: str = ""
@@ -111,11 +113,17 @@ class Settings:
 
     @property
     def service_keys(self) -> dict:
-        try:
-            data = json.loads(self.service_keys_json or "{}")
-            return data if isinstance(data, dict) else {}
-        except json.JSONDecodeError:
-            return {}
+        def load(raw: str) -> dict:
+            try:
+                data = json.loads(raw or "{}")
+                return data if isinstance(data, dict) else {}
+            except json.JSONDecodeError:
+                return {}
+
+        keys = load(self.service_keys_json)
+        for key_id, entry in load(self.service_keys_extra_json).items():
+            keys.setdefault(key_id, entry)
+        return keys
 
     @property
     def citation_base(self) -> str:
@@ -181,6 +189,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         model_timeout_seconds=_int(g("NTK_MODEL_TIMEOUT_SECONDS"), 120),
         model_max_retries=_int(g("NTK_MODEL_MAX_RETRIES"), 3),
         service_keys_json=g("NTK_SERVICE_KEYS", "{}"),
+        service_keys_extra_json=g("NTK_SERVICE_KEYS_EXTRA", "{}"),
         signature_max_skew_seconds=_int(g("NTK_SIGNATURE_MAX_SKEW_SECONDS"), 300),
         cors_origins=g("NTK_CORS_ORIGINS"),
         ip_hash_salt=g("NTK_IP_HASH_SALT"),

@@ -67,6 +67,7 @@ class Storage(Protocol):
     def put_bytes(self, key: str, data: bytes, *, mime_type: str) -> ObjectInfo: ...
     def uri(self, key: str) -> str: ...
     def list(self, prefix: str) -> list[ListedObject]: ...
+    def presign_get(self, key: str, *, ttl: int, filename: str | None = None) -> str: ...
 
 
 def content_key(prefix: str, sha256: str, ext: str = "pdf") -> str:
@@ -154,6 +155,14 @@ class S3Storage:
         assert info is not None
         return info
 
+    def presign_get(self, key: str, *, ttl: int, filename: str | None = None) -> str:
+        from urllib.parse import quote
+
+        params = {"Bucket": self.bucket, "Key": key, "ResponseContentType": "application/pdf"}
+        if filename:
+            params["ResponseContentDisposition"] = f"inline; filename*=UTF-8''{quote(filename)}"
+        return self._presign_client.generate_presigned_url("get_object", Params=params, ExpiresIn=ttl, HttpMethod="GET")
+
     def list(self, prefix: str) -> list[ListedObject]:
         out: list[ListedObject] = []
         for page in self._client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket, Prefix=prefix):
@@ -214,6 +223,9 @@ class LocalStorage:
         info = self.head(key)
         assert info is not None
         return info
+
+    def presign_get(self, key: str, *, ttl: int, filename: str | None = None) -> str:
+        return f"file://{self._path(key)}"
 
     def list(self, prefix: str) -> list[ListedObject]:
         import datetime as _dt

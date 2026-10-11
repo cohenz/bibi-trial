@@ -294,3 +294,65 @@ def corpus_stats(conn: Connection) -> dict:
 
 
 _ = scalar  # re-exported helper kept for callers
+
+
+# ---------------------------------------------------------------------------
+# full text of published sources (transcripts and documents)
+# ---------------------------------------------------------------------------
+TEXT_PAGES_MAX = 25
+LABEL_STATES = ("machine_verified", "approved", "published")
+
+
+def source_text(conn: Connection, source_version_id: str, *, page_from: int, page_to: int) -> list[dict]:
+    """Units of a published source version on pages [page_from, page_to], in reading order, each with its Q/A
+    exchange (question→answer link) and, when verified, the affirmed/denied label."""
+    return rows(conn, """
+        SELECT su.id, su.page_no AS page, su.line_start, su.line_end, su.speaker_label AS speaker, su.speaker_role,
+               su.unit_type, su.examination_phase::text AS phase, su.raw_text AS text, su.witness_label AS witness,
+               x.id AS exchange_id, x.question_unit_id, x.answer_unit_id, x.answer_relation::text AS answer_relation,
+               CASE WHEN x.review_state::text = ANY(:ls) THEN x.public_wording END AS exchange_label
+        FROM ntk.source_units su
+        JOIN ntk.source_versions sv ON sv.id = su.source_version_id AND sv.publication_state = 'published'
+        LEFT JOIN ntk.qa_exchanges x ON x.answer_unit_id = su.id
+        WHERE su.source_version_id = :sv AND su.page_no BETWEEN :a AND :b
+        ORDER BY su.unit_ordinal
+    """, {"sv": source_version_id, "a": page_from, "b": page_to, "ls": list(LABEL_STATES)})
+
+
+def public_documents(conn: Connection, *, source_type: str | None, limit: int, offset: int) -> list[dict]:
+    """Published sources that are not hearing protocols (decisions, motions, notices, …), newest first."""
+    return rows(conn, """
+        SELECT sv.id AS source_version_id, d.id AS document_id, d.canonical_title AS title, d.source_type::text AS source_type,
+               d.source_owner, sv.page_count, coalesce(sv.metadata->>'document_date', '') AS document_date,
+               sv.publication_changed_at AS published_at
+        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+        WHERE sv.publication_state = 'published' AND d.source_type <> 'protocol'
+          AND (CAST(:t AS text) IS NULL OR d.source_type::text = :t)
+          AND NOT EXISTS (SELECT 1 FROM ntk.source_versions newer WHERE newer.supersedes_id = sv.id
+                          AND newer.publication_state = 'published')
+        ORDER BY nullif(sv.metadata->>'document_date', '') DESC NULLS LAST, sv.publication_changed_at DESC
+        LIMIT :lim OFFSET :off
+    """, {"t": source_type, "lim": limit, "off": offset})
+
+
+def public_document(conn: Connection, source_version_id: str) -> dict | None:
+    return row(conn, """
+        SELECT sv.id AS source_version_id, d.id AS document_id, d.canonical_title AS title, d.source_type::text AS source_type,
+               d.source_owner, d.authority_tier, sv.page_count, sv.metadata->>'document_date' AS document_date,
+               sv.content_sha256, sv.court_record_status::text AS court_record_status, sv.synthetic_lines,
+               (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_id,
+               (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_date
+        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+        WHERE sv.id = :sv AND sv.publication_state = 'published'
+    """, {"sv": source_version_id})
+
+
+def published_object_key(conn: Connection, source_version_id: str) -> str | None:
+    r = row(conn, """SELECT s3_key, object_uri FROM ntk.source_versions
+                     WHERE id = :sv AND publication_state = 'published'""", {"sv": source_version_id})
+    if r is None:
+        return None
+    if r.get("s3_key"):
+        return r["s3_key"]
+    uri = r.get("object_uri") or ""
+    return uri.split("/", 3)[3] if uri.startswith("s3://") and uri.count("/") >= 3 else None

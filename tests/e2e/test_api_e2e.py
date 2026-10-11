@@ -286,3 +286,42 @@ def test_inbox_endpoints(client, services):
     assert r.status_code == 202 and r.json()["queued"] == 1
     assert signed(client, "POST", f"/v2/admin/inbox/items/{item['id']}", {"skip": True}).status_code == 409  # already queued
     assert signed(client, "POST", "/v2/admin/inbox/items/not-a-uuid", {"skip": True}).status_code == 400
+
+
+def test_public_transcript_documents_and_pdf(client, services, pipeline):
+    pytest.importorskip("reportlab")
+    from ntk_common import inbox
+    from ntk_common.jobs import TASK_RUN_JOB, InlineQueue
+
+    from tests.doc_fixtures import DECISION, make_pdf
+
+    # a published hearing exists from test_full_flow
+    hearings = client.get("/v2/hearings").json()["items"]
+    assert hearings
+    hid = hearings[0]["id"]
+    t = client.get(f"/v2/hearings/{hid}/transcript?page_from=1&page_to=1").json()
+    assert t["page_from"] == 1 and t["page_to"] == 1 and t["units"] and {u["page"] for u in t["units"]} == {1}
+    assert t["pdf_url"].endswith(f"/v2/sources/{t['hearing']['source_version_id']}/pdf")
+    full = client.get(f"/v2/hearings/{hid}/transcript").json()
+    assert full["page_to"] == min(full["page_count"], 25) and full["next_page_from"] in (None, 26)
+    answers = [u for u in full["units"] if u["unit_type"] == "answer" and u["question_unit_id"]]
+    assert answers, "answers carry their question link"
+    assert client.get("/v2/hearings/hr_00000000000000000000000000/transcript").status_code == 404
+
+    # a decision ingested through the inbox and auto-published by the source policy
+    services.storage.put_bytes("inbox/e2e-docs/decision-b.pdf", make_pdf([DECISION[0] + ["3. נימוק נוסף להחלטה."]]),
+                               mime_type="application/pdf")
+    sid = inbox.start_scan(services.engine, trigger="e2e-docs")
+    for iid in inbox.list_new(services, prefix="inbox/e2e-docs/", scan_id=sid)["pending_ids"]:
+        inbox.classify_item(services, iid)
+    inbox.queue_items(services, InlineQueue({TASK_RUN_JOB: lambda j: pipeline.run_job(j)}), task_name=TASK_RUN_JOB,
+                      kinds=["decision"])
+    docs = client.get("/v2/documents?type=decision").json()["items"]
+    mine = [d for d in docs if "decision-b.pdf" in d["title"]]
+    assert mine and mine[0]["document_date"] == "2025-10-12"
+    d = client.get(f"/v2/documents/{mine[0]['source_version_id']}").json()
+    assert d["document"]["source_type"] == "decision" and d["units"][0]["speaker"] == "בית המשפט"
+    assert any(x["source_version_id"] == mine[0]["source_version_id"] for x in client.get("/v2/timeline").json()["documents"])
+    r = client.get(f"/v2/sources/{mine[0]['source_version_id']}/pdf", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["location"].startswith("file://")
+    assert client.get("/v2/sources/sv_00000000000000000000000000/pdf", follow_redirects=False).status_code == 404

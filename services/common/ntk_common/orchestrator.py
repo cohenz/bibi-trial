@@ -726,7 +726,8 @@ class Pipeline:
 
     def stage_publish(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         """AI layers are never published here. The *source* itself may be, when the operator's intake policy says so
-        (``auto_publish_source``: protocols and decisions whose own pages carry this case's number)."""
+        (``auto_publish_source``: protocols, decisions, motions, responses and notices whose own pages carry
+        this case's number)."""
         if not inp.get("auto_publish_source"):
             return {"note": "publication requires an approved review and an explicit publish action"}, {}, "skipped"
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]

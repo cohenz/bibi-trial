@@ -1,5 +1,6 @@
 """Object-store inbox: listing, classification, duplicates, foreign cases, ingestion of non-protocol documents and the
-auto-publication policy (protocols and decisions whose own pages carry the case number)."""
+auto-publication policy (protocols, decisions, motions, responses and notices whose own pages carry the case
+number)."""
 
 from __future__ import annotations
 
@@ -79,7 +80,7 @@ def test_process_ingests_documents_and_applies_publication_policy(services, pipe
     q = InlineQueue({TASK_RUN_JOB: lambda jid: pipeline.run_job(jid)})
     res = inbox.queue_items(services, q, task_name=TASK_RUN_JOB, kinds=["decision", "motion"])
     assert res == {"queued": 2, "jobs_created": 2}
-    for key, kind, published in (("inbox/2025/החלטה-12-10.pdf", "decision", True), ("inbox/2025/בקשה.pdf", "motion", False)):
+    for key, kind, published in (("inbox/2025/החלטה-12-10.pdf", "decision", True), ("inbox/2025/בקשה.pdf", "motion", True)):
         it = _item(services, key)
         with services.engine.begin() as conn:
             job = row(conn, "SELECT status FROM ntk.ingestion_jobs WHERE id = :j", {"j": it["job_id"]})

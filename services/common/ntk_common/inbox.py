@@ -34,7 +34,7 @@ KIND_HE = {
     "protocol": "פרוטוקול דיון", "decision": "החלטה", "motion": "בקשה", "response": "תגובה", "notice": "הודעה",
     "affidavit": "תצהיר", "indictment": "כתב אישום", "exhibit": "מוצג", "other": "מסמך",
 }
-AUTO_PUBLISH_KINDS = {"protocol", "decision"}
+AUTO_PUBLISH_KINDS = {"protocol", "decision", "motion", "response", "notice"}
 MODEL_THRESHOLD = 0.7
 CLASSIFIER_VERSION = "inbox-classifier-1"
 

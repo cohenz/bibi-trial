@@ -337,3 +337,22 @@ def glossary() -> JSONResponse:
     from ntk_common.glossary import glossary as g
 
     return _json(g(), cache="public, max-age=3600")
+
+
+# ------------------------------------------------------------------ mirror sync (the site keeps its own copy)
+@router.get("/sync/objects", dependencies=[Depends(rate_limit("public"))])
+def sync_objects(st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import sync
+
+    with st.services.engine.connect() as conn:
+        return _json(sync.objects(conn), cache="no-store")
+
+
+@router.get("/sync/changes", dependencies=[Depends(rate_limit("public"))])
+def sync_changes(since: dt.datetime, st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import sync
+
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=dt.UTC)
+    with st.services.engine.connect() as conn:
+        return _json(sync.changes(conn, since), cache="no-store")

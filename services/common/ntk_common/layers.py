@@ -91,15 +91,23 @@ def _now() -> str:
 
 def build_hearing_digest(
     *, hearing_id: str, units: list[UnitView], exchanges: list[ExchangeView], runner: ModelRunner,
-    corpus_version: str, citation_base: str, env: str, max_units: int = 400,
+    corpus_version: str, citation_base: str, env: str, max_units: int = 4000, unit_chars: int = 1200,
 ) -> BuildResult:
+    """Layer A digest of a whole hearing.
+
+    Every non-caption unit is sent (up to ``max_units``), so the digest covers the hearing from start to end. If the
+    first draft fails the judicial-wording gate ("בית המשפט קבע…" without an approved ruling), the model gets one
+    second attempt told which phrases to avoid; a second failure is returned as rejected."""
     by_id = {u.id: u for u in units}
     sample = [u for u in units if u.unit_type != "caption"][:max_units]
-    payload_in = {
+    pages = sorted({u.page for u in sample})
+    base_in = {
         "hearing_id": hearing_id,
+        "hearing_size": {"pages": len(pages), "units": len(sample),
+                         "target_sentences": max(5, min(14, 4 + len(pages) // 15))},
         "units": [
             {"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role, "unit_type": u.unit_type,
-             "phase": u.examination_phase, "page": u.page, "text": u.text[:2000]}
+             "phase": u.examination_phase, "page": u.page, "text": u.text[:unit_chars]}
             for u in sample
         ],
         "exchanges": [
@@ -108,7 +116,7 @@ def build_hearing_digest(
             for e in exchanges
         ],
     }
-    allowed_units = {u["id"] for u in payload_in["units"]}
+    allowed_units = {u["id"] for u in base_in["units"]}
     allowed_ex = {e.id for e in exchanges}
 
     def semantic(out: dict) -> list[dict]:
@@ -118,11 +126,37 @@ def build_hearing_digest(
         errs += unknown_ids_check(allowed_ex, "notable_exchange_ids[]")(out)
         return errs
 
-    run = runner.run("digest", payload_in, input_source_ids=sorted(allowed_units), corpus_version=corpus_version,
-                     semantic_check=semantic)
-    if not run.ok:
-        return BuildResult(None, [run], None, run.validation_errors or [run.error or {}])
+    runs: list[ModelRunRecord] = []
+    avoid: list[str] = []
+    result: BuildResult | None = None
+    for attempt in range(2):
+        payload_in = dict(base_in)
+        if avoid:
+            payload_in["wording_rules"] = {
+                "previous_draft_rejected_for": "court determination wording without an approved ruling",
+                "do_not_use": sorted(set(avoid)),
+                "instead": "describe procedural steps neutrally, without a ruling verb: e.g. 'הדיון הבא יתקיים ביום…', "
+                           "'השופטת שאלה את העד…', 'ב״כ ההגנה ביקש…'",
+            }
+        run = runner.run("digest", payload_in, input_source_ids=sorted(allowed_units), corpus_version=corpus_version,
+                         semantic_check=semantic)
+        runs.append(run)
+        if not run.ok:
+            return BuildResult(None, runs, None, run.validation_errors or [run.error or {}])
+        result = _digest_from_output(run, hearing_id=hearing_id, by_id=by_id, units=units, exchanges=exchanges,
+                                     allowed_units=allowed_units, citation_base=citation_base, env=env)
+        result.runs = runs
+        if result.payload is None or result.decision is None or result.decision.state != "rejected":
+            return result
+        jw = next((r for r in result.decision.results if r.gate == "judicial_wording" and not r.passed), None)
+        if jw is None:
+            return result
+        avoid += [ph.strip() for d in jw.details for ph in d.get("phrases", [])]
+    return result  # type: ignore[return-value]
 
+
+def _digest_from_output(run: ModelRunRecord, *, hearing_id: str, by_id: dict[str, UnitView], units: list[UnitView],
+                        exchanges: list[ExchangeView], allowed_units: set[str], citation_base: str, env: str) -> BuildResult:
     out = run.output
     ex_by_id = {e.id: e for e in exchanges}
     cited_ids: list[str] = []

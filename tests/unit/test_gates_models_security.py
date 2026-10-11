@@ -335,3 +335,45 @@ def test_daily_inbox_scan_is_scheduled():
     assert entry["task"] == "ntk.scan_inbox" and entry["args"] == ("schedule",)
     assert entry["schedule"].hour == {2} and entry["schedule"].minute == {47}
     assert "ntk.scan_inbox" in app.tasks and "ntk.classify_inbox_batch" in app.tasks
+
+
+def test_digest_retries_once_without_ruling_wording():
+    from ntk_common.layers import UnitView, build_hearing_digest
+
+    units = [UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=i, line_start=1, line_end=2,
+                      speaker_label="כב' השופטת", speaker_role="judge", unit_type="speech_turn",
+                      text=f"הדיון הבא יתקיים ביום ראשון בבוקר באולם {i}") for i in range(1, 4)]
+
+    def draft(sentence):
+        return json.dumps({"schema_version": "2.0", "summary_sentences": [{"text": sentence, "source_unit_ids": [units[0].id]}],
+                           "topics": ["מועד"], "persons": [], "notable_exchange_ids": [], "judicial_candidate_unit_ids": []})
+
+    class Seq(MockProvider):
+        def __init__(self, texts):
+            self.texts, self.payloads = list(texts), []
+
+        def generate_json(self, **kw):
+            self.payloads.append(kw["payload"])
+            return ProviderResult(text=self.texts.pop(0))
+
+    prov = Seq([draft("בית המשפט קבע כי הדיון הבא יתקיים ביום ראשון בבוקר"),
+                draft("הדיון הבא יתקיים ביום ראשון בבוקר באולם")])
+    runner = ModelRunner(_registry(), {"mock": prov}, MemoryRunStore(), sleep=lambda _: None)
+    res = build_hearing_digest(hearing_id="hr_" + "b" * 26, units=units, exchanges=[], runner=runner, corpus_version="cv",
+                               citation_base="https://x.test/c/", env="test")
+    assert len(res.runs) == 2 and res.payload is not None and res.decision.state != "rejected"
+    assert "wording_rules" not in prov.payloads[0] and "בית המשפט קבע" in prov.payloads[1]["wording_rules"]["do_not_use"]
+    assert prov.payloads[0]["hearing_size"] == {"pages": 3, "units": 3, "target_sentences": 5}
+    # every unit is sent, not only the first 400
+    assert [u["id"] for u in prov.payloads[0]["units"]] == [u.id for u in units]
+
+    prov = Seq([draft("בית המשפט קבע כי הדיון הבא יתקיים"), draft("השופטת קבעה כי הדיון הבא יתקיים")])
+    runner = ModelRunner(_registry(), {"mock": prov}, MemoryRunStore(), sleep=lambda _: None)
+    res = build_hearing_digest(hearing_id="hr_" + "b" * 26, units=units, exchanges=[], runner=runner, corpus_version="cv",
+                               citation_base="https://x.test/c/", env="test")
+    assert len(res.runs) == 2 and res.decision.state == "rejected"
+
+
+def test_determination_wording_with_court_as_earlier_subject():
+    assert gates.find_determination_language("בית המשפט פתח את הישיבה, ובהמשך קבע בהחלטה כי הדיון יידחה")
+    assert not gates.find_determination_language("העד הסביר שהפגישה נקבעה מראש באופן קבע")

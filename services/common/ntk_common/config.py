@@ -97,6 +97,9 @@ class Settings:
     # pipeline
     ocr_enabled: bool = True
     # object-store inbox (bulk and daily intake)
+    # what may publish without a person: "off" (everything waits for review) or "gates" (an AI artifact that passes
+    # every automatic gate with no risk flag publishes itself; only doubtful items reach the review queue)
+    auto_publish: str = "off"
     inbox_prefix: str = "inbox/"
     inbox_enabled: bool = True
     inbox_auto_process: bool = False  # false: scans only classify (a "map"); true: classified items are ingested
@@ -208,6 +211,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         wp_callback_url=g("WP_CALLBACK_URL"),
         wp_callback_secret=g("WP_CALLBACK_SECRET"),
         ocr_enabled=_bool(g("NTK_OCR_ENABLED"), True),
+        auto_publish=(g("NTK_AUTO_PUBLISH", "off") or "off").strip().lower(),
         inbox_prefix=g("NTK_INBOX_PREFIX", "inbox/"),
         inbox_enabled=_bool(g("NTK_INBOX_ENABLED"), True),
         inbox_auto_process=_bool(g("NTK_INBOX_AUTO_PROCESS"), False),

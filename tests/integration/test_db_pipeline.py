@@ -306,3 +306,49 @@ def test_verify_rechecks_mock_verdicts_after_model_switch(services, pipeline, in
     with services.engine.connect() as conn:
         assert scalar(conn, """SELECT output FROM ntk.ingestion_job_stages WHERE job_id = CAST(:j AS uuid)
                                AND stage = 'verify'""", {"j": str(job_id)})["checked"] == 1
+
+
+def test_auto_publish_policy_and_label_policy(services, pipeline, ingested):
+    """NTK_AUTO_PUBLISH=gates: a digest that passes every gate publishes itself once its sources are published; Q/A
+    labels the verifier agrees with become machine_verified; no review task is opened for exchanges."""
+    import dataclasses
+
+    from ntk_common.orchestrator import Pipeline
+
+    job_id = str(ingested["id"])
+    with services.engine.connect() as conn:
+        hid = scalar(conn, """SELECT checkpoint->>'hearing_id' FROM ntk.ingestion_job_stages
+                              WHERE job_id = CAST(:j AS uuid) AND stage = 'segment'""", {"j": job_id})
+        svid = scalar(conn, "SELECT source_version_id FROM ntk.hearings WHERE id = :h", {"h": hid})
+    cfg = dataclasses.replace(services.settings, auto_publish="gates")
+    auto = Pipeline(dataclasses.replace(services, settings=cfg))
+    with services.engine.begin() as conn:
+        conn.execute(text("UPDATE ntk.source_versions SET publication_state = 'draft' WHERE id = :s"), {"s": svid})
+    out = auto.rebuild_hearing_digest(hid)
+    assert out["auto_published"] is False  # sources not published → stays for review, nothing leaks
+    with services.engine.begin() as conn:
+        kdb.publish_source_version(conn, svid, actor="test")
+    out = auto.rebuild_hearing_digest(hid)
+    assert out["state"] == "machine_verified" and out["auto_published"] is True
+    with services.engine.connect() as conn:
+        art = row(conn, "SELECT review_state::text AS s FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
+                  {"a": out["artifact_id"]})
+        assert art["s"] == "published"
+        assert scalar(conn, "SELECT count(*) FROM ntk.audit_events WHERE actor = 'policy:auto-publish-gates'") >= 1
+        assert scalar(conn, """SELECT count(*) FROM ntk.review_tasks WHERE object_type = 'artifact'
+                               AND object_id = :a AND status = 'open'""", {"a": out["artifact_id"]}) == 0
+    # labels: re-run verify under the policy
+    with services.engine.begin() as conn:
+        conn.execute(text("UPDATE ntk.qa_exchanges SET review_state = 'draft' WHERE hearing_id = :h AND public_wording IS NOT NULL"),
+                     {"h": hid})
+        open_before = scalar(conn, "SELECT count(*) FROM ntk.review_tasks WHERE object_type = 'qa_exchange' AND status = 'open'")
+        ops.reset_stages(conn, job_id, ["verify"])
+    assert auto.run_job(job_id)["status"] == "succeeded"
+    with services.engine.connect() as conn:
+        v = scalar(conn, """SELECT output FROM ntk.ingestion_job_stages WHERE job_id = CAST(:j AS uuid) AND stage = 'verify'""",
+                   {"j": job_id})
+        verified = scalar(conn, """SELECT count(*) FROM ntk.qa_exchanges WHERE hearing_id = :h AND review_state = 'machine_verified'""",
+                          {"h": hid})
+        open_after = scalar(conn, "SELECT count(*) FROM ntk.review_tasks WHERE object_type = 'qa_exchange' AND status = 'open'")
+    assert v["label_policy"] == "agreement" and verified == v["verifier_agrees"]
+    assert open_after == open_before

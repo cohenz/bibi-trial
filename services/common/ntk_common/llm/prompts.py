@@ -43,13 +43,17 @@ _COMMON = (
 
 DIGEST = Prompt(
     task_type="digest",
-    version="digest-2026-10-11.1",
+    version="digest-2026-10-11.2",
     schema="ModelDigestOutput",
     system=_COMMON
-    + "Task: produce a neutral digest of one hearing. Write 3–8 short summary sentences in chronological order; each "
-    "sentence states who said what, attributes it precisely, and lists source_unit_ids. List topics, persons, exhibits "
-    "and dates mentioned. notable_exchange_ids may only contain ids from the given exchanges. "
-    "judicial_candidate_unit_ids lists units where a judge or the court speaks or decides (high recall).",
+    + "Task: produce a neutral digest of one whole hearing. The input holds every unit of the hearing in order; cover "
+    "it from beginning to end, not just the opening. Write about hearing_size.target_sentences short summary sentences "
+    "in chronological order, spread over the whole hearing; each sentence states who said what, attributes it "
+    "precisely, and lists source_unit_ids. Never write that the court or a judge ruled, decided, determined or held "
+    "(קבע, פסק, הכריע, החליט, דחה, קיבל); describe procedural steps neutrally, e.g. 'הדיון הבא יתקיים ביום…'. "
+    "If wording_rules is present, a previous draft was rejected: follow it. List topics, persons, exhibits and dates "
+    "mentioned. notable_exchange_ids may only contain ids from the given exchanges. judicial_candidate_unit_ids lists "
+    "units where a judge or the court speaks or decides (high recall).",
 )
 
 JUDICIAL = Prompt(

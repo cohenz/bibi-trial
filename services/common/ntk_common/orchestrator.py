@@ -524,19 +524,38 @@ class Pipeline:
         res = build_hearing_digest(hearing_id=hid, units=units, exchanges=exchanges, runner=self.s.runner,
                                    corpus_version=cv, citation_base=self.cfg.citation_base, env=self.cfg.env)
         if res.payload is None:
+            # a failed generation is an operational fact (job output + audit), not something a reviewer can approve
             with self.s.engine.begin() as conn:
-                kdb.open_review_task(conn, object_type="hearing_digest_failure", object_id=hid, risk_flags=["contract_failure"],
-                                     reason=f"digest generation failed: {str(res.errors)[:300]}")
-            return {"digest": None, "errors": res.errors[:10]}, {}
+                ops.audit(conn, actor="pipeline", action="hearing_digest.failed", object_type="hearing", object_id=hid,
+                          details={"errors": res.errors[:10]})
+            return {"digest": None, "errors": res.errors[:10], "attempts": len(res.runs)}, {}
         with self.s.engine.begin() as conn:
             kdb.save_layer_a(conn, object_type="hearing", object_key=hid, version_id=res.payload["id"], payload=res.payload,
                              source_unit_ids=[c["source_unit_id"] for c in res.payload["citations"]],
                              model_run_id=res.runs[0].id, review_state=res.decision.state)  # type: ignore[union-attr]
             art_id = str(ids.derived_uuid("summary_artifact", res.payload["id"]))
             kdb.save_artifact(conn, artifact_id=art_id, artifact_type="summary", object_type="hearing", object_id=hid,
-                              payload=res.payload, decision=res.decision, model_run_id=res.runs[0].id, verifier_run_id=None)  # type: ignore[arg-type]
+                              payload=res.payload, decision=res.decision, model_run_id=res.runs[-1].id, verifier_run_id=None)  # type: ignore[arg-type]
+        published = self.auto_publish(art_id, res.decision)  # type: ignore[arg-type]
         return {"digest_id": res.payload["id"], "artifact_id": art_id, "state": res.decision.state,  # type: ignore[union-attr]
-                "risk_flags": res.decision.risk_flags}, {"artifact_id": art_id}  # type: ignore[union-attr]
+                "risk_flags": res.decision.risk_flags, "attempts": len(res.runs),  # type: ignore[union-attr]
+                "auto_published": published}, {"artifact_id": art_id}
+
+    def auto_publish(self, artifact_id: str, decision) -> bool:
+        """Operator policy NTK_AUTO_PUBLISH=gates: an artifact that passed every automatic gate with no risk flag is
+        approved and published by the policy (audited as such). Anything doubtful stays in the review queue."""
+        if self.cfg.auto_publish != "gates" or decision is None or decision.state != "machine_verified":
+            return False
+        try:
+            with self.s.engine.begin() as conn:
+                kdb.review_artifact(conn, artifact_id=artifact_id, decision="approve", reviewer="policy:auto-publish-gates",
+                                    notes="passed all automatic gates with no risk flags")
+                kdb.publish_artifact(conn, artifact_id=artifact_id, actor="policy:auto-publish-gates", env=self.cfg.env,
+                                     public_base_url=self.cfg.public_base_url, include_sources=False)
+            return True
+        except kdb.PublicationError as exc:
+            log.info("auto-publish of %s skipped: %s", artifact_id, exc)
+            return False
 
     def stage_map_b(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         claim_ids = inp.get("claim_ids") or []
@@ -588,8 +607,8 @@ class Pipeline:
                                  independent_verifier=not self.s.registry.single_family)
         if res.payload is None:
             with self.s.engine.begin() as conn:
-                kdb.open_review_task(conn, object_type="claim_build_failure", object_id=claim.id,
-                                     risk_flags=["contract_failure"], reason=str(res.errors)[:500])
+                ops.audit(conn, actor="pipeline", action="claim_build.failed", object_type="claim", object_id=claim.id,
+                          details={"errors": res.errors[:10]})
             return {"claim_id": claim.id, "state": "failed", "errors": res.errors[:10]}
         map_run = res.runs[0]
         verify_run = next((r for r in res.runs if r.task_type == "verify"), None)
@@ -606,9 +625,10 @@ class Pipeline:
                         kdb.save_judicial_statement(conn, source_unit_id=cl["source_unit_id"], level=cl["level"],
                                                     summary=cl.get("summary") or "", confidence=cl["confidence"],
                                                     related_claim_ids=[claim.id], model_run_id=jrun.id, statement_date=None)
+        published = self.auto_publish(res.artifact_id, res.decision)  # type: ignore[arg-type]
         return {"claim_id": claim.id, "artifact_id": res.artifact_id, "state": res.decision.state,  # type: ignore[union-attr]
                 "support": len(res.payload["support"]), "weakness": len(res.payload["weakness"]),
-                "risk_flags": res.decision.risk_flags}  # type: ignore[union-attr]
+                "risk_flags": res.decision.risk_flags, "auto_published": published}  # type: ignore[union-attr]
 
     def stage_verify(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         """Verify Q/A 'affirms'/'denies' exchanges so public wording may be used.
@@ -633,13 +653,16 @@ class Pipeline:
                 WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL
                   AND (x.review_state = 'draft'
                        OR (x.review_state = 'human_review_required' AND :real
-                           AND (x.relation_model_run_id IS NULL OR mr.provider = 'mock')))
+                           AND (x.relation_model_run_id IS NULL OR mr.provider = 'mock' OR :auto)))
                 ORDER BY x.id
-            """, {"h": hid, "real": self.s.registry.get("verifier").provider != "mock"})
+            """, {"h": hid, "real": self.s.registry.get("verifier").provider != "mock",
+                  "auto": self.cfg.auto_publish == "gates"})
             cv = ops.current_corpus_version(conn)
         if not exs:
             return {"verified": 0, "checked": 0, "verifier_model": self.s.registry.get("verifier").model_id}, {}, "succeeded"
         independent = not self.s.registry.single_family
+        # with NTK_AUTO_PUBLISH=gates the operator accepts a same-family verifier's agreement for this low-stakes label
+        trust_agreement = independent or self.cfg.auto_publish == "gates"
         checked = passed = failed_batches = 0
         pairs: dict[str, int] = {}
         for i in range(0, len(exs), 25):
@@ -657,7 +680,7 @@ class Pipeline:
                     checked += 1
                     v = verdicts.get(e["id"])
                     agree = v is not None and v["answer_relation"] == e["rel"] and v["confidence"] >= 0.7
-                    state = "machine_verified" if (agree and independent) else "human_review_required"
+                    state = "machine_verified" if (agree and trust_agreement) else "human_review_required"
                     if agree:
                         passed += 1
                     key = f"{e['rel']}->{v['answer_relation'] if v else 'missing'}"
@@ -667,11 +690,10 @@ class Pipeline:
                     execute(conn, """UPDATE ntk.qa_exchanges SET review_state = CAST(:s AS ntk.review_state),
                                      relation_model_run_id = CAST(:r AS uuid) WHERE id = :id""",
                             {"s": state, "r": run.id, "id": e["id"]})
-                    if state == "human_review_required":
-                        kdb.open_review_task(conn, object_type="qa_exchange", object_id=e["id"],
-                                             risk_flags=["qa_public_wording"] + ([] if agree else ["verifier_disagrees"]),
-                                             reason=e["public_wording"] or "")
+                    # no per-exchange review task: the "affirmed/denied" label is shown only when machine_verified,
+                    # and a person is never asked to approve protocol lines one by one
         return {"checked": checked, "verifier_agrees": passed, "independent_family": independent,
+                "label_policy": "agreement" if trust_agreement else "human",
                 "failed_batches": failed_batches, "relation_pairs": dict(sorted(pairs.items())),
                 "verifier_model": self.s.registry.get("verifier").model_id}, {}, "succeeded"
 

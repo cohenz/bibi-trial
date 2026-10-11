@@ -64,3 +64,44 @@ def test_witness_date_and_speaker_variants():
                                "מה אמר העד על הפגישה?"])
 def test_real_corpus_ordinary_questions_not_flagged(q):
     assert not (detect_injection(q) or detect_ruling_topic(q) or detect_speaker_claim(q) or detect_witness_date(q, HEARINGS))
+
+
+def test_retrieval_keeps_question_and_answer_together():
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, text):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label="עו\"ד" if utype == "question" else "העד", speaker_role=None, unit_type=utype,
+                        text=text, published=True)
+
+    units = {u.id: u for u in [uv(1, "question", "האם ידעת על הפגישות בחניונים?"), uv(2, "answer", "לא."),
+                               uv(3, "speech_turn", "הפגישות בחניונים נדונו"), uv(4, "question", "מי היה בחניון?"),
+                               uv(5, "answer", "לא זוכר")]}
+    q1, a1, other, q2, a2 = list(units)
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+        def exchange_partners(self, ids):
+            m = {q1: a1, a1: q1, q2: a2, a2: q2}
+            return {i: m[i] for i in ids if i in m}
+
+    class Search:
+        def search(self, req):
+            hits = [SearchHit(q1, 1.0, {"terms": 1}, unit_type="question"), SearchHit(other, 0.9, {"terms": 2}),
+                    SearchHit(a2, 0.8, {"terms": 3}, unit_type="answer")]
+            return SearchResponse(req.query, hits, {}, {}, "fake")
+
+    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/"))
+    ctx, origins = eng._retrieve("האם העד ידע על הפגישות בחניונים")
+    assert [c.unit.id for c in ctx] == [q1, a1, other, q2, a2]
+    assert origins["exchange_partners_added"] == 2

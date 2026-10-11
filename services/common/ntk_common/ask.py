@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.3"
+ASK_ENGINE_VERSION = "ask-engine-1.4"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -569,8 +569,29 @@ class AskEngine:
             # fuzzy-only matches (one n-gram or vector signal) are not enough to answer from
             relevant = [h for h in resp.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
             origins["search_relevant"] = len(relevant)
-            add([h.source_unit_id for h in relevant], "context", "search")
-        return items[: self.cfg.max_context], origins
+            hit_ids = [h.source_unit_id for h in relevant]
+            # a question is phrased like the user's question and ranks high; the witness's answer ("נכון", "לא זוכר")
+            # does not. Keep every Q/A exchange whole: question first, then its answer.
+            partners_fn = getattr(self.store, "exchange_partners", None)
+            partners = partners_fn(hit_ids) if partners_fn else {}
+            ordered: list[str] = []
+            for uid in hit_ids:
+                p = partners.get(uid)
+                pair = [uid, p] if p and relevant_type(relevant, uid) == "question" else ([p, uid] if p else [uid])
+                ordered.extend(x for x in pair if x not in ordered)
+            origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
+            add(ordered, "context", "search")
+        return items[: self.cfg.max_context + origins.get("exchange_partners_added", 0)][:MAX_CONTEXT_WITH_PAIRS], origins
+
+
+MAX_CONTEXT_WITH_PAIRS = 24
+
+
+def relevant_type(hits: list, uid: str) -> str | None:
+    for h in hits:
+        if h.source_unit_id == uid:
+            return h.unit_type
+    return None
 
 
 def _clip(text: str, words: int) -> str:

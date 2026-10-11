@@ -217,6 +217,18 @@ class PgAskStore:
         with self.engine.connect() as conn:
             return units_by_ids(conn, unit_ids, published_only=True)
 
+    def exchange_partners(self, unit_ids: list[str]) -> dict[str, str]:
+        """For question/answer units, the unit on the other side of their Q/A exchange (question→answer, answer→question)."""
+        if not unit_ids:
+            return {}
+        with self.engine.connect() as conn:
+            out: dict[str, str] = {}
+            for r in rows(conn, """SELECT question_unit_id AS q, answer_unit_id AS a FROM ntk.qa_exchanges
+                                   WHERE question_unit_id = ANY(:ids) OR answer_unit_id = ANY(:ids)""", {"ids": unit_ids}):
+                out.setdefault(r["q"], r["a"])
+                out.setdefault(r["a"], r["q"])
+            return out
+
     def published_hearings(self) -> list[dict]:
         with self.engine.connect() as conn:
             return rows(conn, """SELECT h.hearing_date::text AS hearing_date, h.witnesses FROM ntk.hearings h

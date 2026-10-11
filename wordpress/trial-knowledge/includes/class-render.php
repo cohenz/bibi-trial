@@ -248,7 +248,8 @@ class TK_Render {
 			$out  .= '<li id="' . esc_attr( $u['id'] ) . '" class="tk-u tk-u--' . esc_attr( $type ) . '">';
 			$out  .= '<a class="tk-u__lines" href="' . esc_url( self::citation_url( $u['id'] ) ) . '" title="' . esc_attr__( 'קישור קבוע לקטע', 'trial-knowledge' ) . '">' .
 				esc_html( $u['line_start'] === $u['line_end'] ? (string) $u['line_start'] : $u['line_start'] . '–' . $u['line_end'] ) . '</a>';
-			if ( ! empty( $u['speaker'] ) && 'caption' !== $type ) {
+			// many protocols print the speaker at the start of the turn; do not show it twice
+			if ( ! empty( $u['speaker'] ) && 'caption' !== $type && 0 !== strpos( ltrim( (string) $u['text'] ), (string) $u['speaker'] ) ) {
 				$out .= '<span class="tk-u__speaker">' . esc_html( $u['speaker'] ) . '</span>';
 			}
 			$out .= '<span class="tk-u__text">' . nl2br( esc_html( $u['text'] ) ) . '</span>';

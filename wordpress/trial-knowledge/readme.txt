@@ -4,7 +4,7 @@ Tags: knowledge base, legal, citations, rtl
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 2.2.0
+Stable tag: 2.2.1
 License: GPLv2 or later
 
 Presentation and editorial layer for the Netanyahu trial Knowledge API.
@@ -29,7 +29,7 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 
 == Changelog ==
 
-= 2.2.0 =
+= 2.2.1 =
 * Hearing pages show the full protocol page by page (speakers, line numbers, verified Q/A labels, link to the original PDF).
 * New document pages (/document/{sv_id}/) for decisions, motions, responses, notices and affidavits.
 * New shortcode [tk_documents type="" limit=""]; the hearing timeline also lists dated documents.

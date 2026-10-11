@@ -42,3 +42,5 @@ $ctx = TK_Render::in_context_url( array( 'citation' => array( 'page' => 30, 'sou
 TK_T::eq( 'https://site.test/trial/hearing/hr_z/?tk_p=26#' . $su, $ctx, 'citation links into the transcript page range' );
 $tl = TK_Render::timeline( array( 'events' => array(), 'hearings' => array(), 'documents' => array( array( 'source_version_id' => 'sv_' . str_repeat( 'f', 26 ), 'title' => 'החלטה', 'source_type' => 'decision', 'document_date' => '2025-10-12' ) ) ) );
 TK_T::ok( false !== strpos( $tl, '2025-10-12' ) && false !== strpos( $tl, '/trial/document/sv_ffff' ), 'timeline lists dated documents' );
+$dup = TK_Render::transcript( array( 'page_from' => 1, 'page_to' => 1, 'page_count' => 1, 'units' => array( array( 'id' => 'su_' . str_repeat( '9', 26 ), 'page' => 1, 'line_start' => 1, 'line_end' => 1, 'speaker' => 'עו"ד תירוש', 'unit_type' => 'speech_turn', 'text' => 'עו"ד תירוש: אוקי.', 'exchange_label' => null ) ) ), 'https://site.test/x/' );
+TK_T::ok( false === strpos( $dup, 'tk-u__speaker' ), 'speaker printed in the text is not repeated' );

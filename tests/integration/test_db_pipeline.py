@@ -416,3 +416,22 @@ def test_digest_waiting_for_its_source_is_published_with_it(services, ingested):
     with services.engine.connect() as conn:
         assert scalar(conn, "SELECT review_state::text FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
                       {"a": out["artifact_id"]}) == "published"
+
+
+def test_repair_keeps_same_pair_when_exchange_id_changes(services, pipeline, ingested):
+    """Re-running `pair` after a parser change that alters an exchange's id (not its question/answer) must not fail on
+    the (question, answer) uniqueness and must keep the pair current."""
+    job_id = str(ingested["id"])
+    with services.engine.begin() as conn:
+        hid = scalar(conn, """SELECT checkpoint->>'hearing_id' FROM ntk.ingestion_job_stages
+                              WHERE job_id = CAST(:j AS uuid) AND stage = 'segment'""", {"j": job_id})
+        before = scalar(conn, "SELECT count(*) FROM ntk.qa_exchanges WHERE hearing_id = :h AND superseded_at IS NULL", {"h": hid})
+        # simulate ids minted by an older parser
+        conn.execute(text("ALTER TABLE ntk.qa_exchanges DISABLE TRIGGER ALL"))
+        conn.execute(text("UPDATE ntk.qa_exchanges SET id = 'qx_' || substr(md5(id), 1, 26) WHERE hearing_id = :h"), {"h": hid})
+        conn.execute(text("ALTER TABLE ntk.qa_exchanges ENABLE TRIGGER ALL"))
+        ops.reset_stages(conn, job_id, ["pair"])
+    assert pipeline.run_job(job_id)["status"] == "succeeded"
+    with services.engine.connect() as conn:
+        after = scalar(conn, "SELECT count(*) FROM ntk.qa_exchanges WHERE hearing_id = :h AND superseded_at IS NULL", {"h": hid})
+    assert after == before

@@ -459,6 +459,7 @@ class Pipeline:
         from .db.core import execute
         from .db.sources import _exchange_row
 
+        # a re-parse keeps an exchange's id and review state when it pairs the same question and answer again
         with self.s.engine.begin() as conn:
             n = execute(conn, """
                 INSERT INTO ntk.qa_exchanges (id, hearing_id, question_unit_id, answer_unit_id, phase, answer_relation,
@@ -466,9 +467,18 @@ class Pipeline:
                     flags, rule, parser_version)
                 VALUES (:id, :hid, :q, :a, CAST(:phase AS ntk.examination_phase), CAST(:rel AS ntk.answer_relation), :prop,
                     :conf, 'draft', :asker, :side, :wit, :wording, :flags, :rule, :pv)
-                ON CONFLICT (id) DO NOTHING
+                ON CONFLICT (question_unit_id, answer_unit_id) DO UPDATE SET
+                    phase = EXCLUDED.phase, answer_relation = EXCLUDED.answer_relation, confidence = EXCLUDED.confidence,
+                    asker_label = EXCLUDED.asker_label, asker_side = EXCLUDED.asker_side,
+                    witness_label = EXCLUDED.witness_label, public_wording = EXCLUDED.public_wording,
+                    flags = EXCLUDED.flags, rule = EXCLUDED.rule, parser_version = EXCLUDED.parser_version,
+                    superseded_at = NULL
             """, [_exchange_row(e, hid, parsed.parser_version) for e in exchanges])
-            ex_superseded = sources.supersede_exchanges(conn, hid, [e.id for e in exchanges])
+            current_ids = [r["id"] for r in rows(conn, """
+                SELECT x.id FROM ntk.qa_exchanges x
+                JOIN unnest(CAST(:q AS text[]), CAST(:a AS text[])) AS p(q, a) ON p.q = x.question_unit_id AND p.a = x.answer_unit_id
+            """, {"q": [e.question.id for e in exchanges], "a": [e.answer.id for e in exchanges]})]
+            ex_superseded = sources.supersede_exchanges(conn, hid, current_ids)
         rel: dict[str, int] = {}
         for e in exchanges:
             rel[e.answer_relation] = rel.get(e.answer_relation, 0) + 1

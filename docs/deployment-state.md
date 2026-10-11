@@ -10,7 +10,7 @@
 | Railway | פרויקט `bibi-trial`, סביבה `production`. Project ID `70fde9b1-8af2-44c4-a771-6995bcc45074`, Environment ID `77764ba9-1b65-405d-922e-8cfed4c30cf5` |
 | API ציבורי | https://api-production-6562.up.railway.app (`/v2/ready`, `/docs`) |
 | אחסון | Cloudflare R2. Account `b3aa40c092c2bbcc8c4c1201b53a4946`. Buckets `ntk-sources` (פרטי, CORS ל־`https://shomersaf.com`, Bucket Lock על `sources/`) ו־`ntk-backups` |
-| WordPress | https://shomersaf.com/trial/. התוסף `trial-knowledge` 2.1.0 מותקן, מוגדר, ו"בדיקת חיבור" עוברת |
+| WordPress | https://shomersaf.com/trial/. התוסף `trial-knowledge` 2.1.0 מותקן ו"בדיקת חיבור" עוברת. **גרסה 2.2.1** (פרוטוקול מלא, דפי מסמכים, `[tk_documents]`) נשלחה למשתמש להתקנה ידנית: `dist/trial-knowledge-2.2.1.zip`. **עמוד הבית** (11.10): עמוד 9, "משפט נתניהו — המאגר", בכתובת `/trial/trial/`, עם `[tk_ask]`, `[tk_hearing_timeline]` ו־`[tk_documents]` |
 | דפים ציבוריים | `https://shomersaf.com/trial/trial/hearing/<hr_id>/`. ה־slug הציבורי `trial` יושב מתחת להתקנת WordPress ב־`/trial/`, ולכן הוא מופיע פעמיים. נבדק: `hr_a52174a761df72d3aba0325a7e` (15.9) מוצג עם תאריך ועדים, ו"טרם פורסם סיכום" |
 | Webhook | `https://shomersaf.com/trial/wp-json/trial-knowledge/v1/webhook`, מוגדר ב־worker וב־beat |
 
@@ -20,9 +20,9 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `b56e93f`** |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `b56e93f`** |
-| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `b56e93f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `d91add5`** |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `d91add5`** |
+| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `dd3488f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
 **Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`) ו־0006 (`ntk.inbox_items`, `ntk.inbox_scans`, וסוגי מקור `response`, `notice` ו־`affidavit`).
 
@@ -87,8 +87,19 @@
   - מריץ את הסט ב־worker מול הקורפוס והמודלים בייצור;
   - `GET /v2/admin/evaluations[/{id}]` מחזיר את הדוח. `?report=false` מחזיר תקציר בלבד.
 
+## מדיניות ביקורת ופרסום (ADR‑0014, מ־11.10.2026)
+- **הגדרות ב־api וב־worker:** `NTK_AUTO_PUBLISH=gates` ו־`NTK_MODEL_TIMEOUT_SECONDS=300`.
+- **מה מתפרסם לבד:** תוצר AI שעבר את כל השערים ואין לו דגל סיכון.
+- **מה מגיע לתור:** רק פריטים שבאמת מוטלים בספק.
+- **זוגות ש/ת:** לא פותחים משימות. התווית "אישר/הכחיש" מוצגת רק כשהמאמת מסכים.
+- **מצב 11.10:**
+  - תקצירי 15.9, 16.9 ו־29.9 פורסמו אוטומטית, והם מכסים את כל הדיון.
+  - תקציר 17.9 ממתין בתור, בגלל דגל `motive_or_conspiracy` על משפט שמתאר טענת "קנוניה" של ריטמן.
+
 ## פתוח — לפי סדר
-1. **העלאת המסמכים לתיבה**, ואז מפה ואישור קליטה (ראו למעלה). **Ask תוקן:** הזוג ש/ת מגיע שלם להקשר, וסט השאלות עובר 15/16.
+1. **התקנת תוסף 2.2.1** על ידי המשתמש.
+2. **העלאת 30 קבצי ניסיון לתיבה**, ואז סריקה, מפה וקליטה.
+3. **Ask תוקן:** הזוג ש/ת מגיע שלם להקשר, וסט השאלות עובר 15/16.
 2. **Layer A:**
    - התקציר מכסה רק את 400 היחידות הראשונות, כלומר עד עמוד 28–36;
    - הניסוח "בית המשפט קבע" נחסם בשער;

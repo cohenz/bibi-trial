@@ -196,6 +196,13 @@ class GuideBuildRequest(BaseModel):
     keys: list[str] | None = Field(default=None, max_length=50)
 
 
+class DuplicateDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # remove_copy: delete this intake copy, keep the document already in the system
+    # keep_and_process: it is a different document; store and ingest it
+    action: Literal["remove_copy", "keep_and_process"]
+
+
 class InboxScanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # None: follow NTK_INBOX_AUTO_PROCESS; False: classify only (a map of the documents); True: classify and ingest

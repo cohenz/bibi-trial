@@ -309,7 +309,7 @@ def test_public_transcript_documents_and_pdf(client, services, pipeline):
     assert client.get("/v2/hearings/hr_00000000000000000000000000/transcript").status_code == 404
 
     # a decision ingested through the inbox and auto-published by the source policy
-    services.storage.put_bytes("inbox/e2e-docs/decision-b.pdf", make_pdf([DECISION[0] + ["3. נימוק נוסף להחלטה."]]),
+    services.storage.put_bytes("inbox/e2e-docs/decision-b.pdf", make_pdf([[ln.replace("12 באוקטובר", "14 באוקטובר") for ln in DECISION[0]] + ["3. נימוק נוסף להחלטה."]]),
                                mime_type="application/pdf")
     sid = inbox.start_scan(services.engine, trigger="e2e-docs")
     for iid in inbox.list_new(services, prefix="inbox/e2e-docs/", scan_id=sid)["pending_ids"]:
@@ -317,7 +317,7 @@ def test_public_transcript_documents_and_pdf(client, services, pipeline):
     inbox.queue_items(services, InlineQueue({TASK_RUN_JOB: lambda j: pipeline.run_job(j)}), task_name=TASK_RUN_JOB,
                       kinds=["decision"])
     docs = client.get("/v2/documents?type=decision").json()["items"]
-    mine = [d for d in docs if d["document_date"] == "2025-10-12" and d["title"] == "החלטה — 2025-10-12"
+    mine = [d for d in docs if d["document_date"] == "2025-10-14" and d["title"] == "החלטה — 2025-10-14"
             and any("נימוק נוסף להחלטה" in u["text"] for u in client.get(f"/v2/documents/{d['source_version_id']}").json()["units"])]
     assert mine
     d = client.get(f"/v2/documents/{mine[0]['source_version_id']}").json()

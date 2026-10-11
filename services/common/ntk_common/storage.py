@@ -68,6 +68,14 @@ class Storage(Protocol):
     def uri(self, key: str) -> str: ...
     def list(self, prefix: str) -> list[ListedObject]: ...
     def presign_get(self, key: str, *, ttl: int, filename: str | None = None) -> str: ...
+    def delete_intake_copy(self, key: str, *, prefix: str, expected_etag: str | None) -> bool: ...
+
+
+def _check_deletable(key: str, prefix: str) -> None:
+    """Only intake copies may be deleted: keys under the inbox prefix, never the immutable sources/ area."""
+    if not prefix or not prefix.endswith("/") or prefix.startswith("sources") or not key.startswith(prefix) \
+            or ".." in key.split("/"):
+        raise StorageError(f"refusing to delete {key!r}: not under the intake prefix {prefix!r}")
 
 
 def content_key(prefix: str, sha256: str, ext: str = "pdf") -> str:
@@ -175,6 +183,25 @@ class S3Storage:
         return out
 
 
+    def _etag(self, key: str) -> str | None:
+        try:
+            r = self._client.head_object(Bucket=self.bucket, Key=key)
+        except Exception:  # noqa: BLE001 - missing object
+            return None
+        return (r.get("ETag") or "").strip('"')
+
+    def delete_intake_copy(self, key: str, *, prefix: str, expected_etag: str | None) -> bool:
+        """Delete one intake object. Returns False if it is already gone; refuses if it changed since it was scanned."""
+        _check_deletable(key, prefix)
+        etag = self._etag(key)
+        if etag is None:
+            return False
+        if expected_etag and etag != expected_etag:
+            raise StorageError(f"{key} changed since it was scanned (etag {etag} != {expected_etag}); not deleted")
+        self._client.delete_object(Bucket=self.bucket, Key=key)
+        return True
+
+
 class LocalStorage:
     """Filesystem storage for tests and offline development (no presign)."""
 
@@ -226,6 +253,18 @@ class LocalStorage:
 
     def presign_get(self, key: str, *, ttl: int, filename: str | None = None) -> str:
         return f"file://{self._path(key)}"
+
+    def delete_intake_copy(self, key: str, *, prefix: str, expected_etag: str | None) -> bool:
+        import hashlib as _hl
+
+        _check_deletable(key, prefix)
+        p = self._path(key)
+        if not p.exists():
+            return False
+        if expected_etag and _hl.md5(p.read_bytes()).hexdigest() != expected_etag:  # noqa: S324
+            raise StorageError(f"{key} changed since it was scanned; not deleted")
+        p.unlink()
+        return True
 
     def list(self, prefix: str) -> list[ListedObject]:
         import datetime as _dt

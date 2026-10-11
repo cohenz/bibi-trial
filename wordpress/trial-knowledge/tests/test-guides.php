@@ -173,3 +173,14 @@ TK_Cache::remember( '/v2/guide', function () use ( &$n ) { ++$n; return array( '
 TK_Cache::purge( TK_Webhooks::tags_for( array( 'event' => 'artifact.published', 'payload' => array( 'artifact_type' => 'guide', 'object_type' => 'indictment', 'object_id' => 'main' ) ) ) );
 TK_Cache::remember( '/v2/guide', function () use ( &$n ) { ++$n; return array( 'x' => 1 ); }, array( 'guide', 'lists' ) );
 TK_T::eq( 2, $n, 'webhook: start page refetched after an indictment guide is published' );
+
+// --- duplicates admin screen (2.3.1)
+require_once TK_DIR . 'includes/class-permissions.php';
+require_once TK_DIR . 'includes/class-admin-duplicates.php';
+$pub = array( 'kind' => 'source', 'publication_state' => 'published', 'source_version_id' => 'sv_' . str_repeat( 'a', 26 ), 'hearing_id' => null, 'title' => 'החלטה <b>x</b>' );
+TK_T::ok( false !== strpos( TK_Admin_Duplicates::kept_link( $pub ), '/document/sv_' ), 'duplicates: published source links to its document page' );
+TK_T::ok( false !== strpos( TK_Admin_Duplicates::kept_link( array_merge( $pub, array( 'hearing_id' => 'hr_' . str_repeat( 'b', 26 ) ) ) ), '/hearing/hr_' ), 'duplicates: protocol links to its hearing page' );
+TK_T::ok( '' === TK_Admin_Duplicates::kept_link( array_merge( $pub, array( 'publication_state' => 'draft' ) ) ), 'duplicates: unpublished source has no public link' );
+TK_T::ok( false === strpos( TK_Admin_Duplicates::kept_html( $pub ), '<b>x</b>' ), 'duplicates: kept title is escaped' );
+TK_T::ok( false !== strpos( TK_Admin_Duplicates::kept_html( array( 'kind' => 'inbox', 'object_key' => 'inbox/a.pdf', 'status' => 'ingested' ) ), 'inbox/a.pdf' ), 'duplicates: kept inbox file shows its key' );
+TK_T::ok( false !== strpos( TK_Admin_Duplicates::kept_html( null ), 'לא ידוע' ), 'duplicates: unknown kept copy' );

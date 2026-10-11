@@ -32,6 +32,7 @@ from ..deps import admin, get_state
 from ..schemas import (
     CaseEventIn,
     ClaimIn,
+    DuplicateDecision,
     EvaluationRequest,
     GuideBuildRequest,
     InboxItemOverride,
@@ -53,6 +54,15 @@ from .public import _json
 
 router = APIRouter(prefix="/v2/admin", tags=["admin"])
 STALE_JOB_MINUTES = 15
+
+
+def _uuid_or_404(v: str) -> None:
+    import uuid as _u
+
+    try:
+        _u.UUID(v)
+    except ValueError as exc:
+        raise ApiError(404, "not_found", "unknown id") from exc
 
 
 def _rid(request: Request) -> str:
@@ -277,6 +287,38 @@ def inbox_process(body: InboxProcessRequest, request: Request, st: AppState = De
         ops.audit(conn, actor=p.label, action="inbox.process", object_type="inbox", object_id=st.settings.inbox_prefix,
                   request_id=_rid(request), details={"kinds": body.kinds, "limit": body.limit, **res})
     return _json(res, cache="no-store", status=202)
+
+
+@router.get("/inbox/duplicates")
+def inbox_duplicates(st: AppState = Depends(get_state), limit: int = Query(200, le=1000),
+                     p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """Exact duplicates removed from inbox/, exact duplicates still there, and held possible duplicates."""
+    from ntk_common import inbox_dupes
+
+    with st.services.engine.connect() as conn:
+        out = inbox_dupes.listing(conn, limit=limit)
+    return _json({**out, "auto_delete": st.settings.inbox_delete_duplicates,
+                  "threshold": inbox_dupes.POSSIBLE_THRESHOLD}, cache="no-store")
+
+
+@router.post("/inbox/items/{item_id}/duplicate")
+def inbox_duplicate_decision(item_id: str, body: DuplicateDecision, request: Request, st: AppState = Depends(get_state),
+                             p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    from ntk_common import inbox_dupes
+
+    _uuid_or_404(item_id)
+    if body.action == "remove_copy":
+        res = inbox_dupes.remove_copy(st.services, item_id, actor=p.label, reason="operator: duplicate copy")
+        if not res.get("removed"):
+            raise ApiError(409, "conflict", f"not removed: {res.get('reason')}")
+        return _json(res, cache="no-store")
+    res = inbox_dupes.release(st.services, item_id, actor=p.label)
+    if not res.get("released"):
+        raise ApiError(409, "conflict", res.get("reason", "not released"))
+    if st.settings.inbox_auto_process and res["status"] == "classified":
+        res["queue"] = inboxmod.queue_items(st.services, st.queue, task_name=TASK_RUN_JOB, item_ids=[item_id],
+                                            requested_by=p.label)
+    return _json(res, cache="no-store")
 
 
 @router.post("/inbox/items/{item_id}")

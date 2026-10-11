@@ -66,6 +66,7 @@ class Classification:
     text_chars: int = 0
     page_count: int = 0
     model_run_id: str | None = None
+    fingerprint: list[int] = field(default_factory=list)  # text sketch of pages 1, 2 and last (inbox_dupes)
 
     def to_json(self) -> dict:
         return {**asdict(self), "classifier_version": CLASSIFIER_VERSION}
@@ -174,8 +175,11 @@ def extract_for_classification(data: bytes, *, ocr: bool, ocr_langs: str) -> tup
 
 def classify_document(data: bytes, *, filename: str, settings, runner=None, corpus_version: str = "cv-inbox") -> Classification:
     first, last, total, notes = extract_for_classification(data, ocr=settings.ocr_enabled, ocr_langs=settings.ocr_langs)
+    from .inbox_dupes import fingerprint
+
     c = classify_by_rules(first, last, filename, case_number=settings.court_case_number)
     c.page_count = total
+    c.fingerprint = fingerprint(first + "\n" + last)
     c.signals += notes
     if runner is not None and c.confidence < MODEL_THRESHOLD and (first or last):
         run = runner.run("classify_document", {"filename": filename.rsplit("/", 1)[-1], "page_count": total,
@@ -271,17 +275,36 @@ def classify_item(services, item_id: str) -> str:
                 _set(conn, item_id, status="unsupported", content_sha256=sha,
                      error={"code": "not_a_pdf", "extension": key.rsplit(".", 1)[-1].lower() if "." in key else ""})
             return "unsupported"
-        with services.engine.connect() as conn:
+        # claim the hash under a lock so two copies classified at the same time cannot both pass as originals
+        with services.engine.begin() as conn:
+            execute(conn, "SELECT pg_advisory_xact_lock(hashtextextended(:s, 0))", {"s": sha})
             dup_sv = scalar(conn, "SELECT id FROM ntk.source_versions WHERE content_sha256 = :s ORDER BY id LIMIT 1", {"s": sha})
             dup_item = scalar(conn, """SELECT id::text FROM ntk.inbox_items WHERE content_sha256 = :s AND id <> CAST(:id AS uuid)
-                                         AND status NOT IN ('duplicate', 'failed', 'discovered') ORDER BY first_seen_at LIMIT 1""",
+                                         AND status NOT IN ('duplicate', 'failed', 'removed') ORDER BY first_seen_at LIMIT 1""",
                               {"s": sha, "id": item_id})
+            if dup_sv or dup_item:
+                _set(conn, item_id, status="duplicate", content_sha256=sha, duplicate_of=dup_sv or f"inbox:{dup_item}")
+            else:
+                _set(conn, item_id, content_sha256=sha)
         if dup_sv or dup_item:
-            with services.engine.begin() as conn:
-                _set(conn, item_id, status="duplicate", content_sha256=sha,
-                     duplicate_of=dup_sv or f"inbox:{dup_item}")
+            if s.inbox_delete_duplicates:
+                from .inbox_dupes import remove_copy
+
+                res = remove_copy(services, item_id, actor="inbox:auto", reason="exact duplicate (same SHA-256)")
+                return "removed" if res.get("removed") else "duplicate"
             return "duplicate"
         c = classify_document(data, filename=key, settings=s, runner=services.runner)
+        from .inbox_dupes import find_possible_duplicate
+
+        with services.engine.begin() as conn:
+            maybe = find_possible_duplicate(conn, fp=c.fingerprint, page_count=c.page_count, sha=sha, item_id=item_id,
+                                            date=plausible_date(c.hearing_date or c.document_date))
+            if maybe:
+                # held: not copied to the write-once sources/ area and not ingested until the operator decides
+                _set(conn, item_id, status="possible_duplicate", doc_kind=c.source_type, classification=c.to_json(),
+                     duplicate_of=maybe[0], similarity=round(maybe[1], 3), error=None)
+        if maybe:
+            return "possible_duplicate"
         source_key = services.storage.content_key(sha)
         services.storage.put_bytes(source_key, data, mime_type="application/pdf")
         status = "foreign_case" if c.case_found is False else "classified"

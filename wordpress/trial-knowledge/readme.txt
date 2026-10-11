@@ -4,7 +4,7 @@ Tags: knowledge base, legal, citations, rtl
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 2.3.0
+Stable tag: 2.3.1
 License: GPLv2 or later
 
 Presentation and editorial layer for the Netanyahu trial Knowledge API.
@@ -29,6 +29,9 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 5. Settings → Permalinks → Save (refreshes rewrite rules) if the public URLs return 404.
 
 == Changelog ==
+
+= 2.3.1 =
+* New admin screen "כפילויות": files uploaded more than once to the intake — near-identical copies held before processing (delete the copy, or keep it as a different document), exact copies left in the inbox, and a log of removed copies.
 
 = 2.3.0 =
 * New home shortcode [tk_start]: what the site is, a neutrality line (an indictment is the prosecution's allegations; presumption of innocence), the three cases (4000, 2000, 1000), the indictment in brief, where the trial stands (latest hearing + counts), witnesses, entry links and Ask. Optional attributes override the entry URLs: glossary, timeline, witnesses, decisions, motions, responses, notices; ask="0" hides Ask.

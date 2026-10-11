@@ -106,6 +106,7 @@ class Settings:
     inbox_scan_hour_utc: int = 2
     inbox_scan_minute: int = 47
     inbox_batch_size: int = 25
+    inbox_delete_duplicates: bool = False  # true: an exact duplicate's copy under inbox/ is deleted after it is detected
     ocr_langs: str = "heb+eng"
     fetch_allowlist: tuple[str, ...] = ("www.gov.il", "gov.il", "supremedecisions.court.gov.il", "the315.org", "www.the315.org")
     log_level: str = "INFO"
@@ -218,6 +219,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         inbox_scan_hour_utc=_int(g("NTK_INBOX_SCAN_HOUR_UTC"), 2),
         inbox_scan_minute=_int(g("NTK_INBOX_SCAN_MINUTE"), 47),
         inbox_batch_size=_int(g("NTK_INBOX_BATCH_SIZE"), 25),
+        inbox_delete_duplicates=_bool(g("NTK_INBOX_DELETE_DUPLICATES"), False),
         ocr_langs=g("NTK_OCR_LANGS", "heb+eng"),
         log_level=g("NTK_LOG_LEVEL", "INFO"),
     )

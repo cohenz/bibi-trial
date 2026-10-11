@@ -22,6 +22,7 @@ class TK_Admin_Settings {
 		add_menu_page( __( 'מאגר המשפט', 'trial-knowledge' ), __( 'מאגר המשפט', 'trial-knowledge' ), TK_Permissions::CAP_REVIEW, 'trial-knowledge', array( 'TK_Admin_Review', 'page' ), 'dashicons-book-alt', 58 );
 		add_submenu_page( 'trial-knowledge', __( 'ביקורת ופרסום', 'trial-knowledge' ), __( 'ביקורת ופרסום', 'trial-knowledge' ), TK_Permissions::CAP_REVIEW, 'trial-knowledge', array( 'TK_Admin_Review', 'page' ) );
 		add_submenu_page( 'trial-knowledge', __( 'מקורות וקליטה', 'trial-knowledge' ), __( 'מקורות וקליטה', 'trial-knowledge' ), TK_Permissions::CAP_SOURCES, 'trial-knowledge-sources', array( 'TK_Admin_Sources', 'page' ) );
+		add_submenu_page( 'trial-knowledge', __( 'כפילויות', 'trial-knowledge' ), __( 'כפילויות', 'trial-knowledge' ), TK_Permissions::CAP_SOURCES, 'trial-knowledge-duplicates', array( 'TK_Admin_Duplicates', 'page' ) );
 		add_submenu_page( 'trial-knowledge', __( 'הגדרות', 'trial-knowledge' ), __( 'הגדרות', 'trial-knowledge' ), TK_Permissions::CAP_SETTINGS, 'trial-knowledge-settings', array( __CLASS__, 'page' ) );
 	}
 

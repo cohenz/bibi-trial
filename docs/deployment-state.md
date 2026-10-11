@@ -20,7 +20,7 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `9356004`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `045957d`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
 | worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `9356004`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
 | beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `dd3488f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
@@ -90,6 +90,15 @@
   - מסמכים פרוצדורליים מוסתרים כברירת מחדל, ויש כפתור להציג אותם;
   - ימי דיון מסומנים על ציר הזמן ובעמודי העדים;
   - עמוד עד גם לעדים שמופיעים רק בהודעות של בית המשפט.
+
+## עותק מקומי בוורדפרס (תוסף 2.5.0, 11.10.2026)
+- **מה זה:** הקוראים מקבלים את התוכן מטבלאות בוורדפרס: `{prefix}tk_store` ו־`tk_store_tags`.
+- **איך הוא מתעדכן:**
+  - Webhook מסמן תוכן שהשתנה, והתוכן מתרענן ברקע;
+  - כל 15 דקות: `GET /v2/sync/changes?since=`;
+  - פעם ביום: סנכרון מלא לפי `GET /v2/sync/objects` (api פרוס ב־`045957d`).
+- **מה נשאר מול Railway בזמן אמת:** Ask, קישורי PDF, וממשק הניהול.
+- **אחרי התקנה:** מריצים פעם אחת "סנכרון מלא" במסך "עותק מקומי".
 
 ## מה בייצור עכשיו
 - **ארבעה פרוטוקולים נקלטו** (550 עמודים):

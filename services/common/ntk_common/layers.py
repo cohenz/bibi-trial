@@ -146,6 +146,8 @@ def build_hearing_digest(
         result = _digest_from_output(run, hearing_id=hearing_id, by_id=by_id, units=units, exchanges=exchanges,
                                      allowed_units=allowed_units, citation_base=citation_base, env=env)
         result.runs = runs
+        if result.payload is not None and result.decision is not None and result.decision.state == "human_review_required":
+            _semantic_support_check(result, runner=runner, by_id=by_id, corpus_version=corpus_version)
         if result.payload is None or result.decision is None or result.decision.state != "rejected":
             return result
         jw = next((r for r in result.decision.results if r.gate == "judicial_wording" and not r.passed), None)
@@ -153,6 +155,51 @@ def build_hearing_digest(
             return result
         avoid += [ph.strip() for d in jw.details for ph in d.get("phrases", [])]
     return result  # type: ignore[return-value]
+
+
+def _semantic_support_check(result: BuildResult, *, runner: ModelRunner, by_id: dict[str, UnitView],
+                            corpus_version: str) -> None:
+    """The lexical support gate is a cheap floor. Sentences below it are sent to the verifier model with the units they
+    cite; if every one is confirmed (supported, correctly attributed, no ruling overstated) the floor is lifted and
+    the digest is decided again. Otherwise it stays with a person."""
+    dec = result.decision
+    sup = next((r for r in dec.results if r.gate == "support" and not r.passed), None)  # type: ignore[union-attr]
+    others_failed = [r for r in dec.results if not r.passed and r.gate != "support"]  # type: ignore[union-attr]
+    if sup is None or others_failed or dec.risk_flags:  # type: ignore[union-attr]
+        return
+    sentences = result.payload["summary_sentences"]  # type: ignore[index]
+    paths = [d["path"] for d in sup.details]
+    asserts = []
+    cited: dict[str, UnitView] = {}
+    for pth in paths:
+        i = int(pth.rsplit("/", 1)[-1])
+        s = sentences[i]
+        asserts.append({"path": pth, "text": s["text"], "citation_ids": s["citation_ids"]})
+        for c in s["citation_ids"]:
+            if c in by_id:
+                cited[c] = by_id[c]
+    vrun = runner.run("verify", {"assertions": asserts, "sources": [
+        {"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role, "text": u.text[:2000],
+         "judicial_level": u.judicial_level} for u in cited.values()]},
+        input_source_ids=sorted(cited), corpus_version=corpus_version)
+    result.runs.append(vrun)
+    if not vrun.ok:
+        return
+    verdicts = {a["path"]: a for a in vrun.output.get("assertions", [])}
+    confirmed = all(
+        (v := verdicts.get(pth)) is not None and v.get("supported") == "yes" and v.get("attribution_ok", False)
+        and not v.get("judicial_overstatement") and not v.get("false_premise")
+        for pth in paths
+    )
+    if not confirmed:
+        sup.details.append({"problem": "verifier_not_confirmed", "verifier_run_id": vrun.id})
+        return
+    sup.passed = True
+    sup.severity = "info"
+    sup.details = [{**d, "resolved_by": "verifier", "verifier_run_id": vrun.id} for d in sup.details]
+    new = gates.decide(dec.results, flags=dec.risk_flags)  # type: ignore[union-attr]
+    result.decision = new
+    result.payload["review"]["state"] = new.state  # type: ignore[index]
 
 
 def _digest_from_output(run: ModelRunRecord, *, hearing_id: str, by_id: dict[str, UnitView], units: list[UnitView],

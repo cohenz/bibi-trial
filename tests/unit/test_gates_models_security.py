@@ -377,3 +377,33 @@ def test_digest_retries_once_without_ruling_wording():
 def test_determination_wording_with_court_as_earlier_subject():
     assert gates.find_determination_language("בית המשפט פתח את הישיבה, ובהמשך קבע בהחלטה כי הדיון יידחה")
     assert not gates.find_determination_language("העד הסביר שהפגישה נקבעה מראש באופן קבע")
+
+
+def test_low_lexical_support_goes_to_the_verifier_before_a_person():
+    from ntk_common.layers import UnitView, build_hearing_digest
+
+    u = UnitView(id="su_" + "1" * 26, source_version_id="sv_" + "a" * 26, page=1, line_start=1, line_end=3,
+                 speaker_label="העד", speaker_role="witness", unit_type="answer", text="לא זכור לי שנפגשנו באותו חודש")
+    paraphrase = json.dumps({"schema_version": "2.0", "summary_sentences": [
+        {"text": "העד העיד שאינו נזכר במפגש בתקופה ההיא", "source_unit_ids": [u.id]}],
+        "topics": [], "persons": [], "notable_exchange_ids": [], "judicial_candidate_unit_ids": []})
+
+    def verdict(supported):
+        return json.dumps({"schema_version": "2.0", "assertions": [
+            {"path": "summary_sentences/0", "supported": supported, "attribution_ok": True, "judicial_overstatement": False,
+             "false_premise": False, "note": None}], "omitted_counterevidence": [], "verdict": "pass" if supported == "yes" else "fail"})
+
+    class Seq(MockProvider):
+        def __init__(self, texts):
+            self.texts = list(texts)
+
+        def generate_json(self, **kw):
+            return ProviderResult(text=self.texts.pop(0))
+
+    for supported, state in (("yes", "machine_verified"), ("no", "human_review_required")):
+        runner = ModelRunner(_registry(), {"mock": Seq([paraphrase, verdict(supported)])}, MemoryRunStore(), sleep=lambda _: None)
+        res = build_hearing_digest(hearing_id="hr_" + "b" * 26, units=[u], exchanges=[], runner=runner, corpus_version="cv",
+                                   citation_base="https://x.test/c/", env="test")
+        assert res.decision.state == state and len(res.runs) == 2
+        sup = next(r for r in res.decision.results if r.gate == "support")
+        assert sup.passed is (supported == "yes")

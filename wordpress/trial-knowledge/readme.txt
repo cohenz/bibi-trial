@@ -4,13 +4,14 @@ Tags: knowledge base, legal, citations, rtl
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 2.3.1
+Stable tag: 2.4.0
 License: GPLv2 or later
 
 Presentation and editorial layer for the Netanyahu trial Knowledge API.
 
 == Description ==
 
+* Document briefs (2.4): a readable title and a short cited summary for every decision, motion, response and notice; procedural documents hidden by default; hearing days from court notices on the timeline and witness pages.
 * Reader entry points (2.3): [tk_start] home page ("מתחילים כאן"), case guides (/trial/case/{1000|2000|4000}/), witness pages (/trial/witness/{w_…}/), a dual-track zoomable timeline (/trial/timeline/, [tk_timeline]), the witnesses list (/trial/witnesses/, [tk_witnesses]) and a glossary with automatic term tooltips (/trial/glossary/, [tk_glossary]).
 * Claim Card, Source Citation, Hearing Timeline and Ask the Trial blocks (and shortcodes [tk_claim_card id=""], [tk_citation id=""], [tk_hearing_timeline], [tk_ask]).
 * Stable public URLs: /trial/claim/{id}/, /trial/answer/{id}/, /trial/source/{su_id}/, /trial/hearing/{hr_id}/.
@@ -29,6 +30,14 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 5. Settings → Permalinks → Save (refreshes rewrite rules) if the public URLs return 404.
 
 == Changelog ==
+
+= 2.4.0 =
+* Document briefs: document lists ([tk_documents] and the /decisions/, /motions/, /responses/, /notices/ pages) show the brief title as the link, a one-line summary, date, type, pages and a "פרוצדורלי" badge. Procedural documents are hidden by default with a link "הצגת גם מסמכים פרוצדורליים (N)" (?tk_all=1, works without JS). New attribute procedural="show|hide" (default hide). Documents without a brief yet keep their archive title.
+* Document pages: the brief title as the heading (the archive title as "שם במסמך"), summary sentences with citation chips, a note for procedural documents, and a "יום דיון" box (date, witnesses linked to their pages with their side, next hearing date). Without a brief the page is unchanged.
+* Timeline: hearing days known from court notices ("ימי דיון (לפי הודעות)", drawn dashed and lighter than transcribed hearings), the brief summary in the detail panel, and a "גם מסמכים פרוצדורליים" toggle (off by default; ?tk_all=1).
+* Witnesses: days of testimony from court notices on the witness page ("ימי עדות לפי הודעות בית המשפט"), witnesses known only from notices get a page without a hearings section; lists show the side (הגנה/תביעה) and "N דיונים מתומללים · M ימי עדות נוספים".
+* Start page: the latest hearing day known from a notice when it is newer than the latest transcribed hearing, and the newest documents in the documents entry.
+* Cache: a published or unpublished document brief purges the document page, document lists, the timeline and the guide pages.
 
 = 2.3.1 =
 * New admin screen "כפילויות": files uploaded more than once to the intake — near-identical copies held before processing (delete the copy, or keep it as a different document), exact copies left in the inbox, and a log of removed copies.

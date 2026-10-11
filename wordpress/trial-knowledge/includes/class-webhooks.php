@@ -93,6 +93,18 @@ class TK_Webhooks {
 		if ( 0 === strpos( $event, 'source_version.' ) || ( 0 === strpos( $event, 'artifact.' ) && 'hearing' === $ot ) ) {
 			$tags = array_merge( $tags, array( 'guide', 'timeline' ) );
 		}
+		// 2.4 document briefs (artifact_type summary, object_type document, object_id = sv_…): the brief changes
+		// the document page ('document:<sv>' above), the document lists, the timeline (title, text, hearing days)
+		// and, through hearing days, the start page and witness pages ('guide').
+		if ( 0 === strpos( $event, 'artifact.' ) && 'document' === $ot ) {
+			$tags = array_merge( $tags, array( 'documents', 'timeline', 'guide', 'guide:home' ) );
+		}
+		if ( 0 === strpos( $event, 'source_version.' ) ) {
+			$tags[] = 'documents';
+			if ( ! empty( $p['source_version_id'] ) ) {
+				$tags[] = 'document:' . preg_replace( '/[^A-Za-z0-9_\-]/', '', (string) $p['source_version_id'] );
+			}
+		}
 		return array_values( array_unique( $tags ) );
 	}
 }

@@ -17,7 +17,7 @@ $tk_cur = TK_Public_Pages::$current;
 		<h1 class="tk-head__title"><?php esc_html_e( 'ציר הזמן', 'trial-knowledge' ); ?></h1></header>
 	<?php
 	if ( $tk_cur && $tk_cur['data'] ) {
-		echo TK_Render_Guides::timeline( $tk_cur['data'], TK_Public_Pages::case_param() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in renderer
+		echo TK_Render_Guides::timeline( $tk_cur['data'], TK_Public_Pages::case_param(), TK_Blocks::toggle_opts() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in renderer
 	} else {
 		echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}

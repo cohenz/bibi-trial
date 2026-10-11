@@ -121,7 +121,7 @@ class TK_Public_Pages {
 			'answer'  => array( '/v2/answers/' . strtolower( $id ), array( 'answer:' . strtolower( $id ) ) ),
 			'source'  => array( '/v2/citations/' . $id, array( 'citations' ) ),
 			'hearing'  => array( '/v2/hearings/' . $id, array( 'hearing:' . $id ) ),
-			'document' => array( '/v2/documents/' . $id . '?page_from=' . self::page_param(), array( 'document:' . $id, 'lists' ) ),
+			'document' => array( '/v2/documents/' . $id . '?page_from=' . self::page_param(), array( 'document:' . $id, 'documents', 'lists' ) ),
 		);
 		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary' );
 		if ( in_array( $type, $guides, true ) ) {
@@ -208,7 +208,7 @@ class TK_Public_Pages {
 			case 'hearing':
 				return sprintf( 'דיון %s | %s', $d['hearing']['hearing_date'], get_bloginfo( 'name' ) );
 			case 'document':
-				return $d['document']['title'] . ' | ' . get_bloginfo( 'name' );
+				return TK_Render::display_title( $d['document'] ) . ' | ' . get_bloginfo( 'name' );
 			case 'case':
 				return trim( ( $d['title'] ?? '' ) . ( ! empty( $d['subtitle'] ) ? ' — ' . $d['subtitle'] : '' ) ) . ' | ' . get_bloginfo( 'name' );
 			case 'witness':
@@ -260,6 +260,10 @@ class TK_Public_Pages {
 			$desc = $one ? $one[0]['text'] : '';
 		} elseif ( 'witness' === $cur['type'] && ! empty( $d['hearings'][0]['digest_sentences'][0]['text'] ) ) {
 			$desc = $d['hearings'][0]['digest_sentences'][0]['text'];
+		} elseif ( 'witness' === $cur['type'] && ! empty( $d['appearances'][0]['description'] ) ) {
+			$desc = $d['appearances'][0]['description'];
+		} elseif ( 'document' === $cur['type'] && ! empty( $d['document']['brief']['summary'] ) && is_string( $d['document']['brief']['summary'] ) ) {
+			$desc = $d['document']['brief']['summary'];
 		}
 		echo '<link rel="canonical" href="' . esc_url( self::current_url( $cur ) ) . '">' . "\n";
 		if ( $desc ) {

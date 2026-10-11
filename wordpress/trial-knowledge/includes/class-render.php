@@ -284,28 +284,71 @@ class TK_Render {
 		return $out . self::pager( $t, $base_url, $fragment ) . '</section>';
 	}
 
+	/** Title shown for a document: the brief title when published (2.4), else the archive title. */
+	public static function display_title( array $doc ) {
+		if ( ! empty( $doc['display_title'] ) ) {
+			return (string) $doc['display_title'];
+		}
+		if ( ! empty( $doc['brief']['title'] ) && is_string( $doc['brief']['title'] ) ) {
+			return $doc['brief']['title'];
+		}
+		return (string) ( $doc['title'] ?? '' );
+	}
+
+	/** substantive|procedural|'' (no brief yet). */
+	public static function significance( array $doc ) {
+		$s = $doc['significance'] ?? ( $doc['brief']['significance'] ?? '' );
+		return in_array( $s, array( 'substantive', 'procedural' ), true ) ? $s : '';
+	}
+
+	public static function procedural_badge() {
+		return '<span class="tk-badge tk-badge--procedural" title="' . esc_attr__( 'מסמך שעוסק רק בלוגיסטיקה של ההליך: מועדים, ארכות, הקלטות, העתקים', 'trial-knowledge' ) . '">' . esc_html__( 'פרוצדורלי', 'trial-knowledge' ) . '</span>';
+	}
+
 	/**
+	 * Document list (2.4: brief title and one-line summary, procedural documents hidden by default).
+	 *
 	 * @param array $d    Response of GET /v2/documents.
-	 * @param array $opts show_type.
+	 * @param array $opts mode: 'all' (no toggle) | 'substantive' (procedural hidden) | 'with_procedural' (shown via toggle);
+	 *                    hidden_count (int|null, procedural documents not shown); show_url / hide_url (toggle links).
 	 */
 	public static function documents( array $d, array $opts = array() ) {
-		$items = (array) ( $d['items'] ?? array() );
-		if ( ! $items ) {
-			return '<p class="tk-empty">' . esc_html__( 'עדיין לא פורסמו מסמכים.', 'trial-knowledge' ) . '</p>';
+		$items  = (array) ( $d['items'] ?? array() );
+		$mode   = in_array( $opts['mode'] ?? 'all', array( 'all', 'substantive', 'with_procedural' ), true ) ? ( $opts['mode'] ?? 'all' ) : 'all';
+		$hidden = isset( $opts['hidden_count'] ) && null !== $opts['hidden_count'] ? (int) $opts['hidden_count'] : null;
+		$toggle = '';
+		if ( 'substantive' === $mode && 0 !== $hidden && ! empty( $opts['show_url'] ) ) {
+			$label  = null === $hidden ? __( 'הצגת גם מסמכים פרוצדורליים', 'trial-knowledge' ) : sprintf( __( 'הצגת גם מסמכים פרוצדורליים (%d)', 'trial-knowledge' ), $hidden );
+			$toggle = '<p class="tk-doctoggle"><span class="tk-muted">' . esc_html__( 'מוצגים מסמכים מהותיים. מסמכים פרוצדורליים (מועדים, ארכות, העתקים) מוסתרים.', 'trial-knowledge' ) . '</span> <a class="tk-button tk-doctoggle__a" href="' . esc_url( $opts['show_url'] ) . '" rel="nofollow">' . esc_html( $label ) . '</a></p>';
+		} elseif ( 'with_procedural' === $mode && ! empty( $opts['hide_url'] ) ) {
+			$toggle = '<p class="tk-doctoggle"><span class="tk-muted">' . esc_html__( 'מוצגים כל המסמכים, כולל פרוצדורליים.', 'trial-knowledge' ) . '</span> <a class="tk-button tk-doctoggle__a" href="' . esc_url( $opts['hide_url'] ) . '">' . esc_html__( 'הסתרת מסמכים פרוצדורליים', 'trial-knowledge' ) . '</a></p>';
 		}
-		$out = '<ul class="tk-documents" dir="rtl" lang="he">';
+		if ( ! $items ) {
+			$empty = 'substantive' === $mode && $hidden ? __( 'אין מסמכים מהותיים להצגה.', 'trial-knowledge' ) : __( 'עדיין לא פורסמו מסמכים.', 'trial-knowledge' );
+			return '<div class="tk-doclist" dir="rtl" lang="he">' . $toggle . '<p class="tk-empty">' . esc_html( $empty ) . '</p></div>';
+		}
+		$out = '<div class="tk-doclist" dir="rtl" lang="he">' . $toggle . '<ul class="tk-documents">';
 		foreach ( $items as $it ) {
-			$out .= '<li class="tk-documents__item"><a href="' . esc_url( TK_Public_Pages::url( 'document', $it['source_version_id'] ) ) . '">' . esc_html( $it['title'] ) . '</a> ';
-			$out .= '<span class="tk-badge">' . esc_html( self::type_label( $it['source_type'] ) ) . '</span>';
+			$sig     = self::significance( $it );
+			$summary = isset( $it['brief']['summary'] ) && is_string( $it['brief']['summary'] ) ? trim( $it['brief']['summary'] ) : '';
+			$out    .= '<li class="tk-documents__item' . ( 'procedural' === $sig ? ' tk-documents__item--procedural' : '' ) . '">';
+			$out    .= '<a class="tk-documents__title" href="' . esc_url( TK_Public_Pages::url( 'document', $it['source_version_id'] ) ) . '">' . esc_html( self::display_title( $it ) ) . '</a>';
+			if ( '' !== $summary ) {
+				$out .= '<p class="tk-documents__summary">' . esc_html( $summary ) . '</p>';
+			}
+			$out .= '<p class="tk-documents__meta"><span class="tk-badge">' . esc_html( self::type_label( $it['source_type'] ?? 'other' ) ) . '</span>';
+			if ( 'procedural' === $sig ) {
+				$out .= ' ' . self::procedural_badge();
+			}
 			if ( ! empty( $it['document_date'] ) ) {
-				$out .= ' <time datetime="' . esc_attr( $it['document_date'] ) . '">' . esc_html( $it['document_date'] ) . '</time>';
+				$out .= ' <time datetime="' . esc_attr( substr( $it['document_date'], 0, 10 ) ) . '">' . esc_html( TK_Render_Guides::fmt_date( $it['document_date'] ) ) . '</time>';
 			}
 			if ( ! empty( $it['page_count'] ) ) {
 				$out .= ' <span class="tk-muted">' . esc_html( sprintf( _n( 'עמוד %d', '%d עמודים', (int) $it['page_count'], 'trial-knowledge' ), (int) $it['page_count'] ) ) . '</span>';
 			}
-			$out .= '</li>';
+			$out .= '</p></li>';
 		}
-		return $out . '</ul>';
+		return $out . '</ul></div>';
 	}
 
 	/**

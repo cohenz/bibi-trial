@@ -65,7 +65,7 @@
 .tk-u--caption .tk-u__text { color: #5b6670; font-size: .92em; }
 .tk-badge--qa { grid-column: 2; justify-self: start; background: #e6f4ea; margin-block-start: .2rem; }
 .tk-documents { list-style: none; padding: 0; }
-.tk-documents__item { padding-block: .45rem; border-block-end: 1px solid #eef1f4; display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.tk-documents__item { padding-block: .45rem; border-block-end: 1px solid #eef1f4; }
 .tk-documents__item time { font-variant-numeric: tabular-nums; color: #4a5560; }
 .tk-kicker { display: flex; gap: .5rem; align-items: center; margin-block-end: .25rem; }
 .tk-timeline__item--document-decision { border-inline-start: 3px solid #1f4e79; }
@@ -349,3 +349,57 @@ a.tk-case-badge:hover { text-decoration: underline; }
 .tk-tl__dcits { margin: 0 0 .5rem; }
 .tk-tl [hidden], .tk-tabs [hidden] { display: none !important; }
 @media (max-width: 600px) { .tk-tabs__tab { padding: .4rem .6rem; font-size: .95em; } }
+
+/* ------------------------------------------------------------------ 2.4: document briefs, hearing days */
+.tk-doclist { direction: rtl; text-align: start; line-height: 1.6; overflow-wrap: anywhere; max-width: 72rem; }
+.tk-doclist .tk-documents { margin: 0; }
+.tk-doclist .tk-documents__item { padding-block: .8rem; border-block-end: 1px solid var(--tk-line); }
+.tk-documents__title { font-weight: 700; font-size: 1.05em; line-height: 1.4; }
+.tk-documents__summary { margin: .25rem 0 0; color: var(--tk-muted); font-size: .93em; max-width: 70ch; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tk-documents__meta { margin: .35rem 0 0; display: flex; flex-wrap: wrap; gap: .35rem .6rem; align-items: center; font-size: .88em; }
+.tk-documents__item--procedural .tk-documents__title { font-weight: 600; }
+.tk-badge--procedural { background: #f1f1ee; color: #5d5a4f; border: 1px dashed #b9b4a3; }
+.tk-doctoggle { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .75rem; margin: .5rem 0 1rem; padding: .55rem .75rem; background: var(--tk-soft); border: 1px solid var(--tk-line); border-radius: 8px; font-size: .92em; }
+.tk-doctoggle .tk-button { min-height: 40px; }
+.tk-brief { margin-block: .25rem 1.25rem; }
+.tk-brief__title { margin-block: 0 .35rem; line-height: 1.3; font-size: clamp(1.45rem, 4.2vw + .5rem, 2.1rem); }
+.tk-page--document > .tk-kicker { margin-block-start: 1.25rem; }
+.tk-brief__orig { margin: 0 0 .75rem; font-size: .9em; }
+.tk-brief__sum .tk-sentences { font-size: 1.05em; }
+.tk-brief__sig { margin: .25rem 0 .75rem; font-size: .92em; }
+.tk-hday { border: 1px dashed #9aa7b4; border-inline-start: 4px solid #8795a3; border-radius: var(--tk-radius); background: #fafbfc; padding: .75rem 1rem; margin-block: 1rem; max-width: 46rem; }
+.tk-hday__h { font-size: 1.05em; margin: 0 0 .4rem; }
+.tk-hday__dl { margin: 0 0 .5rem; display: grid; gap: .3rem; }
+.tk-hday__dl > div { display: grid; grid-template-columns: 6.5rem 1fr; gap: .5rem; }
+.tk-hday__dl dt { font-weight: 700; color: var(--tk-muted); }
+.tk-hday__dl dd { margin: 0; }
+.tk-hday__ws { list-style: none; margin: 0; padding: 0; }
+.tk-hday__ws li { margin-block-end: .25rem; }
+.tk-hday__desc { display: block; color: var(--tk-muted); font-size: .92em; }
+.tk-hday p { margin: .25rem 0 0; }
+@media (max-width: 480px) { .tk-hday__dl > div { grid-template-columns: 1fr; gap: 0; } }
+.tk-doc-full { border-block-start: 1px solid var(--tk-line); padding-block-start: 1rem; }
+.tk-badge--side { font-size: .78em; font-weight: 600; }
+.tk-badge--prosecution { background: #e8eef7; color: #24486f; }
+.tk-badge--defense { background: #eef4ea; color: #34562a; }
+.tk-badge--court { background: #f1eef6; color: #4f3f6b; }
+.tk-badge--transcript { background: #e6f4ea; font-size: .78em; }
+.tk-badge--notice { background: #fff; border: 1px dashed #8795a3; }
+.tk-apps { list-style: none; margin: 0; padding: 0; }
+.tk-apps__item { padding-block: .55rem .7rem; border-block-end: 1px solid var(--tk-line); }
+.tk-apps__head { margin: 0; display: flex; flex-wrap: wrap; gap: .35rem .5rem; align-items: center; }
+.tk-apps__date { font-variant-numeric: tabular-nums; }
+.tk-apps__desc { margin: .2rem 0 0; }
+.tk-apps__src { margin: .2rem 0 0; font-size: .9em; }
+.tk-latest-day { margin: 0 0 .9rem; padding: .55rem .8rem; border: 1px dashed #9aa7b4; border-radius: 8px; background: #fafbfc; }
+.tk-latest-day__k { font-weight: 700; }
+.tk-entry__sub { margin-block-start: .6rem; font-size: .85em; font-weight: 700; color: var(--tk-muted); }
+.tk-entry__docs { list-style: none; margin: .15rem 0 0; padding: 0; font-size: .92em; }
+.tk-entry__docs li { padding-block: .2rem; line-height: 1.45; }
+/* timeline: hearing days known from a notice — same family as hearings, lighter and dashed */
+.tk-tl__dot--notice { background: #fff; border: 1.5px dashed #8795a3; width: 10px; height: 10px; }
+.tk-tl__dot--notice.tk-case--4000, .tk-tl__dot--notice.tk-case--2000, .tk-tl__dot--notice.tk-case--1000 { background: #fff; border-color: var(--tk-case); }
+.tk-tl__ev--notice { border-style: dashed; border-inline-start-style: dashed; background: #fafbfc; color: #3a4651; }
+.tk-tl__ev--proc { color: var(--tk-muted); }
+.tk-tl__fitem--notice time { font-weight: 600; }
+.tk-tl__chip--proc[aria-pressed="false"]::before { content: "+ "; }

@@ -7,15 +7,17 @@
  * +/− buttons, clickable period headers and a breadcrumb) above the list of events of the
  * current period, the two tracks side by side. Narrow screens: a vertical list grouped by
  * year with sticky year headers; a year expands to its months. Clicking an event opens its
- * detail panel in place (date, text, citation chips, link). All text goes through textContent. */
+ * detail panel in place (date, text, citation chips, link). All text goes through textContent.
+ * 2.4: "hearing_day" events (a hearing day known from a court notice, drawn dashed/lighter than
+ * transcribed hearings) and a toggle for procedural documents (off by default; ?tk_all=1 turns it on). */
 (function () {
 	'use strict';
 
 	var MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 	var MONTHS_SHORT = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
-	var KIND_ORDER = ['indictment_fact', 'indictment', 'hearing', 'decision', 'motion', 'response', 'notice', 'affidavit', 'exhibit', 'other'];
+	var KIND_ORDER = ['indictment_fact', 'indictment', 'hearing', 'hearing_day', 'decision', 'motion', 'response', 'notice', 'affidavit', 'exhibit', 'other'];
 	var KIND_PL = {
-		indictment_fact: 'אירועים לפי כתב האישום', indictment: 'כתב האישום', hearing: 'דיונים', decision: 'החלטות',
+		indictment_fact: 'אירועים לפי כתב האישום', indictment: 'כתב האישום', hearing: 'דיונים', hearing_day: 'ימי דיון (לפי הודעות)', decision: 'החלטות',
 		motion: 'בקשות', response: 'תגובות', notice: 'הודעות', affidavit: 'תצהירים', exhibit: 'מוצגים', other: 'מסמכים אחרים'
 	};
 	var TRACK = { story: 'מה קרה (לפי כתב האישום)', trial: 'המשפט' };
@@ -44,6 +46,9 @@
 		return e.d + '.' + e.m + '.' + e.y;
 	}
 	function caseClass(e) { return e.cases.length ? ' tk-case--' + e.cases[0] : ''; }
+	function dotClass(e) {
+		return 'tk-tl__dot' + (e.track === 'story' && !e.cases.length ? ' tk-tl__dot--story' : '') + (e.kind === 'hearing_day' ? ' tk-tl__dot--notice' : '') + caseClass(e);
+	}
 
 	function init(root) {
 		var dataEl = root.querySelector('.tk-tl__data');
@@ -52,7 +57,7 @@
 		try { D = JSON.parse(dataEl.textContent); } catch (err) { return; }
 		var events = (D.events || []).map(function (e) {
 			e.y = +e.date.slice(0, 4); e.m = +e.date.slice(5, 7); e.d = +e.date.slice(8, 10);
-			e.cases = e.cases || []; e.cits = e.cits || [];
+			e.cases = e.cases || []; e.cits = e.cits || []; e.nw = e.nw || [];
 			return e;
 		});
 		var cits = D.citations || {};
@@ -66,12 +71,16 @@
 		var q = '';
 		try { q = new URLSearchParams(window.location.search).get('tk_case') || ''; } catch (err) { q = ''; }
 		var c0 = CASES.indexOf(q) >= 0 ? q : (CASES.indexOf(root.getAttribute('data-case')) >= 0 ? root.getAttribute('data-case') : '');
-		var S = { cs: c0, tracks: { story: true, trial: true }, kinds: {}, path: [], open: {}, openEv: null };
+		var allQ = '';
+		try { allQ = new URLSearchParams(window.location.search).get('tk_all') || ''; } catch (err) { allQ = ''; }
+		var nProc = events.filter(function (e) { return e.sig === 'procedural'; }).length;
+		var S = { cs: c0, proc: allQ === '1' || root.getAttribute('data-all') === '1', tracks: { story: true, trial: true }, kinds: {}, path: [], open: {}, openEv: null };
 		kinds.forEach(function (k) { S.kinds[k] = true; });
 
 		// ---------------------------------------------------------------- filters
 		function visible(e) {
 			if (!S.tracks[e.track] || !S.kinds[e.kind]) { return false; }
+			if (e.sig === 'procedural' && !S.proc) { return false; }
 			if (S.cs) { return e.cases.length ? e.cases.indexOf(S.cs) >= 0 : e.track === 'trial'; }
 			return true;
 		}
@@ -160,7 +169,16 @@
 				} });
 			})));
 		var kindBox = h('details', { class: 'tk-tl__more-filters' }, [h('summary', { text: 'סוגי אירועים' }), gKind]);
-		var bar = h('div', { class: 'tk-tl__bar' }, [gCase, gTrack, kindBox, caseNote]);
+		var gProc = nProc ? h('div', { class: 'tk-tl__group', role: 'group', 'aria-label': 'מסמכים פרוצדורליים' }, [
+			h('button', { type: 'button', class: 'tk-tl__chip tk-tl__chip--proc', 'aria-pressed': String(S.proc), text: 'גם מסמכים פרוצדורליים (' + nProc + ')',
+				title: 'מסמכים שעוסקים רק בלוגיסטיקה של ההליך: מועדים, ארכות, הקלטות, העתקים', onclick: function (ev) {
+					S.proc = !S.proc; S.openEv = null;
+					ev.currentTarget.setAttribute('aria-pressed', String(S.proc));
+					syncUrl();
+					render(true);
+				} })
+		]) : null;
+		var bar = h('div', { class: 'tk-tl__bar' }, [gCase, gTrack, kindBox, gProc, caseNote]);
 
 		var zOut = h('button', { type: 'button', class: 'tk-tl__zoom', 'aria-label': 'התרחקות (תקופה רחבה יותר)', title: 'התרחקות', text: '−', onclick: function () { zoomOut(); } });
 		var zIn = h('button', { type: 'button', class: 'tk-tl__zoom', 'aria-label': 'התקרבות (תקופה מצומצמת יותר)', title: 'התקרבות', text: '+', onclick: function () { zoomIn(); } });
@@ -184,6 +202,7 @@
 			try {
 				var u = new URL(window.location.href);
 				if (S.cs) { u.searchParams.set('tk_case', S.cs); } else { u.searchParams.delete('tk_case'); }
+				if (S.proc) { u.searchParams.set('tk_all', '1'); } else { u.searchParams.delete('tk_all'); }
 				history.replaceState(null, '', u.toString());
 			} catch (err) { /* ignore */ }
 		}
@@ -218,15 +237,18 @@
 		function linkLabel(e) {
 			if (e.kind === 'indictment_fact') { return 'לעמוד התיק'; }
 			if (e.kind === 'hearing') { return 'לדף הדיון'; }
+			if (e.kind === 'hearing_day') { return 'להודעת בית המשפט'; }
 			return 'למסמך המלא';
 		}
 		function detail(e, id, headingTag) {
 			var meta = h('p', { class: 'tk-tl__dmeta' }, [
 				h('time', { datetime: e.date, text: fmt(e) }),
-				h('span', { class: 'tk-badge', text: e.track === 'story' ? TRACK_SHORT.story : ((D.kinds && D.kinds[e.kind]) || e.kind) })
+				h('span', { class: 'tk-badge' + (e.kind === 'hearing_day' ? ' tk-badge--notice' : ''), text: e.track === 'story' ? TRACK_SHORT.story : ((D.kinds && D.kinds[e.kind]) || e.kind) }),
+				e.sig === 'procedural' ? h('span', { class: 'tk-badge tk-badge--procedural', text: 'פרוצדורלי' }) : null
 			].concat(e.cases.map(function (k) { return h('span', { class: 'tk-case-badge tk-case--' + k, text: 'תיק ' + k }); })));
 			var kids = [h(headingTag, { text: e.title }), meta];
 			if (e.text && e.text !== e.title) { kids.push(h('p', { class: 'tk-tl__dtext', text: e.text })); }
+			if (e.kind === 'hearing' && e.nw.length) { kids.push(h('p', { class: 'tk-tl__dtext tk-muted', text: 'לפי הודעת בית המשפט העידו: ' + e.nw.join(', ') })); }
 			var chips = e.cits.filter(function (c) { return cits[c]; }).map(function (c) {
 				return h('a', { class: 'tk-chip', href: cits[c].url, title: cits[c].title, text: cits[c].label });
 			});
@@ -250,11 +272,11 @@
 			var pid = base + '-d-' + e.id;
 			var open = S.openEv === e.id;
 			var btn = h('button', {
-				type: 'button', class: 'tk-tl__ev tk-tl__ev--' + e.track + caseClass(e), 'aria-expanded': String(open), 'aria-controls': pid, 'data-ev': e.id,
+				type: 'button', class: 'tk-tl__ev tk-tl__ev--' + e.track + (e.kind === 'hearing_day' ? ' tk-tl__ev--notice' : '') + (e.sig === 'procedural' ? ' tk-tl__ev--proc' : '') + caseClass(e), 'aria-expanded': String(open), 'aria-controls': pid, 'data-ev': e.id,
 				onclick: function () { toggle(e, false); }
 			}, [
 				withTrack && e.track === 'story' ? h('span', { class: 'tk-tl-m__track', text: TRACK_SHORT.story }) : null,
-				h('span', { class: 'tk-tl__evdate', text: fmt(e) + (e.track === 'trial' && e.kind !== 'hearing' ? ' · ' + ((D.kinds && D.kinds[e.kind]) || '') : '') }),
+				h('span', { class: 'tk-tl__evdate', text: fmt(e) + (e.track === 'trial' && e.kind !== 'hearing' && e.kind !== 'hearing_day' ? ' · ' + ((D.kinds && D.kinds[e.kind]) || '') : '') + (e.sig === 'procedural' ? ' · פרוצדורלי' : '') }),
 				e.title
 			]);
 			var li = h('li', {}, [btn]);
@@ -278,7 +300,7 @@
 					var evs = scope.filter(function (e) { return e.track === t && key(e, lv) === k; });
 					if (!evs.length) { return h('td', { class: 'tk-tl__cell' }); }
 					var dots = h('span', { class: 'tk-tl__dots', 'aria-hidden': 'true' }, evs.slice(0, 12).map(function (e) {
-						return h('span', { class: 'tk-tl__dot' + (e.track === 'story' && !e.cases.length ? ' tk-tl__dot--story' : '') + caseClass(e) });
+						return h('span', { class: dotClass(e) });
 					}));
 					var z = zoomable(lv, k);
 					return h('td', { class: 'tk-tl__cell' }, [h('button', {
@@ -396,7 +418,7 @@
 				} }, [
 					h('strong', { text: y }),
 					h('span', { class: 'tk-tl__dots', 'aria-hidden': 'true' }, evs.slice(0, 14).map(function (e) {
-						return h('span', { class: 'tk-tl__dot' + (e.track === 'story' && !e.cases.length ? ' tk-tl__dot--story' : '') + caseClass(e) });
+						return h('span', { class: dotClass(e) });
 					})),
 					h('span', { class: 'tk-tl__n', text: evs.length + ' אירועים' })
 				]);

@@ -4,7 +4,7 @@
  *
  * Blocks: trial-knowledge/claim-card, source-citation, hearing-timeline, ask-the-trial
  * Shortcodes: [tk_claim_card id=""], [tk_citation id=""], [tk_hearing_timeline], [tk_ask],
- *             [tk_documents type="decision" limit="50"],
+ *             [tk_documents type="decision" limit="50" procedural="hide|show"],
  *             2.3 entry points: [tk_start], [tk_timeline case=""], [tk_witnesses], [tk_glossary]
  *
  * @package TrialKnowledge
@@ -15,6 +15,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class TK_Blocks {
+
+	/** Cache tags of document lists (purged when a document or its brief is published). */
+	const DOC_TAGS = array( 'documents', 'lists' );
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'register' ) );
@@ -63,6 +66,19 @@ class TK_Blocks {
 			wp_enqueue_script( 'trial-knowledge-ask' );
 			$opts['ask_html'] = TK_Render::ask_form();
 		}
+		// 2.4: a hearing day known from a court notice that is newer than the latest transcribed hearing,
+		// and the newest substantive documents (both cached; silently skipped on API errors).
+		try {
+			$opts['latest_day'] = TK_Render_Guides::latest_hearing_day( TK_Guides::timeline(), (string) ( $g['latest_hearing']['hearing_date'] ?? '' ) );
+		} catch ( TK_Api_Error $e ) {
+			$opts['latest_day'] = null;
+		}
+		try {
+			$ld                  = TK_Rest_Proxy::cached_get( '/v2/documents?limit=3&significance=substantive', self::DOC_TAGS );
+			$opts['latest_docs'] = (array) ( $ld['items'] ?? array() );
+		} catch ( TK_Api_Error $e ) {
+			$opts['latest_docs'] = array();
+		}
 		return TK_Render_Guides::start( $g, $opts );
 	}
 
@@ -77,7 +93,16 @@ class TK_Blocks {
 		}
 		TK_Guides::enqueue_timeline();
 		$case = TK_Public_Pages::case_param();
-		return TK_Render_Guides::timeline( $t, $case ? $case : (string) $atts['case'] );
+		return TK_Render_Guides::timeline( $t, $case ? $case : (string) $atts['case'], self::toggle_opts() );
+	}
+
+	/** Procedural-documents toggle state and its no-JS links (?tk_all=1). */
+	public static function toggle_opts() {
+		return array(
+			'all'      => self::all_param(),
+			'show_url' => add_query_arg( 'tk_all', '1' ),
+			'hide_url' => remove_query_arg( 'tk_all' ),
+		);
 	}
 
 	public static function witnesses( $atts ) {
@@ -101,22 +126,49 @@ class TK_Blocks {
 	}
 
 	/**
-	 * Published decisions, motions, notices … newest first.
+	 * Published decisions, motions, notices … newest first, with the brief title and summary (2.4).
+	 * Procedural documents are hidden by default; ?tk_all=1 (a plain link, works without JS) shows them.
 	 *
-	 * @param array $atts type (protocol excluded; decision|motion|response|notice|affidavit|indictment|exhibit|other), limit.
+	 * @param array $atts type (protocol excluded; decision|motion|response|notice|affidavit|indictment|exhibit|other), limit,
+	 *                    procedural (hide|show; default hide).
 	 */
 	public static function documents( $atts ) {
-		$atts  = shortcode_atts( array( 'type' => '', 'limit' => 50 ), (array) $atts );
+		$atts  = shortcode_atts( array( 'type' => '', 'limit' => 50, 'procedural' => 'hide' ), (array) $atts );
 		$type  = preg_replace( '/[^a-z_]/', '', (string) $atts['type'] );
 		$limit = max( 1, min( 200, (int) $atts['limit'] ) );
 		wp_enqueue_style( 'trial-knowledge' );
-		$path = '/v2/documents?limit=' . $limit . ( $type ? '&type=' . $type : '' );
+		$mode = 'show' === $atts['procedural'] ? 'all' : ( self::all_param() ? 'with_procedural' : 'substantive' );
+		$base = '/v2/documents?limit=' . $limit . ( $type ? '&type=' . $type : '' );
 		try {
-			$d = TK_Rest_Proxy::cached_get( $path, array( 'lists' ) );
+			$d = TK_Rest_Proxy::cached_get( $base . ( 'substantive' === $mode ? '&significance=substantive' : '' ), self::DOC_TAGS );
 		} catch ( TK_Api_Error $e ) {
 			return TK_Render::unavailable();
 		}
-		return TK_Render::documents( $d );
+		$opts = array_merge( self::toggle_opts(), array( 'mode' => $mode ) );
+		if ( 'substantive' === $mode ) {
+			$opts['hidden_count'] = self::procedural_count( $type );
+		}
+		return TK_Render::documents( $d, $opts );
+	}
+
+	/** ?tk_all=1 — show procedural documents too (lists and timeline). */
+	public static function all_param() {
+		return isset( $_GET['tk_all'] ) && '1' === (string) wp_unslash( $_GET['tk_all'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended,WordPress.Security.ValidatedSanitizedInput -- compared to a literal
+	}
+
+	/**
+	 * Number of procedural documents of a type (one cached request of up to 200 ids); null when unknown.
+	 *
+	 * @param string $type Source type or ''.
+	 */
+	public static function procedural_count( $type ) {
+		try {
+			$p = TK_Rest_Proxy::cached_get( '/v2/documents?limit=200&significance=procedural' . ( $type ? '&type=' . $type : '' ), self::DOC_TAGS );
+		} catch ( TK_Api_Error $e ) {
+			return null;
+		}
+		$n = count( (array) ( $p['items'] ?? array() ) );
+		return $n >= 200 ? null : $n;
 	}
 
 	public static function register() {

@@ -1,4 +1,4 @@
-# מצב הפריסה וההעברה לשיחה חדשה — 11.10.2026 (אחרי חיבור Gemini)
+# מצב הפריסה וההעברה לשיחה חדשה — 11.10.2026 (אחרי Gemini ותיבת הקליטה)
 
 המסמך הזה מאפשר להמשיך את העבודה בשיחה חדשה בלי לאבד הקשר. **אין בו סודות.** הסודות שמורים רק ב־Railway Variables ובהגדרות התוסף ב־WordPress.
 
@@ -20,11 +20,11 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `4b65ae9`** |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `4b65ae9`** |
-| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** פרוס: `4dc32df`. beat רק מתזמן webhooks, ולכן לא עודכן |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `b56e93f`** |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `b56e93f`** |
+| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `b56e93f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
-**Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`).
+**Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`) ו־0006 (`ntk.inbox_items`, `ntk.inbox_scans`, וסוגי מקור `response`, `notice` ו־`affidavit`).
 
 **משתנים:**
 - **משותפים (Shared Variables):** `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `GEMINI_API_KEY`. ב־Gemini יש יתרה, והוא נבדק מהדפדפן ב־11.10: ג'נרציה ו־embeddings מחזירים 200.
@@ -69,6 +69,15 @@
 - **לא פורסמו:** תקצירים ו־Claim Cards. שלושה תקצירים נדחו בשער, ואחד ממתין לבדיקה. ראו `docs/pilot-report.md`.
 - **ריצות הערכה** שמורות ב־`ntk.evaluation_runs`, ונקראות ב־`GET /v2/admin/evaluations`. עותקים ב־`golden/reports/*.gemini.json`.
 
+## תיבת הקליטה (inbox) — פעילה מ־11.10.2026
+- **מיקום:** הקידומת `inbox/` ב־`ntk-sources`. המשתמש מעלה לשם את כל המסמכים, בכל מבנה תיקיות. התיעוד המלא ב־`docs/inbox.md`.
+- **מצב נוכחי:** `NTK_INBOX_AUTO_PROCESS` לא מוגדר, כלומר `false`. סריקות רק מסווגות ומכינות "מפה". ההחלטה של המשתמש: קודם מפה, אחר כך קליטה.
+- **מדיניות פרסום** (החלטת המשתמש): פרוטוקולים והחלטות שמספר התיק מודפס עליהם מתפרסמים אוטומטית. כל השאר, וכל שכבות ה־AI, ממתינים לאישור.
+- **נבדק בייצור:** סריקה ידנית על תיקייה ריקה עברה בלי שגיאה (`listed: 0`), כלומר הרשאת ה־List ב־R2 תקינה. **עדיין לא נבדק על מסמכים אמיתיים בתיבה.**
+- **אחרי שהמשתמש מאשר את המפה:**
+  1. `POST /v2/admin/inbox/process` עם הסוגים המאושרים;
+  2. `NTK_INBOX_AUTO_PROCESS=true` ב־worker, ופריסה של worker.
+
 ## כלים חדשים ב־API (admin, חתום)
 - `POST /v2/admin/ingestion-jobs/{id}/rerun` עם `{"stages": [...], "force_stale": false}`:
   - מריץ מחדש שלבים מסוימים, למשל `embed`, `extract_a`, `verify` ו־`review` אחרי החלפת מודל. השלבים הקודמים נשארים כמו שהם;
@@ -79,7 +88,7 @@
   - `GET /v2/admin/evaluations[/{id}]` מחזיר את הדוח. `?report=false` מחזיר תקציר בלבד.
 
 ## פתוח — לפי סדר
-1. **Ask: להוסיף להקשר את תשובת העד לכל שאלה שנשלפה.** זה הכשל המרכזי עם Gemini: 5/10 שאלות הסתיימו ב"אין מספיק חומר". אחר כך מריצים שוב את `real-sept2025-v1`.
+1. **העלאת המסמכים לתיבה**, ואז מפה ואישור קליטה (ראו למעלה). **Ask תוקן:** הזוג ש/ת מגיע שלם להקשר, וסט השאלות עובר 15/16.
 2. **Layer A:**
    - התקציר מכסה רק את 400 היחידות הראשונות, כלומר עד עמוד 28–36;
    - הניסוח "בית המשפט קבע" נחסם בשער;

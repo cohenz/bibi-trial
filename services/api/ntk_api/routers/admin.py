@@ -18,6 +18,7 @@ from ntk_common.db.core import execute, row, rows
 from ntk_common.db.public import units_by_ids
 from ntk_common.evaluation import SuiteNotFound, resolve_suite
 from ntk_common.jobs import (
+    TASK_BUILD_BRIEFS,
     TASK_BUILD_CLAIM,
     TASK_BUILD_GUIDES,
     TASK_RUN_EVALUATION,
@@ -30,6 +31,7 @@ from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempot
 from ..app import ApiError, AppState
 from ..deps import admin, get_state
 from ..schemas import (
+    BriefBuildRequest,
     CaseEventIn,
     ClaimIn,
     DuplicateDecision,
@@ -195,6 +197,19 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
 
 
 # ------------------------------------------------------------------ evaluation runs
+@router.post("/briefs/build", status_code=202)
+def build_briefs(body: BriefBuildRequest, request: Request, st: AppState = Depends(get_state),
+                 p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Briefs (title, summary, significance, hearing days) for non-protocol documents, in the worker; audited as
+    ``briefs.built``. Clean briefs of published documents are published under the gates."""
+    spec = body.model_dump(exclude_none=True)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="briefs.build.requested", object_type="document", object_id="batch",
+                  request_id=_rid(request), details=spec)
+    tid = st.queue.enqueue(TASK_BUILD_BRIEFS, json.dumps(spec))
+    return _json({"queued": TASK_BUILD_BRIEFS, "task_id": tid, **spec}, cache="no-store", status=202)
+
+
 @router.post("/guides/build", status_code=202)
 def build_guides(body: GuideBuildRequest, request: Request, st: AppState = Depends(get_state),
                  p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:

@@ -821,6 +821,51 @@ defs["ModelWitnessGuideOutput"] = obj(
     },
 )
 
+# --- document briefs (non-protocol documents) -------------------------------------------------------------------
+SIGNIFICANCE = ["substantive", "procedural"]
+SIDES = ["prosecution", "defense", "court", "unknown"]
+WITNESS_APPEARANCE = obj(["name", "side", "description"], {"name": NESTR, "side": {"enum": SIDES}, "description": STR})
+
+defs["ModelDocumentBriefOutput"] = obj(
+    ["schema_version", "title", "summary", "significance", "significance_reason", "hearing_days"],
+    {
+        "schema_version": {"const": SV},
+        "title": M_ITEM,
+        "summary": arr(M_ITEM, minItems=1, maxItems=4),
+        "significance": {"enum": SIGNIFICANCE},
+        "significance_reason": NESTR,
+        "hearing_days": arr(obj(["hearing_date", "witnesses", "next_hearing_date", "source_unit_ids"], {
+            "hearing_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+            "witnesses": arr(WITNESS_APPEARANCE),
+            "next_hearing_date": {"type": ["string", "null"]},
+            "source_unit_ids": SU_LIST,
+        })),
+    },
+)
+defs["DocumentBrief"] = obj(
+    ["schema_version", "id", "source_version_id", "source_type", "title", "summary_sentences", "significance",
+     "hearing_days", "citations", "review"],
+    {
+        "schema_version": {"const": SV},
+        "id": UUID,
+        "source_version_id": {"type": "string", "pattern": SV_ID},
+        "source_type": {"enum": SOURCE_TYPES},
+        "title": obj(["text", "citation_ids"], {"text": NESTR, "citation_ids": arr({"type": "string", "pattern": SU_ID}, minItems=1)}),
+        "summary_sentences": arr(obj(["text", "citation_ids"], {"text": NESTR,
+                                                                "citation_ids": arr({"type": "string", "pattern": SU_ID}, minItems=1)})),
+        "significance": {"enum": SIGNIFICANCE},
+        "significance_reason": nullable("string"),
+        "hearing_days": arr(obj(["hearing_date", "witnesses", "next_hearing_date", "citation_ids"], {
+            "hearing_date": DATE,
+            "witnesses": arr(WITNESS_APPEARANCE),
+            "next_hearing_date": nullable("string"),
+            "citation_ids": arr({"type": "string", "pattern": SU_ID}, minItems=1),
+        })),
+        "citations": arr(ref("Citation")),
+        "review": ref("Review"),
+    },
+)
+
 DOC = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://knowledge.example.org/schemas/contracts-2.0.json",

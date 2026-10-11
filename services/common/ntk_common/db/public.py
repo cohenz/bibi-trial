@@ -322,32 +322,65 @@ def source_text(conn: Connection, source_version_id: str, *, page_from: int, pag
     """, {"sv": source_version_id, "a": page_from, "b": page_to, "ls": list(LABEL_STATES)})
 
 
-def public_documents(conn: Connection, *, source_type: str | None, limit: int, offset: int) -> list[dict]:
-    """Published sources that are not hearing protocols (decisions, motions, notices, …), newest first."""
-    return rows(conn, """
+_BRIEF_JOIN = """
+        LEFT JOIN LATERAL (
+            SELECT ga.payload AS brief FROM ntk.generated_artifacts ga
+            JOIN ntk.publications pb ON pb.artifact_id = ga.id AND pb.unpublished_at IS NULL
+            WHERE ga.artifact_type = 'summary' AND ga.object_type = 'document' AND ga.object_id = sv.id
+            ORDER BY pb.published_at DESC LIMIT 1) b ON true"""
+
+
+def _with_brief(r: dict) -> dict:
+    b = r.pop("brief", None)
+    r["brief"] = None if not b else {
+        "title": b["title"]["text"], "summary": " ".join(x["text"] for x in b["summary_sentences"]),
+        "significance": b["significance"], "significance_reason": b.get("significance_reason"),
+        "hearing_days": b.get("hearing_days") or []}
+    r["display_title"] = r["brief"]["title"] if r["brief"] else r["title"]
+    r["significance"] = r["brief"]["significance"] if r["brief"] else None
+    return r
+
+
+def public_documents(conn: Connection, *, source_type: str | None, limit: int, offset: int,
+                     significance: str | None = None) -> list[dict]:
+    """Published sources that are not hearing protocols (decisions, motions, notices, …), newest first. Each carries
+    its published brief (title, summary, significance) when there is one. ``significance='substantive'`` keeps the
+    documents not judged purely procedural (documents without a brief yet are kept)."""
+    return [_with_brief(r) for r in rows(conn, f"""
         SELECT sv.id AS source_version_id, d.id AS document_id, d.canonical_title AS title, d.source_type::text AS source_type,
                d.source_owner, sv.page_count, coalesce(sv.metadata->>'document_date', '') AS document_date,
-               sv.publication_changed_at AS published_at
-        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+               sv.publication_changed_at AS published_at, b.brief
+        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id {_BRIEF_JOIN}
         WHERE sv.publication_state = 'published' AND d.source_type <> 'protocol'
           AND (CAST(:t AS text) IS NULL OR d.source_type::text = :t)
+          AND (CAST(:sig AS text) IS NULL OR coalesce(b.brief->>'significance', 'substantive') = :sig)
           AND NOT EXISTS (SELECT 1 FROM ntk.source_versions newer WHERE newer.supersedes_id = sv.id
                           AND newer.publication_state = 'published')
         ORDER BY nullif(sv.metadata->>'document_date', '') DESC NULLS LAST, sv.publication_changed_at DESC
         LIMIT :lim OFFSET :off
-    """, {"t": source_type, "lim": limit, "off": offset})
+    """, {"t": source_type, "lim": limit, "off": offset, "sig": significance})]
 
 
 def public_document(conn: Connection, source_version_id: str) -> dict | None:
-    return row(conn, """
+    r = row(conn, f"""
         SELECT sv.id AS source_version_id, d.id AS document_id, d.canonical_title AS title, d.source_type::text AS source_type,
                d.source_owner, d.authority_tier, sv.page_count, sv.metadata->>'document_date' AS document_date,
                sv.content_sha256, sv.court_record_status::text AS court_record_status, sv.synthetic_lines,
                (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_id,
-               (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_date
-        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+               (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_date,
+               b.brief
+        FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id {_BRIEF_JOIN}
         WHERE sv.id = :sv AND sv.publication_state = 'published'
     """, {"sv": source_version_id})
+    if r is None:
+        return None
+    full = r.get("brief")
+    out = _with_brief(r)
+    if full:
+        out["brief"]["summary_sentences"] = full["summary_sentences"]
+        out["brief"]["title_citation_ids"] = full["title"]["citation_ids"]
+        out["brief"]["citations"] = full["citations"]
+    return out
 
 
 def published_object_key(conn: Connection, source_version_id: str) -> str | None:

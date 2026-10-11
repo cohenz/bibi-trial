@@ -442,6 +442,8 @@ def _public_path(art: dict) -> str:
         return f"claims/{art['object_id']}"
     if t == "summary" and art["object_type"] == "hearing":
         return f"hearings/{art['object_id']}"
+    if t == "summary" and art["object_type"] == "document":
+        return f"documents/{art['object_id']}"
     if t == "guide":
         return {"case": f"guide/cases/{art['object_id']}", "witness": f"guide/witnesses/{art['object_id']}"}.get(
             art["object_type"], "guide")

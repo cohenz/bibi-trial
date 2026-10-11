@@ -15,6 +15,7 @@ from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
 from ntk_common.db.core import get_engine
 from ntk_common.jobs import (
+    TASK_BUILD_BRIEFS,
     TASK_BUILD_CLAIM,
     TASK_BUILD_GUIDES,
     TASK_CLASSIFY_INBOX,
@@ -162,6 +163,36 @@ def classify_inbox_batch(item_ids: list[str], process: str = "0") -> dict:
         q = inbox.queue_items(p.s, _CeleryJobQueue(), task_name=TASK_RUN_JOB, item_ids=item_ids, requested_by="inbox:auto")
         out["jobs_created"] = q["jobs_created"]
     return out
+
+
+@app.task(name=TASK_BUILD_BRIEFS)
+def build_briefs(spec: str) -> dict:
+    """Briefs for non-protocol documents. ``spec`` JSON: {"source_version_ids"?, "only_missing": true}. Audited."""
+    from ntk_common.db.core import rows
+
+    p = _pipeline()
+    args = json.loads(spec or "{}")
+    with p.s.engine.connect() as conn:
+        svs = [r["id"] for r in rows(conn, """
+            SELECT sv.id FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+            WHERE d.source_type <> 'protocol' AND NOT EXISTS (SELECT 1 FROM ntk.hearings h WHERE h.source_version_id = sv.id)
+              AND (CAST(:ids AS text[]) IS NULL OR sv.id = ANY(:ids))
+              AND (NOT :only_missing OR NOT EXISTS (
+                    SELECT 1 FROM ntk.generated_artifacts ga WHERE ga.object_type = 'document' AND ga.object_id = sv.id
+                      AND ga.review_state IN ('machine_verified', 'human_review_required', 'approved', 'published')))
+            ORDER BY sv.id""", {"ids": args.get("source_version_ids"), "only_missing": bool(args.get("only_missing", True))})]
+    results = []
+    for svid in svs:
+        try:
+            results.append({"source_version_id": svid, **p.build_document_brief(svid)})
+        except Exception as exc:  # noqa: BLE001 - one document must not stop the batch
+            log.error("brief %s failed: %s: %s", svid, type(exc).__name__, str(exc)[:300])
+            results.append({"source_version_id": svid, "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+    out = {"documents": len(svs), "results": results}
+    with p.s.engine.begin() as conn:
+        ops.audit(conn, actor="worker", action="briefs.built", object_type="document", object_id="batch",
+                  details=json.loads(json.dumps(out, ensure_ascii=False, default=str)))
+    return {"documents": len(svs)}
 
 
 @app.task(name=TASK_BUILD_GUIDES)

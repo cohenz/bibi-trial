@@ -190,8 +190,30 @@ WITNESS_GUIDE = Prompt(
     "ruling. Cite the units each sentence relies on.",
 )
 
+DOCUMENT_BRIEF = Prompt(
+    task_type="document_brief",
+    version="document-brief-2026-10-11.1",
+    schema="ModelDocumentBriefOutput",
+    system=_COMMON + _GUIDE
+    + "Task: write a brief of one court-file document (a decision, motion, response, notice, affidavit …) for readers "
+    "of a public guide to the trial. title: up to 12 words saying what this document is about (its subject, not its "
+    "form): e.g. 'דחיית בקשת ההגנה לדחות את עדות פילבר' or 'לוח הדיונים לחודש מאי', never just 'החלטה' or 'שניתנה "
+    "ע\"י…'. summary: 1 to 3 sentences: who asks or decides what, and the outcome if there is one. Attribute precisely: "
+    "a party's motion or response states that party's position ('ההגנה מבקשת…', 'המאשימה טוענת…'); only a document "
+    "issued by the court (document_source_type decision) may say what the court decided, and only what this "
+    "document itself decides. significance: 'procedural' when the document only handles logistics (dates, "
+    "extensions, filing deadlines, technical instructions, transcripts, recordings, copies, attendance) and would not "
+    "change a reader's understanding of the case; 'substantive' when it contains real content: a ruling on evidence, "
+    "disclosure, witnesses, privilege or the charges, legal arguments, facts about the case, or who testified. Explain "
+    "in significance_reason (one short sentence). hearing_days: when the document records what happened at a hearing "
+    "(e.g. 'פרוטוקול הדיון מיום … הוקלט', 'העיד/ה …', 'הדיון הבא …'), one entry per hearing day: hearing_date, "
+    "every witness who testified that day with side (prosecution for a prosecution witness 'עד/ת תביעה', defense for "
+    "'עד/ת הגנה', court, or unknown) and a short description as printed (e.g. 'עדת הגנה 15'), and next_hearing_date if "
+    "stated. Leave hearing_days empty otherwise. Cite the units every item relies on.",
+)
+
 ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION, CLASSIFY_DOCUMENT,
-                                INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE)}
+                                INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE, DOCUMENT_BRIEF)}
 ROLE_FOR_TASK = {
     "digest": "extractor",
     "judicial": "judicial_classifier",
@@ -203,4 +225,5 @@ ROLE_FOR_TASK = {
     "indictment_overview": "writer",
     "case_guide": "writer",
     "witness_guide": "writer",
+    "document_brief": "extractor",
 }

@@ -378,6 +378,31 @@ class MockProvider:
             testimony += self._guide_items(h.get("units", []), 2, prefix=f"בדיון מיום {h.get('date')}: ")
         return {"schema_version": "2.0", "role": role, "testimony": testimony[:10]}
 
+    def _task_document_brief(self, p: dict) -> dict:
+        units = [u for u in p.get("units", []) if len(u.get("text", "").split()) >= 4] or p.get("units", [])
+        u0 = units[0]
+        court = p.get("document_source_type") == "decision"
+        lead = "בית המשפט" if court else "לפי המסמך,"
+        body = " ".join(u["text"] for u in units)
+        procedural = bool(re.search(r"מועד|ארכה|דחיית|הוקלט|העתק", body))
+        days = []
+        m = re.search(r"העיד(?:ה)?\s+(?:(עד(?:ת)?\s+(הגנה|תביעה)(?:\s+\d+)?),?\s+)?([א-ת]+\s+[א-ת]+)", body)
+        d = re.search(r"(\d{1,2})\.(\d{1,2})\.(20\d{2})", body)
+        if m and d:
+            src = next(u["id"] for u in units if m.group(3) in u["text"])
+            days.append({"hearing_date": f"{d.group(3)}-{int(d.group(2)):02d}-{int(d.group(1)):02d}",
+                         "witnesses": [{"name": m.group(3), "side": {"הגנה": "defense", "תביעה": "prosecution"}.get(m.group(2) or "", "unknown"),
+                                        "description": m.group(1) or ""}],
+                         "next_hearing_date": (lambda n: f"{n.group(3)}-{int(n.group(2)):02d}-{int(n.group(1)):02d}" if n else None)(
+                             re.search(r"הדיון הבא[^0-9]*(\d{1,2})\.(\d{1,2})\.(20\d{2})", body)),
+                         "source_unit_ids": [src]})
+        return {"schema_version": "2.0",
+                "title": {"text": self._first_words(u0["text"], 8), "source_unit_ids": [u0["id"]]},
+                "summary": [{"text": f"{lead} {self._first_words(u['text'], 16)}", "source_unit_ids": [u["id"]]} for u in units[:2]],
+                "significance": "procedural" if procedural else "substantive",
+                "significance_reason": "כלל מילים של עניינים טכניים" if procedural else "תוכן מהותי",
+                "hearing_days": days}
+
     def _task_classify_document(self, p: dict) -> dict:
         from ..inbox import classify_by_rules
 

@@ -155,10 +155,11 @@ def hearing_transcript(hearing_id: str, st: AppState = Depends(get_state), page_
 
 @router.get("/documents", dependencies=[Depends(rate_limit("public"))])
 def list_documents(st: AppState = Depends(get_state), type: str | None = None,  # noqa: A002 - public query name
-                   limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)) -> JSONResponse:
+                   limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+                   significance: str | None = Query(None, pattern="^(substantive|procedural)$")) -> JSONResponse:
     with st.services.engine.connect() as conn:
-        items = pub.public_documents(conn, source_type=type, limit=limit, offset=offset)
-    return _json({"items": items, "limit": limit, "offset": offset})
+        items = pub.public_documents(conn, source_type=type, limit=limit, offset=offset, significance=significance)
+    return _json({"items": items, "limit": limit, "offset": offset, "significance": significance})
 
 
 @router.get("/documents/{source_version_id}", dependencies=[Depends(rate_limit("public"))])

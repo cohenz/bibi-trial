@@ -111,3 +111,31 @@
 ## API admin
 - `POST /v2/admin/guides/build` `{"kind": "indictment"|"cases"|"witnesses"|"all", "source_version_id": "sv_…"?}` — בונה (משימת worker).
 - המדריכים נכנסים לתור הבדיקה הרגיל (`/v2/admin/review-tasks`), ומאושרים ב־`/v2/admin/artifacts/{id}/review`.
+
+## תקצירי מסמכים (Document briefs)
+לכל מסמך שאינו פרוטוקול (החלטה, בקשה, תגובה, הודעה…) נבנה תקציר (`artifact_type=summary`, `object_type=document`):
+- `title`: כותרת שאומרת במה המסמך עוסק. היא מוצגת במקום שם הקובץ;
+- `summary_sentences`: משפט עד שלושה משפטים, עם ציטוט;
+- `significance`: `substantive` או `procedural`, ונימוק ב־`significance_reason`. מסמך פרוצדורלי עוסק רק בלוגיסטיקה: מועדים, ארכות, הקלטות, העתקים;
+- `hearing_days`: כשהמסמך מתעד יום דיון — תאריך, מי העיד ומאיזה צד, והדיון הבא.
+
+**שערים:**
+- ציטוט ותמיכה;
+- "בית המשפט החליט" מותר רק במסמך של בית המשפט, ורק בציטוט של הטקסט שלו;
+- בבקשות ובתגובות, עמדה של צד חייבת להופיע מיוחסת לצד;
+- כל שם עד חייב להופיע ביחידות שמצוטטות ליום הדיון;
+- מאמת.
+
+**פרסום:** תקציר שעבר את כל השערים ואין לו דגל סיכון מתפרסם מיד אחרי המקור שלו (ADR‑0014).
+
+**API ציבורי:**
+- **`GET /v2/documents?significance=substantive|procedural`:** כל פריט כולל `brief`, `display_title` ו־`significance`.
+- **`GET /v2/documents/{sv}`:** `document.brief` המלא, כולל ציטוטים.
+- **`/v2/guide/timeline`:**
+  - אירועי `hearing_day` (מסלול `trial`), שקושרים להודעה;
+  - לכל אירוע שדה `significance`;
+  - הודעה שהפכה לאירוע `hearing_day` לא מופיעה שוב כמסמך.
+- **`/v2/guide/witnesses/{slug}`:** עד שמופיע רק בהודעות של בית המשפט מקבל עמוד עם `appearances` (תאריך, צד, תיאור, המסמך), בלי `hearings`.
+- **`/v2/guide`:** הרשימה `witnesses` כוללת `appearance_count` ו־`side`.
+
+**Admin:** `POST /v2/admin/briefs/build` עם `{"only_missing": true}` משלים תקצירים לכל המסמכים. התוצאה נרשמת ב־audit כ־`briefs.built`.

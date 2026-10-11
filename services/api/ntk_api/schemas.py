@@ -196,6 +196,12 @@ class GuideBuildRequest(BaseModel):
     keys: list[str] | None = Field(default=None, max_length=50)
 
 
+class BriefBuildRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_version_ids: list[str] | None = Field(default=None, max_length=2000)
+    only_missing: bool = True
+
+
 class NonHearingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     apply: bool = False  # false: list what would change

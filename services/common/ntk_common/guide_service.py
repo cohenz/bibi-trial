@@ -28,26 +28,62 @@ def latest_indictment(conn) -> str | None:
     """)
 
 
+def published_hearing_days(conn) -> list[dict]:
+    """Hearing days recorded in published document briefs (court notices: who testified, when)."""
+    out = []
+    for r in rows(conn, """
+        SELECT ga.object_id AS sv, ga.payload FROM ntk.generated_artifacts ga
+        JOIN ntk.publications p ON p.artifact_id = ga.id AND p.unpublished_at IS NULL
+        WHERE ga.artifact_type = 'summary' AND ga.object_type = 'document'
+          AND jsonb_array_length(coalesce(ga.payload->'hearing_days', '[]'::jsonb)) > 0"""):
+        for d in r["payload"]["hearing_days"]:
+            out.append({**d, "source_version_id": r["sv"], "document_title": r["payload"]["title"]["text"]})
+    return sorted(out, key=lambda d: d["hearing_date"])
+
+
+def _all_dates(w: dict) -> list[str]:
+    return sorted([h["hearing_date"] for h in w["hearings"]] + [a["date"] for a in w["appearances"]])
+
+
 def witnesses(conn) -> list[dict]:
-    """Everyone listed as a witness in a published hearing, grouped by name."""
+    """Everyone listed as a witness in a published hearing, or named as testifying in a court notice, grouped by name.
+    ``hearings`` are hearings with a transcript; ``appearances`` are days known only from a court notice."""
     hs = rows(conn, """
         SELECT h.id, h.hearing_date::text AS hearing_date, h.witnesses, h.source_version_id
         FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
         WHERE sv.publication_state = 'published' ORDER BY h.hearing_date
     """)
     out: dict[str, dict] = {}
+
+    def entry(name: str, label: str | None) -> dict:
+        slug = guides.witness_slug(name)
+        return out.setdefault(slug, {"slug": slug, "name": name, "label": label, "raw": set(), "hearings": [],
+                                     "appearances": [], "side": None})
+
     for h in hs:
         for raw in h["witnesses"] or []:
             name, label = guides.witness_name(raw)
             if not name:
                 continue
-            slug = guides.witness_slug(name)
-            w = out.setdefault(slug, {"slug": slug, "name": name, "label": label, "raw": set(), "hearings": []})
+            w = entry(name, label)
             w["raw"].add(raw)
             w["hearings"].append({"id": h["id"], "hearing_date": h["hearing_date"], "source_version_id": h["source_version_id"]})
+    for d in published_hearing_days(conn):
+        for wt in d["witnesses"]:
+            name, label = guides.witness_name(wt["name"])
+            if not name:
+                continue
+            w = entry(name, label)
+            if any(a["date"] == d["hearing_date"] for a in w["appearances"]):
+                continue
+            w["appearances"].append({"date": d["hearing_date"], "side": wt.get("side"), "description": wt.get("description"),
+                                     "source_version_id": d["source_version_id"], "document_title": d["document_title"],
+                                     "has_transcript": any(h["hearing_date"] == d["hearing_date"] for h in w["hearings"])})
+            if wt.get("side") in {"prosecution", "defense"}:
+                w["side"] = wt["side"]
     for w in out.values():
         w["raw"] = sorted(w["raw"])
-    return sorted(out.values(), key=lambda w: (w["hearings"][0]["hearing_date"], w["name"]))
+    return sorted(out.values(), key=lambda w: (_all_dates(w)[0], w["name"]))
 
 
 def _sample(units: list[UnitView], keep: set[str], n: int) -> list[UnitView]:

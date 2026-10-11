@@ -59,8 +59,11 @@ def _witness_cases(cases: list[dict], ws: list[dict]) -> dict[str, list[str]]:
 
 
 def _witness_summary(ws: list[dict], wcases: dict[str, list[str]], with_guides: set[str]) -> list[dict]:
+    from ..guide_service import _all_dates
+
     return [{"slug": w["slug"], "name": w["name"], "label": w["label"], "hearing_count": len(w["hearings"]),
-             "first_date": w["hearings"][0]["hearing_date"], "last_date": w["hearings"][-1]["hearing_date"],
+             "appearance_count": len([a for a in w["appearances"] if not a["has_transcript"]]), "side": w.get("side"),
+             "first_date": _all_dates(w)[0], "last_date": _all_dates(w)[-1],
              "cases": sorted(wcases.get(w["slug"], []), key=lambda k: CASE_ORDER.get(k, 9)),
              "has_guide": w["slug"] in with_guides} for w in ws]
 
@@ -154,7 +157,8 @@ def witness_page(conn: Connection, slug: str) -> dict | None:
     wcases = _witness_cases(cases, [w]).get(slug, [])
     return {"slug": slug, "name": w["name"], "label": w["label"], "artifact_id": g["artifact_id"] if g else None,
             "blocks": g["blocks"] if g else [], "cases": sorted(wcases, key=lambda k: CASE_ORDER.get(k, 9)),
-            "hearings": hearings, "notable_exchanges": notable[:12], "citations": list(citations.values())}
+            "hearings": hearings, "appearances": w["appearances"], "side": w.get("side"),
+            "notable_exchanges": notable[:12], "citations": list(citations.values())}
 
 
 def timeline(conn: Connection) -> dict:
@@ -185,13 +189,36 @@ def timeline(conn: Connection) -> dict:
                        "title": ("דיון: עדות " + ", ".join(names)) if names else "דיון",
                        "text": d["summary_sentences"][0]["text"] if d and d["summary_sentences"] else None,
                        "case_keys": keys, "kind": "hearing", "link": {"type": "hearing", "id": h["id"]}, "citation_ids": []})
+    from ..guide_service import published_hearing_days
+
+    by_date = {e["date"]: e for e in events if e["kind"] == "hearing"}
+    day_docs: set[str] = set()
+    for d in published_hearing_days(conn):
+        day_docs.add(d["source_version_id"])
+        names = [guides.witness_name(w["name"])[0] for w in d["witnesses"]]
+        side_he = {"defense": "עד/ת הגנה", "prosecution": "עד/ת תביעה"}
+        who = ", ".join(f"{n} ({side_he[w['side']]})" if w.get("side") in side_he else n
+                        for n, w in zip(names, d["witnesses"], strict=False))
+        keys = sorted({k for n in names for k in wcases.get(guides.witness_slug(n), [])}, key=lambda k: CASE_ORDER.get(k, 9))
+        known = by_date.get(d["hearing_date"])
+        if known is not None:  # the hearing has a transcript: the notice only adds who testified
+            known.setdefault("notice_witnesses", []).extend(names)
+            continue
+        text = "לפי הודעת בית המשפט" + (f". הדיון הבא נקבע ל־{d['next_hearing_date']}" if d.get("next_hearing_date") else "")
+        events.append({"id": f"hd_{d['source_version_id']}_{d['hearing_date']}", "track": "trial", "date": d["hearing_date"],
+                       "date_precision": "day", "title": ("יום דיון: עדות " + who) if who else "יום דיון",
+                       "text": text, "case_keys": keys, "kind": "hearing_day", "significance": "substantive",
+                       "link": {"type": "document", "id": d["source_version_id"]}, "citation_ids": []})
+    for e in events:
+        e.setdefault("significance", "substantive")
     for doc in public_documents(conn, source_type=None, limit=1000, offset=0):
-        if not doc["document_date"]:
+        if not doc["document_date"] or doc["source_version_id"] in day_docs:
             continue
         events.append({"id": doc["source_version_id"], "track": "trial", "date": doc["document_date"][:10],
-                       "date_precision": "day", "title": doc["title"], "text": None, "case_keys": [],
-                       "kind": doc["source_type"], "link": {"type": "document", "id": doc["source_version_id"]},
-                       "citation_ids": []})
+                       "date_precision": "day", "title": doc["display_title"],
+                       "text": doc["brief"]["summary"] if doc["brief"] else None, "case_keys": [],
+                       "kind": doc["source_type"], "significance": doc["significance"] or "substantive",
+                       "link": {"type": "document", "id": doc["source_version_id"]}, "citation_ids": []})
     events.sort(key=lambda e: (e["date"], e["track"]))
     return {"events": events, "citations": cits,
             "range": {"from": events[0]["date"] if events else None, "to": events[-1]["date"] if events else None}}

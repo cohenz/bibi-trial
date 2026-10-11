@@ -547,9 +547,43 @@ class Pipeline:
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
         if hid is None:
-            return {"note": "hearing digests are built for protocols only"}, {}, "skipped"
+            return self.build_document_brief(svid), {}, "succeeded"
         out, cp = self.build_hearing_digest(hid, svid)
         return out, cp, "succeeded"
+
+    def build_document_brief(self, svid: str) -> dict:
+        """Brief of a non-protocol document: title, summary, significance, hearing days. Published under the gates
+        once its source is public."""
+        from .briefs import build_document_brief
+
+        with self.s.engine.connect() as conn:
+            unit_rows = sources.units_for_version(conn, svid)
+            views = units_by_ids(conn, [r["id"] for r in unit_rows], published_only=False)
+            units = [views[r["id"]] for r in unit_rows if r["id"] in views]
+            meta = row(conn, """SELECT d.source_type::text AS st, d.canonical_title AS title, sv.publication_state::text AS ps
+                                FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                                WHERE sv.id = :sv""", {"sv": svid})
+            cv = ops.current_corpus_version(conn)
+        if not units:
+            return {"brief": None, "note": "no text units"}
+        res = build_document_brief(source_version_id=svid, source_type=meta["st"], units=units, runner=self.s.runner,
+                                   corpus_version=cv, citation_base=self.cfg.citation_base, env=self.cfg.env,
+                                   archive_title=meta["title"])
+        if res.payload is None:
+            with self.s.engine.begin() as conn:
+                ops.audit(conn, actor="pipeline", action="document_brief.failed", object_type="source_version",
+                          object_id=svid, details={"errors": res.errors[:10]})
+            return {"brief": None, "errors": res.errors[:5]}
+        art_id = str(ids.derived_uuid("brief_artifact", res.payload["id"]))
+        with self.s.engine.begin() as conn:
+            kdb.save_artifact(conn, artifact_id=art_id, artifact_type="summary", object_type="document", object_id=svid,
+                              payload=res.payload, decision=res.decision,  # type: ignore[arg-type]
+                              model_run_id=res.runs[0].id,
+                              verifier_run_id=next((r.id for r in reversed(res.runs) if r.task_type == "verify"), None))
+        published = self.auto_publish(art_id, res.decision) if meta["ps"] == "published" else False
+        return {"brief_artifact_id": art_id, "state": res.decision.state if res.decision else None,  # type: ignore[union-attr]
+                "significance": res.payload["significance"], "hearing_days": len(res.payload["hearing_days"]),
+                "title": res.payload["title"]["text"], "published": published}
 
     def rebuild_hearing_digest(self, hearing_id: str) -> dict:
         """Rebuild Layer A for a hearing outside a job (sources or judicial statements changed)."""
@@ -774,7 +808,8 @@ class Pipeline:
         with self.s.engine.begin() as conn:
             cv = kdb.publish_source_version(conn, svid, actor="inbox:auto-publish")
         # the digest was built (extract_a) before its source was public; publish it now if it passed every gate
-        digest_published = self.auto_publish_latest(object_type="hearing", object_id=hid) if hid else False
+        digest_published = (self.auto_publish_latest(object_type="hearing", object_id=hid) if hid
+                            else self.auto_publish_latest(object_type="document", object_id=svid))
         return {"source_version_id": svid, "published": True, "corpus_version": cv,
                 "digest_auto_published": digest_published}, {}, "succeeded"
 

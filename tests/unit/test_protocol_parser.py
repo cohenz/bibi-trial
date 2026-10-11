@@ -122,3 +122,26 @@ def test_validate_pdf_rejects_bad_input(fixture_pdf):
     with pytest.raises(PdfValidationError) as e4:
         validate_pdf(fixture_pdf, max_bytes=100)
     assert e4.value.code == "file_too_large"
+
+
+def test_line_holding_only_its_margin_number_does_not_break_extraction():
+    pytest = __import__("pytest")
+    pytest.importorskip("reportlab")
+    import io
+
+    from ntk_common.pipeline.pdf import extract_text_layer
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4, invariant=1)
+    w, h = A4
+    for i in range(1, 6):
+        c.setFont("Helvetica", 10)
+        c.drawString(30, h - 60 - i * 18, str(i))
+        if i != 3:  # line 3 has a number and no text
+            c.drawRightString(w - 60, h - 60 - i * 18, f"text line number {i} of the page")
+    c.showPage()
+    c.save()
+    pages = extract_text_layer(buf.getvalue())
+    assert len(pages) == 1 and any("text line number 4" in ln.text for ln in pages[0].lines)

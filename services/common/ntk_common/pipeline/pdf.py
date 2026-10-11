@@ -229,8 +229,11 @@ def extract_text_layer(data: bytes, only_pages: set[int] | None = None) -> list[
                 pages.append(pt)
                 continue
             raw_rows = []
-            for row in _group_lines(chars):
-                margin_no, row = _split_margin_number(row, width)
+            for full_row in _group_lines(chars):
+                margin_no, row = _split_margin_number(full_row, width)
+                if not row:  # the line held only its margin number
+                    raw_rows.append((full_row[0]["top"], margin_no, ""))
+                    continue
                 segs = _row_segments(row) if any(c["text"].strip() for c in row) else []
                 body_parts = []
                 for x0, x1, txt in segs:

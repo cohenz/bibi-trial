@@ -125,7 +125,7 @@ class GeminiProvider:
     def create_batch(self, *, model_id: str, items: list[dict], display_name: str) -> str:
         """items: [{"key": str, "request": GenerateContentRequest}]. Returns the batch name ("batches/…")."""
         body = {"batch": {"display_name": display_name, "input_config": {"requests": {"requests": [
-            {"request": it["request"], "metadata": {"key": it["key"]}} for it in items]}}}}
+            {"request": batch_request(it["request"]), "metadata": {"key": it["key"]}} for it in items]}}}}
         data = self._post(f"models/{model_id}:batchGenerateContent", body)
         name = data.get("name") or (data.get("metadata") or {}).get("name")
         if not name:
@@ -185,6 +185,24 @@ class GeminiProvider:
         if len(out) != len(texts):
             raise ProviderError("embedding count mismatch", retryable=True)
         return out
+
+
+_BATCH_FIELDS = {"systemInstruction": "system_instruction", "generationConfig": "generation_config",
+                 "responseMimeType": "response_mime_type", "responseJsonSchema": "response_json_schema",
+                 "responseSchema": "response_schema", "maxOutputTokens": "max_output_tokens"}
+
+
+def batch_request(req: dict) -> dict:
+    """Inline batch requests with snake_case field names. Both pilots (11.10.2026) came back as if the request had no
+    system instruction and no generation config: free-form JSON, invented field names, no schema. The camelCase
+    names that ``generateContent`` accepts are apparently dropped by the batch endpoint. Only the request structure
+    is renamed; the JSON schema value itself (``additionalProperties`` etc.) is left untouched."""
+    out: dict[str, Any] = {}
+    for k, v in req.items():
+        if k == "generationConfig" and isinstance(v, dict):
+            v = {_BATCH_FIELDS.get(gk, gk): gv for gk, gv in v.items()}
+        out[_BATCH_FIELDS.get(k, k)] = v
+    return out
 
 
 # JSON Schema keywords Gemini's responseJsonSchema accepts; others (pattern, minLength, format, ...) are dropped here

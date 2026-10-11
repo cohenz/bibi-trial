@@ -43,3 +43,17 @@ def test_witness_names_slugs_and_dates():
     assert guides._norm_date("2015-03", "day") == ("2015-03-01", "month")
     assert guides._norm_date("2015-03-12", "year") == ("2015-01-01", "year")
     assert guides._norm_date("1999", "year") is None and guides._norm_date("12.3.2015", "day") is None
+
+
+def test_batch_request_uses_snake_case_fields():
+    from ntk_common.llm.providers import GeminiProvider, batch_request
+
+    body = GeminiProvider.request_body(system="S", user="U", temperature=0.1,
+                                       response_schema={"type": "object", "additionalProperties": False,
+                                                        "properties": {"a": {"type": "string"}}})
+    b = batch_request(body)
+    assert b["system_instruction"] == {"parts": [{"text": "S"}]} and "systemInstruction" not in b
+    g = b["generation_config"]
+    assert g["response_mime_type"] == "application/json" and g["temperature"] == 0.1
+    assert g["response_json_schema"]["additionalProperties"] is False  # schema keywords untouched
+    assert b["contents"] == body["contents"]

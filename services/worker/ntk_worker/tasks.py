@@ -14,7 +14,13 @@ from ntk_common.config import get_settings
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
 from ntk_common.db.core import get_engine
-from ntk_common.jobs import TASK_BUILD_CLAIM, TASK_DELIVER_WEBHOOKS, TASK_RUN_JOB, TASK_VERIFY_ARTIFACT
+from ntk_common.jobs import (
+    TASK_BUILD_CLAIM,
+    TASK_DELIVER_WEBHOOKS,
+    TASK_RUN_EVALUATION,
+    TASK_RUN_JOB,
+    TASK_VERIFY_ARTIFACT,
+)
 from ntk_common.orchestrator import Pipeline, StageError, build_services
 
 from .celery_app import app
@@ -90,6 +96,37 @@ def verify_artifact(artifact_id: str) -> dict:
         out = p.build_claim(str(art["object_id"]))
         return {"artifact_id": artifact_id, "status": "rebuilt", "new": out}
     return {"artifact_id": artifact_id, "status": "unsupported", "object_type": art["object_type"]}
+
+
+@app.task(name=TASK_RUN_EVALUATION)
+def run_evaluation(run_id: str) -> dict:
+    """Run a search benchmark or an Ask suite against the deployed corpus and models; store the report."""
+    p = _pipeline()
+    return execute_evaluation(p, run_id)
+
+
+def execute_evaluation(p: Pipeline, run_id: str) -> dict:
+    from ntk_common.evaluation import resolve_suite
+    from ntk_common.evaluation import run_evaluation as _run
+
+    with p.s.engine.begin() as conn:
+        run = ops.get_eval_run(conn, run_id, with_report=False)
+        if run is None:
+            return {"run_id": run_id, "status": "not_found"}
+        if not ops.start_eval_run(conn, run_id, models=p.s.registry.describe()):
+            return {"run_id": run_id, "status": run["status"]}
+    try:
+        report = _run(run["kind"], resolve_suite(run["suite"]), settings=p.cfg, engine=p.s.engine, services=p.s,
+                      options=run["options"] or {})
+    except Exception as exc:  # noqa: BLE001 - the error is stored on the run, never re-raised into a redelivery loop
+        log.error("evaluation %s failed: %s: %s", run_id, type(exc).__name__, str(exc)[:300])
+        with p.s.engine.begin() as conn:
+            ops.finish_eval_run(conn, run_id, status="failed", error={"type": type(exc).__name__, "message": str(exc)[:1000]})
+        return {"run_id": run_id, "status": "failed"}
+    report = json.loads(json.dumps(report, ensure_ascii=False, default=str))
+    with p.s.engine.begin() as conn:
+        ops.finish_eval_run(conn, run_id, status="succeeded", summary=report.get("summary"), report=report)
+    return {"run_id": run_id, "status": "succeeded"}
 
 
 @app.task(name=TASK_DELIVER_WEBHOOKS)

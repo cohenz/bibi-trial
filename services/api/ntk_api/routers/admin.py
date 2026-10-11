@@ -14,7 +14,8 @@ from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
 from ntk_common.db.core import row, rows
 from ntk_common.db.public import units_by_ids
-from ntk_common.jobs import TASK_BUILD_CLAIM, TASK_RUN_JOB, TASK_VERIFY_ARTIFACT
+from ntk_common.evaluation import SuiteNotFound, resolve_suite
+from ntk_common.jobs import TASK_BUILD_CLAIM, TASK_RUN_EVALUATION, TASK_RUN_JOB, TASK_VERIFY_ARTIFACT
 from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempotency_key
 
 from ..app import ApiError, AppState
@@ -22,6 +23,7 @@ from ..deps import admin, get_state
 from ..schemas import (
     CaseEventIn,
     ClaimIn,
+    EvaluationRequest,
     IngestionJobRequest,
     ObjectReviewRequest,
     PresignRequest,
@@ -30,6 +32,7 @@ from ..schemas import (
     Project315ImportRequest,
     PublishRequest,
     ReviewRequest,
+    StageRerunRequest,
     UnpublishRequest,
 )
 from ..security import Principal
@@ -140,6 +143,71 @@ def retry_job(job_id: str, request: Request, st: AppState = Depends(get_state),
 
 
 # ------------------------------------------------------------------ review
+@router.post("/ingestion-jobs/{job_id}/rerun", status_code=202)
+def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: AppState = Depends(get_state),
+                 p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Re-run the named stages (e.g. embed, extract_a, verify after switching models). Earlier stages keep their results."""
+    bad = [s for s in body.stages if s not in STAGES]
+    if bad:
+        raise ApiError(400, "invalid_request", f"unknown stage {bad}; valid: {STAGES}")
+    if "publish" in body.stages:
+        raise ApiError(400, "invalid_request", "publish is an explicit admin action, not a pipeline stage to re-run")
+    with st.services.engine.begin() as conn:
+        job = ops.get_job(conn, job_id)
+        if job is None:
+            raise ApiError(404, "not_found", "job not found")
+        if job["status"] in {"running", "queued"}:
+            raise ApiError(409, "conflict", f"job is {job['status']}")
+        n = ops.reset_stages(conn, job_id, list(dict.fromkeys(body.stages)))
+        ops.audit(conn, actor=p.label, action="ingestion_job.rerun", object_type="ingestion_job", object_id=job_id,
+                  request_id=_rid(request), details={"stages": body.stages, "stages_reset": n})
+    st.queue.enqueue(TASK_RUN_JOB, job_id)
+    return _json({"job_id": job_id, "status": "queued", "stages_reset": n}, cache="no-store", status=202)
+
+
+# ------------------------------------------------------------------ evaluation runs
+@router.post("/evaluations", status_code=202)
+def create_evaluation(body: EvaluationRequest, request: Request, st: AppState = Depends(get_state),
+                      p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    try:
+        path = resolve_suite(body.suite)
+    except SuiteNotFound as exc:
+        raise ApiError(404, "not_found", str(exc)) from exc
+    options = {"published_only": body.published_only} if body.kind == "search_bench" else {}
+    if body.as_of is not None:
+        options["as_of"] = body.as_of.isoformat()
+    with st.services.engine.begin() as conn:
+        run = ops.create_eval_run(conn, kind=body.kind, suite=path.stem, options=options, requested_by=p.label)
+        ops.audit(conn, actor=p.label, action="evaluation.create", object_type="evaluation_run", object_id=str(run["id"]),
+                  request_id=_rid(request), details={"kind": body.kind, "suite": path.stem, **options})
+    st.queue.enqueue(TASK_RUN_EVALUATION, str(run["id"]))
+    return _json({"run_id": str(run["id"]), "status": run["status"], "kind": body.kind, "suite": path.stem},
+                 cache="no-store", status=202)
+
+
+@router.get("/evaluations")
+def list_evaluations(st: AppState = Depends(get_state), limit: int = Query(50, le=200),
+                     p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    with st.services.engine.connect() as conn:
+        return _json({"items": ops.list_eval_runs(conn, limit=limit)}, cache="no-store")
+
+
+@router.get("/evaluations/{run_id}")
+def get_evaluation(run_id: str, st: AppState = Depends(get_state), report: bool = True,
+                   p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    try:
+        import uuid
+
+        uuid.UUID(run_id)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_request", "run_id must be a UUID") from exc
+    with st.services.engine.connect() as conn:
+        run = ops.get_eval_run(conn, run_id, with_report=report)
+    if run is None:
+        raise ApiError(404, "not_found", "evaluation run not found")
+    return _json(run, cache="no-store")
+
+
 @router.get("/review-tasks")
 def review_tasks(st: AppState = Depends(get_state), status: str = "open", p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
     with st.services.engine.connect() as conn:

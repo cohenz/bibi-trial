@@ -584,7 +584,12 @@ class Pipeline:
         """Verify Q/A 'affirms'/'denies' exchanges so public wording may be used.
 
         With a single model family, exchanges stay 'human_review_required'
-        (spec §23.5)."""
+        (spec §23.5).
+
+        Exchanges still awaiting human review whose last check came from the
+        mock provider (or from no model at all) are checked again, so a re-run
+        after switching to a real model replaces the placeholder verdict.
+        Exchanges a person already reviewed are never touched."""
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
         with self.s.engine.connect() as conn:
             exs = rows(conn, """
@@ -592,13 +597,19 @@ class Pipeline:
                        q.raw_text AS qtext, a.raw_text AS atext
                 FROM ntk.qa_exchanges x JOIN ntk.source_units q ON q.id = x.question_unit_id
                 JOIN ntk.source_units a ON a.id = x.answer_unit_id
-                WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL AND x.review_state = 'draft'
-            """, {"h": hid})
+                LEFT JOIN ntk.model_runs mr ON mr.id = x.relation_model_run_id
+                WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL
+                  AND (x.review_state = 'draft'
+                       OR (x.review_state = 'human_review_required' AND :real
+                           AND (x.relation_model_run_id IS NULL OR mr.provider = 'mock')))
+                ORDER BY x.id
+            """, {"h": hid, "real": self.s.registry.get("verifier").provider != "mock"})
             cv = ops.current_corpus_version(conn)
         if not exs:
-            return {"verified": 0}, {}, "succeeded"
+            return {"verified": 0, "checked": 0, "verifier_model": self.s.registry.get("verifier").model_id}, {}, "succeeded"
         independent = not self.s.registry.single_family
-        checked = passed = 0
+        checked = passed = failed_batches = 0
+        pairs: dict[str, int] = {}
         for i in range(0, len(exs), 25):
             batch = exs[i : i + 25]
             run = self.s.runner.run("qa_relation", {"exchanges": [{"id": e["id"], "question": e["qtext"][:1500],
@@ -606,6 +617,7 @@ class Pipeline:
                                     input_source_ids=[x for e in batch for x in (e["question_unit_id"], e["answer_unit_id"])],
                                     corpus_version=cv, role="verifier")
             if not run.ok:
+                failed_batches += 1
                 continue
             verdicts = {it["exchange_id"]: it for it in run.output["items"]}
             with self.s.engine.begin() as conn:
@@ -616,6 +628,8 @@ class Pipeline:
                     state = "machine_verified" if (agree and independent) else "human_review_required"
                     if agree:
                         passed += 1
+                    key = f"{e['rel']}->{v['answer_relation'] if v else 'missing'}"
+                    pairs[key] = pairs.get(key, 0) + 1
                     from .db.core import execute
 
                     execute(conn, """UPDATE ntk.qa_exchanges SET review_state = CAST(:s AS ntk.review_state),
@@ -625,7 +639,9 @@ class Pipeline:
                         kdb.open_review_task(conn, object_type="qa_exchange", object_id=e["id"],
                                              risk_flags=["qa_public_wording"] + ([] if agree else ["verifier_disagrees"]),
                                              reason=e["public_wording"] or "")
-        return {"checked": checked, "verifier_agrees": passed, "independent_family": independent}, {}, "succeeded"
+        return {"checked": checked, "verifier_agrees": passed, "independent_family": independent,
+                "failed_batches": failed_batches, "relation_pairs": dict(sorted(pairs.items())),
+                "verifier_model": self.s.registry.get("verifier").model_id}, {}, "succeeded"
 
     def stage_review(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         with self.s.engine.connect() as conn:

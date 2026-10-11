@@ -113,6 +113,55 @@ def reset_failed_stages(conn: Connection, job_id: str) -> int:
     return n
 
 
+def reset_stages(conn: Connection, job_id: str, stages: list[str]) -> int:
+    """Re-run: put the named stages back to pending (checkpoints kept), leave every other stage as it is.
+
+    Used after a model or embedding change, when earlier deterministic stages are still valid but the
+    model-dependent ones (embed, extract_a, verify, ...) must run again."""
+    n = execute(conn, """UPDATE ntk.ingestion_job_stages SET status = 'pending', error = NULL
+                         WHERE job_id = CAST(:id AS uuid) AND stage = ANY(:st)""", {"id": job_id, "st": stages})
+    execute(conn, """UPDATE ntk.ingestion_jobs SET status = 'queued', error = NULL, dead_lettered = false,
+                     attempts = attempts + 1, updated_at = now() WHERE id = CAST(:id AS uuid)""", {"id": job_id})
+    return n
+
+
+# ------------------------------------------------------------------ evaluation runs
+EVAL_KINDS = ("search_bench", "ask_suite")
+
+
+def create_eval_run(conn: Connection, *, kind: str, suite: str, options: dict, requested_by: str) -> dict:
+    return row(conn, """INSERT INTO ntk.evaluation_runs (kind, suite, options, requested_by)
+                        VALUES (:k, :s, CAST(:o AS jsonb), :by) RETURNING *""",
+               {"k": kind, "s": suite, "o": j(options), "by": requested_by})  # type: ignore[return-value]
+
+
+def get_eval_run(conn: Connection, run_id: str, *, with_report: bool = True) -> dict | None:
+    cols = "*" if with_report else "id, kind, suite, options, status, models, summary, error, requested_by, created_at, started_at, finished_at"
+    return row(conn, f"SELECT {cols} FROM ntk.evaluation_runs WHERE id = CAST(:id AS uuid)", {"id": run_id})
+
+
+def list_eval_runs(conn: Connection, *, limit: int = 50) -> list[dict]:
+    return rows(conn, """SELECT id, kind, suite, options, status, models, summary, error, requested_by, created_at,
+                                started_at, finished_at
+                         FROM ntk.evaluation_runs ORDER BY created_at DESC LIMIT :lim""", {"lim": limit})
+
+
+def start_eval_run(conn: Connection, run_id: str, *, models: dict) -> bool:
+    """Mark a queued run as running. False if it already finished (a redelivered task must not overwrite a report)."""
+    n = execute(conn, """UPDATE ntk.evaluation_runs SET status = 'running', started_at = now(), models = CAST(:m AS jsonb)
+                         WHERE id = CAST(:id AS uuid) AND status IN ('queued', 'running')""", {"id": run_id, "m": j(models)})
+    return bool(n)
+
+
+def finish_eval_run(conn: Connection, run_id: str, *, status: str, summary: dict | None = None, report: dict | None = None,
+                    error: dict | None = None) -> None:
+    execute(conn, """UPDATE ntk.evaluation_runs SET status = :st, summary = CAST(:s AS jsonb), report = CAST(:r AS jsonb),
+                            error = CAST(:e AS jsonb), finished_at = now()
+                     WHERE id = CAST(:id AS uuid) AND status = 'running'""",
+            {"id": run_id, "st": status, "s": j(summary) if summary is not None else None,
+             "r": j(report) if report is not None else None, "e": j(error) if error is not None else None})
+
+
 def dead_letter(conn: Connection, *, job_id: str | None, task_name: str, payload: dict, error: dict) -> None:
     execute(conn, """INSERT INTO ntk.dead_letters (job_id, task_name, payload, error)
                      VALUES (CAST(:j AS uuid), :t, CAST(:p AS jsonb), CAST(:e AS jsonb))""",

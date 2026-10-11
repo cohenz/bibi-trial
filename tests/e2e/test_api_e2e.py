@@ -180,3 +180,56 @@ def test_presign_validation(client):
     r = signed(client, "POST", "/v2/admin/uploads/presign", {"filename": "a.pdf", "mime_type": "text/html",
                                                               "size_bytes": 10, "sha256": "0" * 64})
     assert r.status_code == 400
+
+
+def test_rerun_stages(client, fixture_pdf):
+    sha = hashlib.sha256(fixture_pdf).hexdigest()
+    up = signed(client, "POST", "/v2/admin/uploads/presign",
+                {"filename": "12.04.21.pdf", "mime_type": "application/pdf", "size_bytes": len(fixture_pdf), "sha256": sha}).json()
+    body = {"upload_id": up["upload_id"], "document": {"title": "SYNTHETIC e2e", "hearing_date": "2021-04-12",
+                                                        "court_record_status": "filed"}}
+    job_id = signed(client, "POST", "/v2/admin/ingestion-jobs", body).json()["job_id"]
+    before = {s["stage"]: s for s in signed(client, "GET", f"/v2/admin/ingestion-jobs/{job_id}").json()["stages"]}
+
+    assert signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["nope"]}).status_code == 400
+    assert signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["publish"]}).status_code == 400
+    r = signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["embed", "extract_a", "verify"]})
+    assert r.status_code == 202, r.text
+    assert r.json()["stages_reset"] == 3
+    job = signed(client, "GET", f"/v2/admin/ingestion-jobs/{job_id}").json()
+    assert job["status"] == "succeeded", job
+    after = {s["stage"]: s for s in job["stages"]}
+    # re-run stages ran again; deterministic stages were not touched
+    for st in ("embed", "extract_a", "verify"):
+        assert after[st]["finished_at"] != before[st]["finished_at"]
+    for st in ("extract_text", "segment", "pair", "chunk"):
+        assert after[st]["finished_at"] == before[st]["finished_at"]
+    assert signed(client, "POST", "/v2/admin/ingestion-jobs/00000000-0000-0000-0000-000000000000/rerun",
+                  {"stages": ["embed"]}).status_code == 404
+
+
+def test_evaluation_runs(client, pipeline):
+    from ntk_common.jobs import TASK_RUN_EVALUATION
+    from ntk_worker.tasks import execute_evaluation
+
+    client.queue.handlers[TASK_RUN_EVALUATION] = lambda rid: execute_evaluation(pipeline, rid)
+    try:
+        assert signed(client, "POST", "/v2/admin/evaluations", {"kind": "search_bench", "suite": "../pyproject"}).status_code == 404
+        assert signed(client, "POST", "/v2/admin/evaluations", {"kind": "search_bench", "suite": "no-such-suite"}).status_code == 404
+        r = signed(client, "POST", "/v2/admin/evaluations", {"kind": "search_bench", "suite": "golden/search-bench-synthetic-v1.json"})
+        assert r.status_code == 202, r.text
+        run_id = r.json()["run_id"]
+        run = signed(client, "GET", f"/v2/admin/evaluations/{run_id}").json()
+        assert run["status"] == "succeeded", run
+        assert run["suite"] == "search-bench-synthetic-v1"
+        assert run["summary"]["queries"] == 15 and run["report"]["results"]
+        assert run["models"]["roles"]["embedder"]["provider"] == "mock"
+        light = signed(client, "GET", f"/v2/admin/evaluations/{run_id}?report=false").json()
+        assert "report" not in light and light["summary"]
+        items = signed(client, "GET", "/v2/admin/evaluations").json()["items"]
+        assert any(str(i["id"]) == run_id for i in items)
+        # a redelivered task must not overwrite a finished report
+        assert execute_evaluation(pipeline, run_id)["status"] == "succeeded"
+        assert signed(client, "GET", "/v2/admin/evaluations/not-a-uuid").status_code == 400
+    finally:
+        client.queue.handlers.pop(TASK_RUN_EVALUATION, None)

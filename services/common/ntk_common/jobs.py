@@ -13,6 +13,7 @@ TASK_RUN_JOB = "ntk.run_ingestion_job"
 TASK_BUILD_CLAIM = "ntk.build_claim"
 TASK_VERIFY_ARTIFACT = "ntk.verify_artifact"
 TASK_DELIVER_WEBHOOKS = "ntk.deliver_webhooks"
+TASK_RUN_EVALUATION = "ntk.run_evaluation"
 
 
 class JobQueue(Protocol):

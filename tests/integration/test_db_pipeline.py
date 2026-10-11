@@ -241,3 +241,68 @@ def test_rebuild_hearing_digest_outside_job(services, pipeline, ingested):
 
     with pytest.raises(StageError):
         pipeline.rebuild_hearing_digest("00000000-0000-0000-0000-000000000000")
+
+
+def test_verify_rechecks_mock_verdicts_after_model_switch(services, pipeline, ingested):
+    """After switching from the mock provider to a real one, a re-run of `verify` replaces mock verdicts on
+    exchanges still awaiting review, and never touches exchanges a person already reviewed."""
+    import dataclasses
+
+    from ntk_common.llm.providers import MockProvider
+    from ntk_common.llm.registry import ModelRegistry
+    from ntk_common.llm.runner import ModelRunner
+    from ntk_common.orchestrator import Pipeline
+
+    job_id = str(ingested["id"])
+    with services.engine.connect() as conn:
+        hid = scalar(conn, """SELECT checkpoint->>'hearing_id' FROM ntk.ingestion_job_stages
+                              WHERE job_id = CAST(:j AS uuid) AND stage = 'segment'""", {"j": job_id})
+    with services.engine.begin() as conn:
+        exs = rows(conn, """SELECT x.id, x.review_state::text AS st, mr.provider FROM ntk.qa_exchanges x
+                            LEFT JOIN ntk.model_runs mr ON mr.id = x.relation_model_run_id
+                            WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL ORDER BY x.id""", {"h": hid})
+        assert len(exs) >= 2, "fixture should produce exchanges with public wording"
+        assert all(e["st"] == "human_review_required" and e["provider"] == "mock" for e in exs)
+        reviewed = exs[0]["id"]
+        conn.execute(text("UPDATE ntk.qa_exchanges SET review_state = 'approved' WHERE id = :id"), {"id": reviewed})
+
+    # the mock run itself must not re-check (nothing changed)
+    with services.engine.begin() as conn:
+        ops.reset_stages(conn, str(job_id), ["verify"])
+    out = pipeline.run_job(str(job_id))
+    assert out["status"] == "succeeded"
+    with services.engine.connect() as conn:
+        verify_out = scalar(conn, """SELECT output FROM ntk.ingestion_job_stages WHERE job_id = CAST(:j AS uuid)
+                                     AND stage = 'verify'""", {"j": str(job_id)})
+    assert verify_out["checked"] == 0
+
+    specs = {r: services.registry.get(r) for r in ("extractor", "mapper", "judicial_classifier", "writer", "qa_relation",
+                                                   "verifier", "embedder")}
+    specs["verifier"] = dataclasses.replace(specs["verifier"], provider="gemini", model_family="google-gemini",
+                                            model_id="gemini-test-verifier")
+    registry = ModelRegistry(specs)
+    runner = ModelRunner(registry, {"mock": MockProvider(), "gemini": MockProvider()}, ops.PgRunStore(services.engine))
+    real = Pipeline(dataclasses.replace(services, registry=registry, runner=runner))
+    with services.engine.begin() as conn:
+        ops.reset_stages(conn, str(job_id), ["verify"])
+    assert real.run_job(str(job_id))["status"] == "succeeded"
+    with services.engine.connect() as conn:
+        verify_out = scalar(conn, """SELECT output FROM ntk.ingestion_job_stages WHERE job_id = CAST(:j AS uuid)
+                                     AND stage = 'verify'""", {"j": str(job_id)})
+        after = {e["id"]: e for e in rows(conn, """SELECT x.id, x.review_state::text AS st, mr.provider
+                    FROM ntk.qa_exchanges x LEFT JOIN ntk.model_runs mr ON mr.id = x.relation_model_run_id
+                    WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL""", {"h": hid})}
+    assert verify_out["checked"] == len(exs) - 1 and verify_out["verifier_model"] == "gemini-test-verifier"
+    assert sum(verify_out["relation_pairs"].values()) == len(exs) - 1
+    assert after[reviewed]["st"] == "approved" and after[reviewed]["provider"] == "mock"
+    for e in exs[1:]:
+        # the placeholder verdict was replaced by a run from the real provider
+        assert after[e["id"]]["provider"] == "gemini"
+    # a second real re-run finds nothing left to re-check
+    with services.engine.begin() as conn:
+        ops.reset_stages(conn, str(job_id), ["verify"])
+        conn.execute(text("UPDATE ntk.qa_exchanges SET review_state = 'human_review_required' WHERE id = :id"), {"id": reviewed})
+    real.run_job(str(job_id))
+    with services.engine.connect() as conn:
+        assert scalar(conn, """SELECT output FROM ntk.ingestion_job_stages WHERE job_id = CAST(:j AS uuid)
+                               AND stage = 'verify'""", {"j": str(job_id)})["checked"] == 1

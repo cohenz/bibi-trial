@@ -167,3 +167,20 @@ class Project315ImportRequest(BaseModel):
     source: str = Field(min_length=3, max_length=500, description="where the export came from (URL or file name)")
     content: str = Field(min_length=2, description="the raw export (JSON array/object or CSV text)")
     synthetic: bool = False
+
+
+class StageRerunRequest(BaseModel):
+    """Re-run named stages of an existing job (e.g. after a model change). Other stages keep their results."""
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"stages": ["embed", "extract_a", "verify"]}]})
+    stages: list[str] = Field(min_length=1, max_length=15)
+
+
+class EvaluationRequest(BaseModel):
+    """Run a golden suite on the worker against the deployed corpus and models."""
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [
+        {"kind": "search_bench", "suite": "search-bench-real-sept2025-v1", "published_only": False},
+        {"kind": "ask_suite", "suite": "real-sept2025-v1"}]})
+    kind: Literal["search_bench", "ask_suite"]
+    suite: str = Field(min_length=1, max_length=120)
+    published_only: bool = False
+    as_of: dt.datetime | None = None

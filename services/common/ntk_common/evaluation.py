@@ -396,3 +396,38 @@ def apply_search_labels(path: Path, labels: Path) -> dict[str, int]:
     suite["status"] = "labelled"
     path.write_text(json.dumps(suite, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"queries": len(suite["queries"]), "labelled_queries": sum(1 for q in suite["queries"] if q["relevant"])}
+
+
+# ---------------------------------------------------------------------------
+# server-side evaluation runs (admin API → worker)
+# ---------------------------------------------------------------------------
+GOLDEN_DIR = Path(__file__).resolve().parents[3] / "golden"
+
+
+class SuiteNotFound(ValueError):
+    pass
+
+
+def resolve_suite(name: str, *, golden_dir: Path | None = None) -> Path:
+    """Map a suite name ("search-bench-real-sept2025-v1" or "golden/….json") to a file inside golden/.
+
+    Only top-level JSON files in golden/ are accepted, so the API can never be used to read other paths."""
+    base = (golden_dir or GOLDEN_DIR).resolve()
+    stem = Path(name).name
+    if stem.endswith(".json"):
+        stem = stem[:-5]
+    if not stem or not all(c.isalnum() or c in "-_." for c in stem) or stem.startswith("."):
+        raise SuiteNotFound(f"invalid suite name {name!r}")
+    path = (base / f"{stem}.json").resolve()
+    if path.parent != base or not path.is_file():
+        raise SuiteNotFound(f"suite {stem!r} not found in golden/")
+    return path
+
+
+def run_evaluation(kind: str, suite: Path, *, settings, engine: Engine, services, options: dict | None = None) -> dict:
+    options = options or {}
+    if kind == "search_bench":
+        return run_search_bench(suite, services=services, published_only=bool(options.get("published_only", False)))
+    if kind == "ask_suite":
+        return run_suite(suite, settings=settings, engine=engine, services=services, as_of=options.get("as_of"))
+    raise ValueError(f"unknown evaluation kind {kind!r}")

@@ -39,6 +39,7 @@ from ..schemas import (
     InboxProcessRequest,
     InboxScanRequest,
     IngestionJobRequest,
+    NonHearingsRequest,
     ObjectReviewRequest,
     PresignRequest,
     PresignResponse,
@@ -299,6 +300,26 @@ def inbox_duplicates(st: AppState = Depends(get_state), limit: int = Query(200, 
         out = inbox_dupes.listing(conn, limit=limit)
     return _json({**out, "auto_delete": st.settings.inbox_delete_duplicates,
                   "threshold": inbox_dupes.POSSIBLE_THRESHOLD}, cache="no-store")
+
+
+@router.post("/maintenance/non-hearings")
+def maintenance_non_hearings(body: NonHearingsRequest, request: Request, st: AppState = Depends(get_state),
+                             p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """Hearings created from documents that are not hearing records (no speaker turns, no attendance list): list them,
+    or with apply=true turn them back into documents (decision / notice)."""
+    from ntk_common import inbox_dupes, reclassify
+
+    with st.services.engine.begin() as conn:
+        found = reclassify.candidates(conn)
+        out = {"candidates": [{k: v for k, v in c.items() if k != "metadata"} for c in found], "applied": []}
+        if body.apply:
+            for c in found:
+                out["applied"].append(reclassify.demote(conn, hearing_id=c["id"], kind=c["kind"], actor=p.label))
+            if out["applied"]:
+                ops.bump_corpus_version(conn, reason=f"{len(out['applied'])} documents taken for hearings reclassified",
+                                        actor=p.label)
+            out["names"] = inbox_dupes.refresh_names(conn)
+    return _json(out, cache="no-store")
 
 
 @router.post("/inbox/refresh-names")

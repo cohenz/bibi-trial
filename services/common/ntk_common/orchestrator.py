@@ -403,10 +403,41 @@ class Pipeline:
                "units_superseded": counts["superseded"], "warnings": parsed.warnings}
         return out, {"hearing_id": None}, "succeeded"
 
+    def _demote_input(self, job_id: str, inp: dict, svid: str, text: str) -> dict:
+        from . import reclassify
+        from .db.core import execute, j
+
+        doc = dict(inp["document"])
+        kind = reclassify.guess_kind(text, doc.get("original_filename") or "")
+        date = doc.get("document_date") or doc.get("hearing_date_hint")
+        doc.update({"source_type": kind, "document_date": date, "hearing_date": None,
+                    "title": reclassify.new_title(kind, doc.get("original_filename") or "", date),
+                    "reclassified_from": "protocol"})
+        new_inp = {**inp, "document": doc}
+        with self.s.engine.begin() as conn:
+            execute(conn, "UPDATE ntk.ingestion_jobs SET input = CAST(:i AS jsonb) WHERE id = CAST(:j AS uuid)",
+                    {"i": j(new_inp), "j": job_id})
+            execute(conn, """UPDATE ntk.source_documents SET source_type = CAST(:t AS ntk.source_type), canonical_title = :ti
+                             WHERE id = (SELECT document_id FROM ntk.source_versions WHERE id = :sv)""",
+                    {"t": kind, "ti": doc["title"], "sv": svid})
+            execute(conn, "UPDATE ntk.source_versions SET metadata = metadata || CAST(:p AS jsonb) WHERE id = :sv",
+                    {"sv": svid, "p": j({"document_date": date, "reclassified_from": "protocol"})})
+            execute(conn, "UPDATE ntk.inbox_items SET doc_kind = :k, updated_at = now() WHERE job_id = CAST(:j AS uuid)",
+                    {"k": kind, "j": job_id})
+            ops.audit(conn, actor="pipeline", action="protocol.reclassified", object_type="source_version", object_id=svid,
+                      details={"kind": kind, "title": doc["title"], "reason": "no speaker turns and no attendance list"})
+        return new_inp
+
     def stage_segment(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         if not self._is_protocol(inp):
             return self._segment_document(job_id, inp)
         svid, parsed = self._parse(job_id, inp)
+        from . import reclassify
+
+        text = "\n".join(u.raw_text for u in parsed.units[:80])
+        if inp.get("manifest") == "inbox" and not reclassify.is_hearing_record([u.unit_type for u in parsed.units], text):
+            # no speaker turns and no attendance list: a court decision or notice that mentions a protocol, not a hearing
+            return self._segment_document(job_id, self._demote_input(job_id, inp, svid, text))
         reg = self._cp(job_id, "register") or {}
         doc = inp["document"]
         hearing_date = doc.get("hearing_date") or parsed.header.hearing_date or doc.get("hearing_date_hint")

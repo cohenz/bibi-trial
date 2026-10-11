@@ -41,10 +41,16 @@ CLASSIFIER_VERSION = "inbox-classifier-1"
 _CASE_RE = re.compile(r"(?<!\d)(\d{4,6})\s*[-–]\s*(\d{2})\s*[-–]\s*(\d{2})(?!\d)")
 _PUNCT = re.compile(r"^[\s\"'״׳:.\-–()\[\]]+")
 
+# headings of documents the court issues outside a hearing ("העתק החלטת בית משפט", "הודעת בית המשפט")
+_COURT_DOC_HEADINGS = ("העתק החלטת", "העתק החלטה", "החלטה", "החלטת", "הודעת בית המשפט", "הודעה לצדדים", "הודעה מטעם בית")
+# speaker turns as printed in protocols: "כב' השופטת …:", "עו"ד חדד:", "ש.", "ת:", "העד:"
+_TURN_RE = re.compile(r"^(?:[שת][.:]|(?:כב\W?\s*ה?שופט|ה?שופט(?:ת)?\s|אב\W?ד|עו\W?ד\s|ב\W?כ\s|העד(?:ה)?\b|ה?נאשם\s?\d?)[^:\n]{0,45}:)")
+
 # heading keyword → kind, checked against the start of short lines on the first page, in this priority order
 _HEADINGS: list[tuple[str, tuple[str, ...]]] = [
     ("indictment", ("כתב אישום", "כתב-אישום", "כתב האישום המתוקן", "כתב אישום מתוקן")),
-    ("decision", ("הכרעת דין", "הכרעת-דין", "גזר דין", "גזר-דין", "פסק דין", "פסק-דין", "החלטה", "החלטת")),
+    ("decision", ("הכרעת דין", "הכרעת-דין", "גזר דין", "גזר-דין", "פסק דין", "פסק-דין", "העתק החלטת", "העתק החלטה",
+                  "החלטה", "החלטת")),
     ("affidavit", ("תצהיר", "הצהרה", "הצהרת")),
     ("response", ("תגובה", "תגובת", "תשובה", "תשובת", "תגובה לבקשה", "השלמת טיעון")),
     ("motion", ("בקשה", "בקשת", "בקשה דחופה")),
@@ -95,11 +101,19 @@ def classify_by_rules(first_pages: str, last_page: str = "", filename: str = "",
     signals: list[str] = []
     kind, conf, title = "other", 0.3, None
 
-    is_protocol = "פרוטוקול" in head_text
-    attendance = any(k in head_text for k in ("נוכחים", "לפני כב", "בפני כב", "לפני: כב", "בפני: כב"))
-    if is_protocol:
-        kind, conf, title = "protocol", 0.95 if attendance else 0.8, "פרוטוקול דיון"
-        signals.append("heading:פרוטוקול" + ("+attendance" if attendance else ""))
+    # A protocol records a hearing: an attendance list ("נוכחים") or a "פרוטוקול" heading with speaker turns. A mere
+    # mention ("פרוטוקול הדיון מיום … הוקלט" in a decision) is not enough: court decisions and notices issued outside a
+    # hearing often refer to a protocol.
+    norm = [_norm_line(ln) for ln in head]
+    protocol_heading = any(t.startswith("פרוטוקול") and len(t.split()) <= 6 for t in norm)
+    present = "נוכחים" in head_text or "נוכחות:" in head_text
+    turns = sum(1 for ln in lines[:200] if _TURN_RE.match(_norm_line(ln)))
+    if present or (protocol_heading and turns >= 2):
+        kind, conf, title = "protocol", 0.95, "פרוטוקול דיון"
+        signals.append("protocol:" + ("attendance" if present else "") + (f"+turns:{turns}" if turns else ""))
+    elif protocol_heading and not any(t.startswith(_COURT_DOC_HEADINGS) for t in norm[:20]):
+        kind, conf, title = "protocol", 0.7, "פרוטוקול דיון"
+        signals.append("heading:פרוטוקול")
     else:
         for ln in head:
             t = _norm_line(ln)

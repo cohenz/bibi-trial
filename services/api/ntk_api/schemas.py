@@ -196,6 +196,11 @@ class GuideBuildRequest(BaseModel):
     keys: list[str] | None = Field(default=None, max_length=50)
 
 
+class NonHearingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    apply: bool = False  # false: list what would change
+
+
 class DuplicateDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # remove_copy: delete this intake copy, keep the document already in the system

@@ -91,3 +91,10 @@ def test_notice_brief_hearing_day_on_timeline_and_witness(services):
         assert w["appearance_count"] == 1 and w["hearing_count"] == 0 and w["side"] == "defense"
         page = gp.witness_page(conn, w["slug"])
         assert page["appearances"][0]["date"] == "2026-04-20" and page["hearings"] == []
+
+
+def test_model_dates_are_normalised():
+    v = briefs._valid_date
+    assert [v("18.05.2021"), v("28 אפריל 2026"), v("2026-04-20"), v("20/4/2026")] == ["2021-05-18", "2026-04-28",
+                                                                                      "2026-04-20", "2026-04-20"]
+    assert v("1999-01-01") is None and v("") is None and v(None) is None

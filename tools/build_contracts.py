@@ -835,7 +835,8 @@ defs["ModelDocumentBriefOutput"] = obj(
         "significance": {"enum": SIGNIFICANCE},
         "significance_reason": NESTR,
         "hearing_days": arr(obj(["hearing_date", "witnesses", "next_hearing_date", "source_unit_ids"], {
-            "hearing_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+            # models write dates as printed ("18.05.2021", "28 אפריל 2026"); the pipeline normalises them
+            "hearing_date": NESTR,
             "witnesses": arr(WITNESS_APPEARANCE),
             "next_hearing_date": {"type": ["string", "null"]},
             "source_unit_ids": SU_LIST,

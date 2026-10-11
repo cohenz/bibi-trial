@@ -46,9 +46,14 @@ def _witness_gate(days: list[dict], by_id: dict[str, UnitView]) -> gates.GateRes
 
 
 def _valid_date(d: str | None) -> str | None:
-    if not d or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+    """ISO date from what the model wrote: '2026-04-20', '20.4.2026', '20/04/2026', '28 אפריל 2026'."""
+    from .pipeline.protocol import parse_date
+
+    if not d:
         return None
-    return d if "2016-01-01" <= d <= "2035-12-31" else None
+    d = d.strip()
+    iso = d if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) else parse_date(d.replace("/", "."))
+    return iso if iso and "2016-01-01" <= iso <= "2035-12-31" else None
 
 
 def build_document_brief(*, source_version_id: str, source_type: str, units: list[UnitView], runner: ModelRunner,

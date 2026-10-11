@@ -74,6 +74,34 @@ def insert_source_version(conn: Connection, *, document_id: str, content_sha256:
     return svid, True
 
 
+def supersede_units(conn: Connection, source_version_id: str, current_ids: list[str], parser_version: str) -> int:
+    """After a (re-)parse: units of this version the parser no longer produces are marked superseded (never deleted,
+    so published citations keep resolving); units it produces again are current. Records the parser version."""
+    execute(conn, """UPDATE ntk.source_units SET superseded_at = NULL
+                     WHERE source_version_id = :sv AND id = ANY(:ids) AND superseded_at IS NOT NULL""",
+            {"sv": source_version_id, "ids": current_ids})
+    n = execute(conn, """UPDATE ntk.source_units SET superseded_at = now()
+                         WHERE source_version_id = :sv AND superseded_at IS NULL AND NOT (id = ANY(:ids))""",
+                {"sv": source_version_id, "ids": current_ids})
+    execute(conn, "UPDATE ntk.source_versions SET parser_version = :pv WHERE id = :sv AND parser_version IS DISTINCT FROM :pv",
+            {"sv": source_version_id, "pv": parser_version})
+    return n
+
+
+def supersede_exchanges(conn: Connection, hearing_id: str, current_ids: list[str]) -> int:
+    execute(conn, """UPDATE ntk.qa_exchanges SET superseded_at = NULL
+                     WHERE hearing_id = :h AND id = ANY(:ids) AND superseded_at IS NOT NULL""", {"h": hearing_id, "ids": current_ids})
+    return execute(conn, """UPDATE ntk.qa_exchanges SET superseded_at = now()
+                            WHERE hearing_id = :h AND superseded_at IS NULL AND NOT (id = ANY(:ids))""",
+                   {"h": hearing_id, "ids": current_ids})
+
+
+def drop_stale_chunks(conn: Connection, source_version_id: str, current_ids: list[str]) -> int:
+    """Chunks are derived from units; after a re-parse the old ones are removed (members cascade)."""
+    return execute(conn, """DELETE FROM ntk.retrieval_chunks WHERE source_version_id = :sv AND NOT (id = ANY(:ids))""",
+                   {"sv": source_version_id, "ids": current_ids})
+
+
 def ensure_hearing(conn: Connection, *, case_id: str, hearing_date: str, source_version_id: str,
                    judges: list[str], witnesses: list[str], phase: str | None = None,
                    location: str | None = None, metadata: dict | None = None) -> str:
@@ -81,7 +109,8 @@ def ensure_hearing(conn: Connection, *, case_id: str, hearing_date: str, source_
     execute(conn, """
         INSERT INTO ntk.hearings (id, case_id, hearing_date, location, phase, source_version_id, judges, witnesses, metadata)
         VALUES (:id, :case, :d, :loc, :phase, :sv, :judges, :wit, CAST(:meta AS jsonb))
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT (id) DO UPDATE SET judges = EXCLUDED.judges, witnesses = EXCLUDED.witnesses,
+            metadata = ntk.hearings.metadata || EXCLUDED.metadata
     """, {"id": hid, "case": case_id, "d": hearing_date, "loc": location, "phase": phase, "sv": source_version_id,
           "judges": judges, "wit": witnesses, "meta": json.dumps(metadata or {}, ensure_ascii=False)})
     return hid
@@ -199,13 +228,14 @@ def refresh_normalization(conn: Connection, source_version_id: str) -> int:
 
 
 def units_for_version(conn: Connection, source_version_id: str) -> list[dict]:
-    return rows(conn, """SELECT * FROM ntk.source_units WHERE source_version_id = :sv ORDER BY unit_ordinal""",
+    return rows(conn, """SELECT * FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
+                         ORDER BY unit_ordinal""",
                 {"sv": source_version_id})
 
 
 def counts_for_version(conn: Connection, source_version_id: str) -> dict:
     return row(conn, """
-        SELECT (SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv) AS units,
+        SELECT (SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL) AS units,
                (SELECT count(*) FROM ntk.qa_exchanges x JOIN ntk.source_units q ON q.id = x.question_unit_id
                  WHERE q.source_version_id = :sv) AS exchanges,
                (SELECT count(*) FROM ntk.retrieval_chunks WHERE source_version_id = :sv) AS chunks,

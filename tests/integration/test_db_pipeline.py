@@ -352,3 +352,67 @@ def test_auto_publish_policy_and_label_policy(services, pipeline, ingested):
         open_after = scalar(conn, "SELECT count(*) FROM ntk.review_tasks WHERE object_type = 'qa_exchange' AND status = 'open'")
     assert v["label_policy"] == "agreement" and verified == v["verifier_agrees"]
     assert open_after == open_before
+
+
+def test_reparse_supersedes_units_exchanges_and_chunks(services, ingested):
+    """A re-parse never deletes citation units: units it no longer produces are superseded (excluded from listings,
+    search and new AI input) but still resolve by id; producing them again makes them current again."""
+    from ntk_common.db import sources
+    from ntk_common.db.public import units_by_ids
+    from ntk_common.search.base import SearchFilters, SearchRequest
+
+    job_id = str(ingested["id"])
+    with services.engine.connect() as conn:
+        hid = scalar(conn, """SELECT checkpoint->>'hearing_id' FROM ntk.ingestion_job_stages
+                              WHERE job_id = CAST(:j AS uuid) AND stage = 'segment'""", {"j": job_id})
+        svid = scalar(conn, "SELECT source_version_id FROM ntk.hearings WHERE id = :h", {"h": hid})
+        all_ids = [r["id"] for r in sources.units_for_version(conn, svid)]
+        ex_ids = [r["id"] for r in rows(conn, "SELECT id FROM ntk.qa_exchanges WHERE hearing_id = :h AND superseded_at IS NULL", {"h": hid})]
+        chunk_ids = [r["id"] for r in rows(conn, "SELECT id FROM ntk.retrieval_chunks WHERE source_version_id = :s", {"s": svid})]
+    gone = all_ids[:3]
+    with services.engine.begin() as conn:
+        assert sources.supersede_units(conn, svid, all_ids[3:], "protocol-parser-test") == 3
+        assert sources.supersede_exchanges(conn, hid, ex_ids[1:]) == 1
+        assert sources.drop_stale_chunks(conn, svid, chunk_ids[1:]) == 1
+    with services.engine.connect() as conn:
+        current = [r["id"] for r in sources.units_for_version(conn, svid)]
+        assert current == all_ids[3:]
+        assert set(units_by_ids(conn, gone, published_only=False)) == set(gone)  # old citations still resolve
+        assert scalar(conn, "SELECT parser_version FROM ntk.source_versions WHERE id = :s", {"s": svid}) == "protocol-parser-test"
+    hits = services.search_backend(use_vector=False).search(SearchRequest(" ".join(services.engine.connect().execute(
+        text("SELECT raw_text FROM ntk.source_units WHERE id = :i"), {"i": gone[0]}).scalar().split()[:4]),
+        SearchFilters(published_only=False), limit=50)).hits
+    assert not {h.source_unit_id for h in hits} & set(gone)
+    with services.engine.begin() as conn:  # the parser produces them again → current again
+        assert sources.supersede_units(conn, svid, all_ids, "protocol-parser-1.3") == 0
+        sources.supersede_exchanges(conn, hid, ex_ids)
+    with services.engine.connect() as conn:
+        assert [r["id"] for r in sources.units_for_version(conn, svid)] == all_ids
+
+
+def test_digest_waiting_for_its_source_is_published_with_it(services, ingested):
+    import dataclasses
+
+    from ntk_common.orchestrator import Pipeline
+
+    job_id = str(ingested["id"])
+    with services.engine.connect() as conn:
+        hid = scalar(conn, """SELECT checkpoint->>'hearing_id' FROM ntk.ingestion_job_stages
+                              WHERE job_id = CAST(:j AS uuid) AND stage = 'segment'""", {"j": job_id})
+        svid = scalar(conn, "SELECT source_version_id FROM ntk.hearings WHERE id = :h", {"h": hid})
+    auto = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, auto_publish="gates")))
+    with services.engine.begin() as conn:
+        conn.execute(text("UPDATE ntk.source_versions SET publication_state = 'draft' WHERE id = :s"), {"s": svid})
+        conn.execute(text("""UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'hearing'
+                             AND object_id = :h AND review_state = 'published'"""), {"h": hid})
+        conn.execute(text("UPDATE ntk.publications SET unpublished_at = now() WHERE unpublished_at IS NULL"))
+    out = auto.rebuild_hearing_digest(hid)
+    if out.get("state") != "machine_verified":
+        pytest.skip("mock digest did not pass the gates on this fixture")
+    assert out["auto_published"] is False
+    with services.engine.begin() as conn:
+        kdb.publish_source_version(conn, svid, actor="test")
+    assert auto.auto_publish_latest(object_type="hearing", object_id=hid) is True
+    with services.engine.connect() as conn:
+        assert scalar(conn, "SELECT review_state::text FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
+                      {"a": out["artifact_id"]}) == "published"

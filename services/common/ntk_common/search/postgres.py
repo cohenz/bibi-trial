@@ -28,7 +28,7 @@ Embedder = Callable[[str], list[float]]
 
 def _filter_sql(req: SearchRequest, alias: str = "su") -> tuple[str, dict]:
     f = req.filters
-    clauses = []
+    clauses = [f"{alias}.superseded_at IS NULL"]  # units replaced by a re-parse are never search results
     params: dict = {}
     if f.published_only:
         clauses.append("sv.publication_state = 'published'")

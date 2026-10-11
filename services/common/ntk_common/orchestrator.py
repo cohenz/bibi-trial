@@ -397,8 +397,10 @@ class Pipeline:
             l0 = L0Result(svid, (self._cp(job_id, "validate") or {})["content_sha256"], 0,
                           ExtractedDocument([], 0), parsed, [], [])
             counts = sources.write_l0(conn, l0, hearing_id=None, court_record_status=doc.get("court_record_status", "unknown"))
+            counts["superseded"] = sources.supersede_units(conn, svid, [u.id for u in parsed.units], parsed.parser_version)
         out = {"hearing_id": None, "source_type": doc["source_type"], "document_date": doc.get("document_date"),
-               "units": len(parsed.units), "units_inserted": counts["units_inserted"], "warnings": parsed.warnings}
+               "units": len(parsed.units), "units_inserted": counts["units_inserted"],
+               "units_superseded": counts["superseded"], "warnings": parsed.warnings}
         return out, {"hearing_id": None}, "succeeded"
 
     def stage_segment(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
@@ -441,8 +443,10 @@ class Pipeline:
             l0 = L0Result(svid, (self._cp(job_id, "validate") or {})["content_sha256"], 0,
                           ExtractedDocument([], 0), parsed, [], [])
             counts = sources.write_l0(conn, l0, hearing_id=hid, court_record_status=crs, speaker_entities=speaker_entities)
+            counts["superseded"] = sources.supersede_units(conn, svid, [u.id for u in parsed.units], parsed.parser_version)
         out = {"hearing_id": hid, "hearing_date": hearing_date, "units": len(parsed.units),
-               "units_inserted": counts["units_inserted"], "witnesses": parsed.witnesses, "judges": parsed.header.judges,
+               "units_inserted": counts["units_inserted"], "units_superseded": counts["superseded"],
+               "witnesses": parsed.witnesses, "judges": parsed.header.judges,
                "warnings": warnings[:50]}
         return out, {"hearing_id": hid}, "succeeded"
 
@@ -464,10 +468,12 @@ class Pipeline:
                     :conf, 'draft', :asker, :side, :wit, :wording, :flags, :rule, :pv)
                 ON CONFLICT (id) DO NOTHING
             """, [_exchange_row(e, hid, parsed.parser_version) for e in exchanges])
+            ex_superseded = sources.supersede_exchanges(conn, hid, [e.id for e in exchanges])
         rel: dict[str, int] = {}
         for e in exchanges:
             rel[e.answer_relation] = rel.get(e.answer_relation, 0) + 1
-        return {"exchanges": len(exchanges), "inserted": n, "relations": rel, "warnings": warnings[:20]}, {}, "succeeded"
+        return {"exchanges": len(exchanges), "inserted": n, "superseded": ex_superseded, "relations": rel,
+                "warnings": warnings[:20]}, {}, "succeeded"
 
     def stage_chunk(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         svid, parsed = self._parse(job_id, inp)
@@ -476,7 +482,9 @@ class Pipeline:
         with self.s.engine.begin() as conn:
             n = sources.write_chunks(conn, chunks, source_version_id=svid, hearing_id=hid,
                                      court_record_status=inp["document"].get("court_record_status", "unknown"))
-        return {"chunks": len(chunks), "inserted": n, "tokens": sum(c.token_count for c in chunks)}, {}, "succeeded"
+            removed = sources.drop_stale_chunks(conn, svid, [c.id for c in chunks])
+        return {"chunks": len(chunks), "inserted": n, "removed_stale": removed,
+                "tokens": sum(c.token_count for c in chunks)}, {}, "succeeded"
 
     def stage_embed(self, job_id: str, inp: dict) -> tuple[dict, dict, str]:
         svid = (self._cp(job_id, "validate") or {})["source_version_id"]
@@ -517,7 +525,7 @@ class Pipeline:
             units = [views[r["id"]] for r in unit_rows if r["id"] in views]
             ex_rows = rows(conn, """SELECT id, question_unit_id, answer_unit_id, answer_relation::text AS rel, confidence,
                                            interpreted_proposition, review_state::text AS st
-                                    FROM ntk.qa_exchanges WHERE hearing_id = :h""", {"h": hid})
+                                    FROM ntk.qa_exchanges WHERE hearing_id = :h AND superseded_at IS NULL""", {"h": hid})
             cv = ops.current_corpus_version(conn)
         exchanges = [ExchangeView(r["id"], r["question_unit_id"], r["answer_unit_id"], r["rel"], float(r["confidence"]),
                                   r["interpreted_proposition"], r["st"] in {"machine_verified", "approved", "published"}) for r in ex_rows]
@@ -586,7 +594,8 @@ class Pipeline:
             # add the paired unit of every candidate exchange so Q/A are seen together
             pairs = rows(conn, """SELECT id, question_unit_id, answer_unit_id, answer_relation::text AS rel, confidence,
                                          interpreted_proposition, review_state::text AS st
-                                  FROM ntk.qa_exchanges WHERE question_unit_id = ANY(:ids) OR answer_unit_id = ANY(:ids)""",
+                                  FROM ntk.qa_exchanges WHERE (question_unit_id = ANY(:ids) OR answer_unit_id = ANY(:ids))
+                                  AND superseded_at IS NULL""",
                            {"ids": cand_ids})
             for p in pairs:
                 for x in (p["question_unit_id"], p["answer_unit_id"]):
@@ -653,7 +662,7 @@ class Pipeline:
                 FROM ntk.qa_exchanges x JOIN ntk.source_units q ON q.id = x.question_unit_id
                 JOIN ntk.source_units a ON a.id = x.answer_unit_id
                 LEFT JOIN ntk.model_runs mr ON mr.id = x.relation_model_run_id
-                WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL
+                WHERE x.hearing_id = :h AND x.public_wording IS NOT NULL AND x.superseded_at IS NULL
                   AND (x.review_state = 'draft'
                        OR (x.review_state = 'human_review_required' AND :real
                            AND (x.relation_model_run_id IS NULL OR mr.provider = 'mock' OR :auto)))
@@ -722,7 +731,23 @@ class Pipeline:
             return {"note": "case number not verified on the document; source left unpublished"}, {}, "skipped"
         with self.s.engine.begin() as conn:
             cv = kdb.publish_source_version(conn, svid, actor="inbox:auto-publish")
-        return {"source_version_id": svid, "published": True, "corpus_version": cv}, {}, "succeeded"
+        # the digest was built (extract_a) before its source was public; publish it now if it passed every gate
+        digest_published = self.auto_publish_latest(object_type="hearing", object_id=hid) if hid else False
+        return {"source_version_id": svid, "published": True, "corpus_version": cv,
+                "digest_auto_published": digest_published}, {}, "succeeded"
+
+    def auto_publish_latest(self, *, object_type: str, object_id: str) -> bool:
+        with self.s.engine.connect() as conn:
+            art = row(conn, """SELECT id::text AS id, review_state::text AS st, risk_flags FROM ntk.generated_artifacts
+                               WHERE object_type = :ot AND object_id = :oid ORDER BY created_at DESC LIMIT 1""",
+                      {"ot": object_type, "oid": object_id})
+        if not art or art["st"] != "machine_verified" or art["risk_flags"]:
+            return False
+
+        class _Decision:  # the stored gate outcome: passed every gate, no risk flag
+            state = "machine_verified"
+
+        return self.auto_publish(art["id"], _Decision())
 
 
 def doc_input_from_manifest(manifest: dict, doc: dict) -> dict:

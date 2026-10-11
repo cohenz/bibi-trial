@@ -67,12 +67,13 @@ def public_citation(conn: Connection, unit_id: str) -> dict | None:
                              WHERE turn_key = :tk AND id <> :id ORDER BY turn_part""",
                     {"tk": r["turn_key"], "id": unit_id}) if r["turn_key"] else []
     neighbours = rows(conn, """SELECT id, page_no, line_start, line_end, speaker_label, unit_type, raw_text
-                               FROM ntk.source_units WHERE source_version_id = :sv
+                               FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
                                AND unit_ordinal BETWEEN :o - 2 AND :o + 2 AND id <> :id ORDER BY unit_ordinal""",
                       {"sv": r["source_version_id"], "o": r["unit_ordinal"], "id": unit_id})
     exchange = row(conn, """SELECT id, question_unit_id, answer_unit_id, answer_relation::text AS answer_relation,
                                    public_wording, review_state::text AS review_state
-                            FROM ntk.qa_exchanges WHERE question_unit_id = :id OR answer_unit_id = :id LIMIT 1""",
+                            FROM ntk.qa_exchanges WHERE (question_unit_id = :id OR answer_unit_id = :id)
+                            AND superseded_at IS NULL LIMIT 1""",
                    {"id": unit_id})
     return {"unit": r, "turn_continuations": siblings, "context": neighbours, "exchange": exchange}
 
@@ -83,7 +84,8 @@ def public_source_version(conn: Connection, document_id: str, version_id: str) -
                sv.parser_version, sv.extractor_version, sv.supersedes_id, sv.synthetic_lines, sv.court_record_status::text AS crs,
                sv.size_bytes, sv.source_url, d.canonical_title, d.source_type::text AS source_type, d.authority_tier,
                d.source_owner, d.source_stance, d.canonical_url, d.legal_access_notes,
-               (SELECT count(*) FROM ntk.source_units su WHERE su.source_version_id = sv.id) AS unit_count
+               (SELECT count(*) FROM ntk.source_units su WHERE su.source_version_id = sv.id
+                  AND su.superseded_at IS NULL) AS unit_count
         FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
         WHERE sv.id = :v AND sv.document_id = :d AND sv.publication_state = 'published'
     """, {"v": version_id, "d": document_id})
@@ -139,7 +141,7 @@ def public_hearing(conn: Connection, hearing_id: str) -> dict | None:
     """, {"id": hearing_id})
     stats = row(conn, """SELECT count(*) AS units, count(*) FILTER (WHERE unit_type='question') AS questions,
                                 count(*) FILTER (WHERE unit_type='answer') AS answers
-                         FROM ntk.source_units WHERE hearing_id = :id""", {"id": hearing_id})
+                         FROM ntk.source_units WHERE hearing_id = :id AND superseded_at IS NULL""", {"id": hearing_id})
     return {"hearing": h, "digest": digest["payload"] if digest else None,
             "digest_artifact_id": str(digest["id"]) if digest else None, "stats": stats}
 
@@ -224,7 +226,8 @@ class PgAskStore:
         with self.engine.connect() as conn:
             out: dict[str, str] = {}
             for r in rows(conn, """SELECT question_unit_id AS q, answer_unit_id AS a FROM ntk.qa_exchanges
-                                   WHERE question_unit_id = ANY(:ids) OR answer_unit_id = ANY(:ids)""", {"ids": unit_ids}):
+                                   WHERE (question_unit_id = ANY(:ids) OR answer_unit_id = ANY(:ids))
+                                   AND superseded_at IS NULL""", {"ids": unit_ids}):
                 out.setdefault(r["q"], r["a"])
                 out.setdefault(r["a"], r["q"])
             return out
@@ -313,8 +316,8 @@ def source_text(conn: Connection, source_version_id: str, *, page_from: int, pag
                CASE WHEN x.review_state::text = ANY(:ls) THEN x.public_wording END AS exchange_label
         FROM ntk.source_units su
         JOIN ntk.source_versions sv ON sv.id = su.source_version_id AND sv.publication_state = 'published'
-        LEFT JOIN ntk.qa_exchanges x ON x.answer_unit_id = su.id
-        WHERE su.source_version_id = :sv AND su.page_no BETWEEN :a AND :b
+        LEFT JOIN ntk.qa_exchanges x ON x.answer_unit_id = su.id AND x.superseded_at IS NULL
+        WHERE su.source_version_id = :sv AND su.page_no BETWEEN :a AND :b AND su.superseded_at IS NULL
         ORDER BY su.unit_ordinal
     """, {"sv": source_version_id, "a": page_from, "b": page_to, "ls": list(LABEL_STATES)})
 

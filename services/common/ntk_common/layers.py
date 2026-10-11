@@ -117,14 +117,12 @@ def build_hearing_digest(
         ],
     }
     allowed_units = {u["id"] for u in base_in["units"]}
-    allowed_ex = {e.id for e in exchanges}
 
     def semantic(out: dict) -> list[dict]:
         # citations must be exact; judicial_candidate_unit_ids is a high-recall candidate list (not cited), so an
         # unknown id there is dropped below instead of discarding the whole digest
-        errs = unknown_ids_check(allowed_units, "summary_sentences[].source_unit_ids[]")(out)
-        errs += unknown_ids_check(allowed_ex, "notable_exchange_ids[]")(out)
-        return errs
+        # notable_exchange_ids is a pointer list too: unknown ids are dropped when the digest is built
+        return unknown_ids_check(allowed_units, "summary_sentences[].source_unit_ids[]")(out)
 
     runs: list[ModelRunRecord] = []
     avoid: list[str] = []
@@ -213,7 +211,9 @@ def _digest_from_output(run: ModelRunRecord, *, hearing_id: str, by_id: dict[str
                 cited_ids.append(cid)
     notable = []
     for xid in out.get("notable_exchange_ids", []):
-        e = ex_by_id[xid]
+        e = ex_by_id.get(xid)
+        if e is None:
+            continue
         notable.append({"question_unit_id": e.question_unit_id, "answer_unit_id": e.answer_unit_id,
                         "answer_relation": e.answer_relation, "interpreted_proposition": e.interpreted_proposition,
                         "confidence": float(e.confidence)})

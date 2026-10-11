@@ -167,3 +167,63 @@ def test_real_protocols_structure(name):
     sides = {u.speaker_label: u.speaker_side for u in r.parsed.units if u.speaker_label and "חדד" in u.speaker_label}
     assert sides and all(s == "defense_1" for s in sides.values())
     assert pdfmod  # imported for the skip message
+
+
+# 2021–2023 phrasings (protocols ingested from the archive on 11.10.2026): prosecution-witness codes without a dash,
+# intros with "משיב לשאלות" and no warning clause, and a narrative cover note instead of "העיד:".
+COVER_2021 = COVER[:12] + [
+    (1, 9, "פרוטוקול הדיון הוקלט", "body"),
+]
+
+
+def _parse(rows):
+    return parse_protocol(_lines(rows), source_version_id="sv_" + "2" * 26)
+
+
+def test_summary_with_prosecution_witness_code_and_no_dash():
+    p = _parse(COVER_2021 + [
+        (1, 10, 'העיד: ע"ת 65 ינון מגל – המשך חקירה נגדית לעו"ד בעז בן-צור.', "body"),
+        (2, 3, 'כב\' השופטת ר\' פרידמן-פלדמן - אב"ד: בוקר טוב. מר מגל על הדוכן, שלום לך,', "body"),
+        (2, 4, "ת. שלום", "body"),
+        (2, 5, 'ע"ת 65 מר ינון מגל לאחר שהוזהר כדין משיב לשאלות עו"ד בועז בן-צור בהמשך חקירה נגדית', "body"),
+        (2, 6, "ש. שלום לך מר מגל.", "body"),
+        (2, 7, "ת. שלום.", "body"),
+        (2, 8, "ש. נכון שהכתבה עלתה בהוראה?", "body"),
+        (2, 9, "ת. לא נכון.", "body"),
+    ])
+    assert p.header.summary_witnesses and p.header.summary_witnesses[0]["witness"] == "ינון מגל"
+    assert "ינון מגל" in p.witnesses
+    q = next(u for u in p.units if u.raw_text.startswith("נכון שהכתבה"))
+    assert q.unit_type == "question" and q.examination_phase == "cross" and q.witness_label == "ינון מגל"
+    a = next(u for u in p.units if u.raw_text == "לא נכון.")
+    assert a.unit_type == "answer"
+    exchanges, _ = pair_exchanges(p.units)
+    assert len(exchanges) >= 2
+
+
+def test_intro_with_answering_questions_and_no_warning_clause():
+    p = _parse(COVER_2021 + [
+        (2, 3, 'כב\' השופטת ר\' פרידמן-פלדמן - אב"ד: או.קיי. בסדר.', "body"),
+        (2, 4, 'ע"ת 8 - מר ניר חפץ משיב לשאלות עו"ד אלון גילדין בהמשך חקירה ראשית', "body"),
+        (2, 5, "ש. בוקר טוב מר חפץ", "body"),
+        (2, 6, "ת. בוקר טוב", "body"),
+    ])
+    q = next(u for u in p.units if u.unit_type == "question")
+    assert q.witness_label == "ניר חפץ" and q.examination_phase == "direct"
+    assert any(u.unit_type == "answer" and u.raw_text == "בוקר טוב" for u in p.units)
+
+
+def test_narrative_cover_note_names_the_witness():
+    p = _parse(COVER_2021 + [
+        (1, 10, 'נמשכה חקירתו הנגדית של ע"ת 1 אילן ישועה, על ידי עו"ד ז\'ק חן.', "body"),
+        (2, 1, "תמליל פרוטוקול מוקלט", "body"),
+        (2, 16, 'עו"ד ז\'ק חן: תודה גברתי. למעשה עורך דין רלי לשם שלל את החששות שלך. נכון?', "body"),
+        (2, 17, "ת: נכון.", "body"),
+        (2, 18, "ש: עורך הדין אמר לך שזאת זכותו של מו\"ל?", "body"),
+        (2, 19, "ת: כן.", "body"),
+    ])
+    assert p.header.summary_witnesses[0]["witness"] == "אילן ישועה"
+    assert p.header.summary_witnesses[0]["phase"] == "cross"
+    q = next(u for u in p.units if u.raw_text.startswith("עורך הדין אמר"))
+    assert q.unit_type == "question" and q.witness_label == "אילן ישועה"
+    assert any(u.unit_type == "answer" and u.raw_text == "כן." for u in p.units)

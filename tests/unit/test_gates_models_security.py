@@ -435,3 +435,10 @@ def test_citation_completion_adds_nearby_units_with_the_missing_details():
     assert {c["source_unit_id"] for c in res.payload["citations"]} == {units[0].id, units[1].id}
     assert res.payload["judicial_candidates"] == [units[2].id]  # malformed candidate dropped, digest kept
     assert len(res.runs) == 1  # no verifier call needed
+
+
+def test_runner_splits_ids_joined_in_one_string():
+    from ntk_common.llm.runner import split_joined_ids
+
+    a, b = "su_" + "1" * 26, "su_" + "2" * 26
+    assert split_joined_ids({"x": [f"{a}, {b}", a], "y": "a, b"}) == {"x": [a, b, a], "y": "a, b"}

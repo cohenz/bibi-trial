@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from .. import ids
 from .pdf import Line
 
-PARSER_VERSION = "protocol-parser-1.2"
+PARSER_VERSION = "protocol-parser-1.3"
 
 # ---------------------------------------------------------------------------
 # pinned text view used for structure detection only
@@ -83,13 +83,20 @@ PHASE_HEADING_RE = re.compile(
 )
 WITNESS_CODE = r"(?:ע\"ה|ע\"ת|עד(?:ת)?\s+(?:ה)?(?:הגנה|תביעה))\s*(?:מס['\"]?\s*)?(?P<num>\d+)"
 # "ע"ה 1 – נאשם 1 – לאחר שהוזהר…", "עד הגנה 4 - ח"כ משה סעדה , לאחר שהוזהר…", "ע"ה 5 - מר דובי שרצר, מוזהר כדין…"
+# 2021–2023: "ע"ת 65 מר ינון מגל לאחר שהוזהר כדין…" (no dash), "ע"ת 8 - מר ניר חפץ משיב לשאלות עו"ד …" (no warning clause)
 WITNESS_CODE_INTRO_RE = re.compile(
-    rf"^(?P<code>{WITNESS_CODE})\s*[-–]\s*(?P<name>.+?)\s*(?:[-–,]\s*)?"
-    r"(?:לאחר\s+שהוזהר(?:ה)?|מוזהר(?:ת)?|לאחר\s+שהצהיר(?:ה)?)"
+    rf"^(?P<code>{WITNESS_CODE})\s*[-–]?\s*(?P<name>.+?)\s*(?:[-–,]\s*)?"
+    r"(?:לאחר\s+שהוזהר(?:ה)?|מוזהר(?:ת)?|לאחר\s+שהצהיר(?:ה)?|(?=משיב(?:ה)?\s+לשאלות))"
 )
 # hearing summary on the cover page: "העיד: ע"ה 1 – נאשם 1 – המשך חקירה נגדית לעו"ד …"
 SUMMARY_WITNESS_RE = re.compile(r"^העיד(?:ו)?\s*:\s*(?P<rest>.+)$")
-SUMMARY_ITEM_RE = re.compile(rf"(?P<code>{WITNESS_CODE})\s*[-–]\s*(?P<body>.*?)(?=(?:\.\s*)?(?:ע\"ה|ע\"ת)\s*\d|$)")
+SUMMARY_ITEM_RE = re.compile(rf"(?P<code>{WITNESS_CODE})\s*[-–]?\s*(?P<body>.*?)(?=(?:\.\s*)?(?:ע\"ה|ע\"ת)\s*\d|$)")
+# narrative cover note: "נמשכה חקירתו הנגדית של ע"ת 1 אילן ישועה, על ידי עו"ד ז'ק חן."
+NARRATIVE_SUMMARY_RE = re.compile(
+    rf"^(?:נמשכה|החלה|התחילה|הסתיימה|נשמעה|המשך)\s+חקירת(?:ו|ה)?\s+ה?(?P<phase>ראשית|נגדית|חוזרת)\s+של\s+"
+    rf"(?:(?:העד|העדה)\s+)?(?:(?P<code>{WITNESS_CODE})\s*[-–]?\s*)?(?P<name>[^,.]+?)\s*"
+    r"(?:,?\s*(?:על\s+ידי|ע\"י|לשאלות)\s+(?P<asker>[^,.]+?))?\s*\.?\s*$"
+)
 # furniture of the record itself, not anybody's speech
 PROCEDURAL_NOTE_RE = re.compile(  # anywhere in the record
     r"^(?:תמליל\s+(?:ה)?פרוטוקול(?:\s+מוקלט)?\s*$|-\s*הדיון\s+(?:הסתיים|ננעל|נסתיים)\s*-|הוקלד\s+על\s+ידי\s)"
@@ -462,6 +469,17 @@ def parse_protocol(lines: list[Line], *, source_version_id: str, case_number_hin
         if PROCEDURAL_NOTE_RE.match(t) or (ln.page == first_page and COVER_NOTE_RE.match(t)):
             # a procedural note closes the running turn; "הוגשו מוצגים: …" may wrap onto following lines
             current = new_turn(None, "caption", Line(ln.page, ln.line_no, raw, ln.kind, ln.synthetic, ln.top), ["procedural_note"])
+            continue
+
+        nsm = NARRATIVE_SUMMARY_RE.match(t) if ln.page == first_page else None
+        if nsm:
+            name = witness_name(nsm.group("code"), nsm.group("name"))
+            if name and all(w["witness"] != name for w in header.summary_witnesses):
+                header.summary_witnesses.append({"code": _pv(nsm.group("code") or ""), "witness": name,
+                                                 "phase": PHASE_WORDS[nsm.group("phase")],
+                                                 "asker": nsm.group("asker").strip() if nsm.group("asker") else None,
+                                                 "ended": nsm.group(0).startswith("הסתיימה")})
+            current = new_turn(None, "caption", Line(ln.page, ln.line_no, raw, ln.kind, ln.synthetic, ln.top), ["hearing_summary"])
             continue
 
         # cover-page summary of who testified

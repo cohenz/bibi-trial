@@ -76,6 +76,24 @@ class MemoryRunStore:
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.S)
 
 
+_ID_IN_TEXT = re.compile(r"\b(?:su|qx|sv|hr|rc)_[0-9a-f]{26}\b")
+
+
+def split_joined_ids(obj: Any) -> Any:
+    """Models sometimes return ["su_a, su_b"] instead of ["su_a", "su_b"]. Split such list items; nothing else changes."""
+    if isinstance(obj, dict):
+        return {k: split_joined_ids(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        out: list[Any] = []
+        for v in obj:
+            if isinstance(v, str) and len(_ID_IN_TEXT.findall(v)) > 1:
+                out.extend(_ID_IN_TEXT.findall(v))
+            else:
+                out.append(split_joined_ids(v))
+        return out
+    return obj
+
+
 def parse_json_text(text: str) -> Any:
     t = _FENCE.sub("", text.strip())
     try:
@@ -152,7 +170,7 @@ class ModelRunner:
             parsed = parse_json_text(result.text)
             if not isinstance(parsed, dict):
                 raise ValueError("model output is not a JSON object")
-            output = parsed
+            output = split_joined_ids(parsed)
             contracts.validate(prompt.schema, output)
             if semantic_check:
                 errors.extend(semantic_check(output))

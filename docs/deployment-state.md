@@ -20,8 +20,8 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `50f8ea4`** (migration 0009). `NTK_INBOX_AUTO_PROCESS=true` |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `50f8ea4`**. `NTK_INBOX_AUTO_PROCESS=true` |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `e20e368`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `e20e368`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
 | beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `dd3488f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
 **Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`) ו־0006 (`ntk.inbox_items`, `ntk.inbox_scans`, וסוגי מקור `response`, `notice` ו־`affidavit`).
@@ -55,8 +55,12 @@
 - **עמודי WordPress חדשים:** `/trial/decisions/` (39), `/trial/motions/` (40), `/trial/responses/` (41), `/trial/notices/` (42).
 - **קליטה אוטומטית מלאה:** `NTK_INBOX_AUTO_PROCESS=true` ב־api וב־worker. הסריקה היומית קולטת מיד.
 - **מדריכים:** נבנו 14 (`POST /v2/admin/guides/build`): סקירת כתב האישום, תיקים 4000/2000/1000 ו־10 עדים. כולם `human_review_required`, ממתינים לאישור המשתמש בתור הבדיקה. API ציבורי: `/v2/guide`, `/v2/guide/cases/{key}`, `/v2/guide/witnesses/{slug}`, `/v2/guide/timeline`, `/v2/glossary` (`docs/guides-api.md`).
-- **באג שתוקן ב־`7fdb2b2` (עוד לא פרוס):** הנספחים של כתב האישום לא שויכו לתיקים, כי ההפניה כתובה `כנספח "א"`. התיקון דורש פריסה של worker ובנייה מחדש של 4000 ו־1000.
-- **התוסף 2.3.0** (`dist/trial-knowledge-2.3.0.zip`): `[tk_start]`, עמודי תיק/עד/ציר זמן/עדים/מילון תחת `/trial/trial/…`, לשוניות בעמוד הדיון, מילון בריחוף, ותצוגת מדריכים בתור הבדיקה. אחרי ההתקנה: להחליף את תוכן עמוד הבית (עמוד 9) ב־`[tk_start]`.
+- **נספחי כתב האישום:** לא שויכו לתיקים, כי ההפניה כתובה `כנספח "א"`. תוקן ופורס ב־`e20e368`. מדריכי 4000 ו־1000 נבנו מחדש.
+- **כפילויות (`e20e368`):**
+  - עותק זהה נמחק אוטומטית מ־`inbox/`, אחרי שנבדק שהעותק השמור קיים;
+  - עותק כמעט זהה מוחזק, ומחכה להחלטה במסך "כפילויות" בתוסף 2.3.1;
+  - פירוט ב־`docs/inbox.md`.
+- **התוסף 2.3.1** (`dist/trial-knowledge-2.3.1.zip`, כולל את 2.3.0 ומסך כפילויות): `[tk_start]`, עמודי תיק/עד/ציר זמן/עדים/מילון תחת `/trial/trial/…`, לשוניות בעמוד הדיון, מילון בריחוף, ותצוגת מדריכים בתור הבדיקה. אחרי ההתקנה: להחליף את תוכן עמוד הבית (עמוד 9) ב־`[tk_start]`.
 
 ## מה בייצור עכשיו
 - **ארבעה פרוטוקולים נקלטו** (550 עמודים):

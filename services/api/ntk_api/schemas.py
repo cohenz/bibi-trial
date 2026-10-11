@@ -196,6 +196,12 @@ class GuideBuildRequest(BaseModel):
     keys: list[str] | None = Field(default=None, max_length=50)
 
 
+class DigestBuildRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hearing_ids: list[str] | None = Field(default=None, max_length=500)
+    limit: int = Field(default=20, ge=1, le=500)
+
+
 class BriefBuildRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_version_ids: list[str] | None = Field(default=None, max_length=2000)

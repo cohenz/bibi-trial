@@ -26,3 +26,19 @@ def test_objects_and_changes(services, ingested):
         assert hid in ch["hearings"] and ch["lists_changed"]
         later = sync.changes(conn, dt.datetime.now(dt.UTC) + dt.timedelta(seconds=5))
         assert later["hearings"] == [] and later["documents"] == [] and not later["lists_changed"]
+
+
+def test_deferred_digests_skip_extract_a(services, fixture_path):
+    import dataclasses
+
+    from ntk_common.orchestrator import Pipeline
+
+    from tests.conftest import make_job
+
+    p = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, hearing_digests="deferred")))
+    job = p.run_job(make_job(services, fixture_path, key="deferred-digest"))
+    stages = {s["stage"]: s for s in job["stages"]}
+    assert job["status"] == "succeeded" and stages["extract_a"]["status"] == "skipped"
+    assert "deferred" in stages["extract_a"]["output"]["note"]
+    out = p.rebuild_hearing_digest(stages["extract_a"]["output"]["hearing_id"])  # built later, on request
+    assert out.get("digest_id"), out

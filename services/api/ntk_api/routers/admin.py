@@ -20,6 +20,7 @@ from ntk_common.evaluation import SuiteNotFound, resolve_suite
 from ntk_common.jobs import (
     TASK_BUILD_BRIEFS,
     TASK_BUILD_CLAIM,
+    TASK_BUILD_DIGESTS,
     TASK_BUILD_GUIDES,
     TASK_RUN_EVALUATION,
     TASK_RUN_JOB,
@@ -34,6 +35,7 @@ from ..schemas import (
     BriefBuildRequest,
     CaseEventIn,
     ClaimIn,
+    DigestBuildRequest,
     DuplicateDecision,
     EvaluationRequest,
     GuideBuildRequest,
@@ -197,6 +199,18 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
 
 
 # ------------------------------------------------------------------ evaluation runs
+@router.post("/digests/build", status_code=202)
+def build_digests(body: DigestBuildRequest, request: Request, st: AppState = Depends(get_state),
+                  p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Build hearing digests on request (cost control: NTK_HEARING_DIGESTS=deferred). Audited as ``digests.built``."""
+    spec = body.model_dump(exclude_none=True)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="digests.build.requested", object_type="hearing", object_id="batch",
+                  request_id=_rid(request), details=spec)
+    tid = st.queue.enqueue(TASK_BUILD_DIGESTS, json.dumps(spec))
+    return _json({"queued": TASK_BUILD_DIGESTS, "task_id": tid, **spec}, cache="no-store", status=202)
+
+
 @router.post("/briefs/build", status_code=202)
 def build_briefs(body: BriefBuildRequest, request: Request, st: AppState = Depends(get_state),
                  p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:

@@ -17,6 +17,7 @@ from ntk_common.db.core import get_engine
 from ntk_common.jobs import (
     TASK_BUILD_BRIEFS,
     TASK_BUILD_CLAIM,
+    TASK_BUILD_DIGESTS,
     TASK_BUILD_GUIDES,
     TASK_CLASSIFY_INBOX,
     TASK_DELIVER_WEBHOOKS,
@@ -163,6 +164,34 @@ def classify_inbox_batch(item_ids: list[str], process: str = "0") -> dict:
         q = inbox.queue_items(p.s, _CeleryJobQueue(), task_name=TASK_RUN_JOB, item_ids=item_ids, requested_by="inbox:auto")
         out["jobs_created"] = q["jobs_created"]
     return out
+
+
+@app.task(name=TASK_BUILD_DIGESTS)
+def build_digests(spec: str) -> dict:
+    """Hearing digests built on request (when NTK_HEARING_DIGESTS=deferred). ``spec`` JSON: {"hearing_ids"?,
+    "limit"?} — without ids, the oldest published hearings that have no digest yet. Audited as ``digests.built``."""
+    from ntk_common.db.core import rows
+
+    p = _pipeline()
+    args = json.loads(spec or "{}")
+    with p.s.engine.connect() as conn:
+        hs = [r["id"] for r in rows(conn, """
+            SELECT h.id FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
+            WHERE (CAST(:ids AS text[]) IS NULL OR h.id = ANY(:ids))
+              AND (CAST(:ids AS text[]) IS NOT NULL OR NOT EXISTS (
+                    SELECT 1 FROM ntk.generated_artifacts ga WHERE ga.object_type = 'hearing' AND ga.object_id = h.id
+                      AND ga.review_state IN ('machine_verified', 'human_review_required', 'approved', 'published')))
+            ORDER BY h.hearing_date LIMIT :lim""", {"ids": args.get("hearing_ids"), "lim": int(args.get("limit", 20))})]
+    results = []
+    for hid in hs:
+        try:
+            results.append({"hearing_id": hid, **p.rebuild_hearing_digest(hid)})
+        except Exception as exc:  # noqa: BLE001 - one hearing must not stop the batch
+            results.append({"hearing_id": hid, "error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+    with p.s.engine.begin() as conn:
+        ops.audit(conn, actor="worker", action="digests.built", object_type="hearing", object_id="batch",
+                  details=json.loads(json.dumps({"results": results}, ensure_ascii=False, default=str)))
+    return {"hearings": len(hs)}
 
 
 @app.task(name=TASK_BUILD_BRIEFS)

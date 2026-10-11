@@ -548,6 +548,9 @@ class Pipeline:
         hid = (self._cp(job_id, "segment") or {})["hearing_id"]
         if hid is None:
             return self.build_document_brief(svid), {}, "succeeded"
+        if self.cfg.hearing_digests == "deferred":
+            # cost control: the transcript is ingested (text, search, citations); the digest is built later on request
+            return {"note": "hearing digest deferred (NTK_HEARING_DIGESTS=deferred)", "hearing_id": hid}, {}, "skipped"
         out, cp = self.build_hearing_digest(hid, svid)
         return out, cp, "succeeded"
 

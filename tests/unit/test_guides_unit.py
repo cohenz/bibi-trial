@@ -32,6 +32,9 @@ def test_allegation_framing():
 def test_witness_names_slugs_and_dates():
     assert guides.witness_name("נאשם 1 — בנימין נתניהו") == ("בנימין נתניהו", "נאשם 1")
     assert guides.witness_name("אילן ישועה") == ("אילן ישועה", None)
+    assert guides.witness_name("השר זאב אלקין") == ("זאב אלקין", "השר")
+    assert guides.witness_name('רס"מ טליה שור') == ("טליה שור", 'רס"מ')
+    assert guides.witness_name("מר כהן") == ("מר כהן", None)  # a title with a single name stays as printed
     assert guides.witness_slug("אילן ישועה") == guides.witness_slug(" אילן  ישועה ")
     assert guides.witness_slug("אילן ישועה").startswith("w_") and len(guides.witness_slug("x")) == 12
     assert guides.name_matches("אילן ישועה", "לפי כתב האישום, ישועה היה מנכ\"ל")

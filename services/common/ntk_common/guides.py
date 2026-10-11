@@ -152,12 +152,19 @@ def split_indictment(units: list[UnitView]) -> IndictmentParts:
 _DEFENDANT_PREFIX = re.compile(r"^\s*(נאש[םמ]ת?\s*\d+)\s*[—–-]\s*")
 
 
+_TITLE_PREFIX = re.compile(r"^\s*(?:השר(?:ה)?|ח[\"״]כ|עו[\"״]ד|רס[\"״]מ|רפ[\"״]ק|ד[\"״]ר|פרופ['׳]?|מר|גב['׳]|הגב['׳]|הגברת|העד(?:ה)?)\s+")
+
+
 def witness_name(raw: str) -> tuple[str, str | None]:
-    """'נאשם 1 — בנימין נתניהו' → ('בנימין נתניהו', 'נאשם 1')."""
-    m = _DEFENDANT_PREFIX.match(raw or "")
+    """'נאשם 1 — בנימין נתניהו' → ('בנימין נתניהו', 'נאשם 1'); 'השר זאב אלקין' → ('זאב אלקין', 'השר')."""
+    raw = (raw or "").strip()
+    m = _DEFENDANT_PREFIX.match(raw)
     if m:
         return raw[m.end():].strip(), m.group(1).strip()
-    return (raw or "").strip(), None
+    t = _TITLE_PREFIX.match(raw)
+    if t and len(raw[t.end():].split()) >= 2:
+        return raw[t.end():].strip(), t.group(0).strip()
+    return raw, None
 
 
 def witness_slug(name: str) -> str:

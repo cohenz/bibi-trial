@@ -1,0 +1,172 @@
+{
+  "generated_at": "2026-10-11T05:45:51.676170+00:00",
+  "note": "Production run with gemini-3.8-flash for every role and gemini-embedding-001 (768 dims). verify compares the model's answer_relation with the parser's heuristic relation on exchanges that carry public wording (affirms/denies): it measures agreement, not accuracy against human labels.",
+  "hearings": {
+    "2025-09-15": {
+      "protocol": "0421",
+      "job_id": "6535c612-6eb8-59e1-a900-dd9b640b5d6e",
+      "pages": 93,
+      "units": 1394,
+      "exchanges": 242,
+      "chunks": 44,
+      "embed": {
+        "model": "gemini-embedding-001",
+        "embedded": 44
+      },
+      "verify": {
+        "checked": 22,
+        "failed_batches": 0,
+        "relation_pairs": {
+          "denies->denies": 8,
+          "denies->affirms": 1,
+          "affirms->affirms": 10,
+          "denies->ambiguous": 2,
+          "denies->nonresponsive": 1
+        },
+        "verifier_model": "gemini-3.8-flash",
+        "verifier_agrees": 18,
+        "independent_family": false
+      },
+      "digest": {
+        "artifact_id": "62c5a933-c313-560b-be94-093803495045",
+        "state": "rejected",
+        "risk_flags": [
+          "court_determined_wording"
+        ],
+        "sentences": 7,
+        "cited_page_range": [
+          1,
+          28
+        ]
+      }
+    },
+    "2025-09-16": {
+      "protocol": "0422",
+      "job_id": "a355b596-98ed-54fb-b399-3ee513ffe89d",
+      "pages": 182,
+      "units": 2012,
+      "exchanges": 390,
+      "chunks": 63,
+      "embed": {
+        "model": "gemini-embedding-001",
+        "embedded": 63
+      },
+      "verify": {
+        "checked": 47,
+        "failed_batches": 0,
+        "relation_pairs": {
+          "denies->denies": 21,
+          "denies->affirms": 3,
+          "affirms->affirms": 9,
+          "denies->ambiguous": 2,
+          "denies->does_not_know": 3,
+          "denies->nonresponsive": 2,
+          "affirms->does_not_know": 1,
+          "denies->qualified_affirmation": 3,
+          "affirms->qualified_affirmation": 3
+        },
+        "verifier_model": "gemini-3.8-flash",
+        "verifier_agrees": 30,
+        "independent_family": false
+      },
+      "digest": {
+        "artifact_id": "2fb19d2b-7086-5587-8140-2f9db6da68c6",
+        "state": "rejected",
+        "risk_flags": [
+          "court_determined_wording"
+        ],
+        "sentences": 7,
+        "cited_page_range": [
+          1,
+          36
+        ]
+      }
+    },
+    "2025-09-17": {
+      "protocol": "0423",
+      "job_id": "580bbb25-e820-538b-82f2-a40dd9f410ec",
+      "pages": 146,
+      "units": 1933,
+      "exchanges": 376,
+      "chunks": 54,
+      "embed": {
+        "model": "gemini-embedding-001",
+        "embedded": 54
+      },
+      "verify": {
+        "checked": 42,
+        "failed_batches": 0,
+        "relation_pairs": {
+          "denies->denies": 18,
+          "denies->affirms": 2,
+          "affirms->affirms": 11,
+          "denies->ambiguous": 1,
+          "denies->does_not_know": 6,
+          "affirms->does_not_know": 2,
+          "affirms->qualified_affirmation": 2
+        },
+        "verifier_model": "gemini-3.8-flash",
+        "verifier_agrees": 29,
+        "independent_family": false
+      },
+      "digest": {
+        "artifact_id": "ba731fdd-d637-5ce3-b82c-3f62f9092fc0",
+        "state": "human_review_required",
+        "risk_flags": [],
+        "sentences": 6,
+        "cited_page_range": [
+          1,
+          30
+        ]
+      }
+    },
+    "2025-09-29": {
+      "protocol": "0424",
+      "job_id": "ec77075c-24ef-5439-a3dd-449741fe7bc0",
+      "pages": 129,
+      "units": 2007,
+      "exchanges": 654,
+      "chunks": 42,
+      "embed": {
+        "model": "gemini-embedding-001",
+        "embedded": 42
+      },
+      "verify": {
+        "checked": 252,
+        "failed_batches": 0,
+        "relation_pairs": {
+          "denies->denies": 49,
+          "denies->affirms": 16,
+          "affirms->affirms": 142,
+          "denies->ambiguous": 2,
+          "affirms->ambiguous": 3,
+          "denies->does_not_know": 4,
+          "denies->nonresponsive": 6,
+          "affirms->nonresponsive": 1,
+          "denies->qualified_affirmation": 5,
+          "affirms->qualified_affirmation": 24
+        },
+        "verifier_model": "gemini-3.8-flash",
+        "verifier_agrees": 191,
+        "independent_family": false
+      },
+      "digest": {
+        "artifact_id": "1e3f12a7-4973-5a25-8c33-9638c2a58970",
+        "state": "rejected",
+        "risk_flags": [
+          "court_determined_wording"
+        ],
+        "sentences": 7,
+        "cited_page_range": [
+          1,
+          28
+        ]
+      }
+    }
+  },
+  "verify_total": {
+    "checked": 363,
+    "verifier_agrees": 268,
+    "rate": 0.7383
+  }
+}

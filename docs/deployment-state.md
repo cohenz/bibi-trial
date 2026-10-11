@@ -1,4 +1,4 @@
-# מצב הפריסה וההעברה לשיחה חדשה — 11.10.2026
+# מצב הפריסה וההעברה לשיחה חדשה — 11.10.2026 (אחרי חיבור Gemini)
 
 המסמך הזה מאפשר להמשיך את העבודה בשיחה חדשה בלי לאבד הקשר. **אין בו סודות.** הסודות שמורים רק ב־Railway Variables ובהגדרות התוסף ב־WordPress.
 
@@ -11,6 +11,7 @@
 | API ציבורי | https://api-production-6562.up.railway.app (`/v2/ready`, `/docs`) |
 | אחסון | Cloudflare R2. Account `b3aa40c092c2bbcc8c4c1201b53a4946`. Buckets `ntk-sources` (פרטי, CORS ל־`https://shomersaf.com`, Bucket Lock על `sources/`) ו־`ntk-backups` |
 | WordPress | https://shomersaf.com/trial/. התוסף `trial-knowledge` 2.1.0 מותקן, מוגדר, ו"בדיקת חיבור" עוברת |
+| דפים ציבוריים | `https://shomersaf.com/trial/trial/hearing/<hr_id>/`. ה־slug הציבורי `trial` יושב מתחת להתקנת WordPress ב־`/trial/`, ולכן הוא מופיע פעמיים. נבדק: `hr_a52174a761df72d3aba0325a7e` (15.9) מוצג עם תאריך ועדים, ו"טרם פורסם סיכום" |
 | Webhook | `https://shomersaf.com/trial/wp-json/trial-knowledge/v1/webhook`, מוגדר ב־worker וב־beat |
 
 ## שירותי Railway
@@ -19,53 +20,84 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready` |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2` |
-| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד** |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `4b65ae9`** |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `4b65ae9`** |
+| beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** פרוס: `4dc32df`. beat רק מתזמן webhooks, ולכן לא עודכן |
+
+**Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`).
 
 **משתנים:**
-- **משותפים (Shared Variables):** `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` ו־`GEMINI_API_KEY`. כולם מוזנים, אבל במפתח Gemini אין יתרה, ראו למטה.
+- **משותפים (Shared Variables):** `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `GEMINI_API_KEY`. ב־Gemini יש יתרה, והוא נבדק מהדפדפן ב־11.10: ג'נרציה ו־embeddings מחזירים 200.
 - **api ו־worker מפנים אליהם:**
   - `S3_ACCESS_KEY_ID=${{shared.R2_ACCESS_KEY_ID}}`;
-  - `S3_SECRET_ACCESS_KEY=${{shared.R2_SECRET_ACCESS_KEY}}`.
+  - `S3_SECRET_ACCESS_KEY=${{shared.R2_SECRET_ACCESS_KEY}}`;
+  - `GEMINI_API_KEY=${{shared.GEMINI_API_KEY}}`.
+- **מודלים ב־api וב־worker:**
+  - `NTK_MODEL_PROVIDER=gemini`, `NTK_EMBEDDING_PROVIDER=gemini`;
+  - `NTK_EMBEDDING_MODEL=gemini-embedding-001`, `NTK_EMBEDDING_DIM=768`;
+  - `NTK_MODEL_EXTRACTOR`, `MAPPER`, `JUDICIAL_CLASSIFIER`, `WRITER`, `QA_RELATION` ו־`VERIFIER` כולם `gemini-3.8-flash`.
+  - `/v2/admin/registry` מחזיר `uses_mock: false` ו־`single_family: true`. כלומר, כל פריט רגיש עובר לבדיקה אנושית.
+- **ב־beat:** עדיין `NTK_MODEL_PROVIDER=mock`. beat לא קורא למודלים.
 - **ב־api, worker ו־beat:**
   - `NTK_ENV=production`;
   - `DATABASE_URL` ו־`REDIS_URL`, דרך reference variables לשירותים postgres ו־redis;
-  - `NTK_EMBEDDING_DIM=768`;
-  - `NTK_MODEL_PROVIDER=mock`, `NTK_EMBEDDING_PROVIDER=mock` (עדיין);
   - `S3_ENDPOINT_URL`, `S3_BUCKET=ntk-sources`, `S3_REGION=auto`;
   - `NTK_PUBLIC_BASE_URL`;
   - `RAILWAY_DOCKERFILE_PATH=Dockerfile.base`.
-- **ב־api בלבד:** `NTK_SERVICE_KEYS` (המפתח `wp-bibi`, scope `admin:all`), `NTK_IP_HASH_SALT`, `NTK_CORS_ORIGINS=https://shomersaf.com`.
+- **ב־api בלבד:**
+  - `NTK_SERVICE_KEYS`: המפתח `wp-bibi`, scope `admin:all`, של התוסף;
+  - `NTK_SERVICE_KEYS_EXTRA`: המפתח `claude-ops`, scopes `admin:read`, `admin:ingest` ו־`admin:publish`. נוצר ב־11.10 לעבודה של Claude באישור המשתמש. **ביטול:** מוחקים את המשתנה ופורסים את api;
+  - `NTK_IP_HASH_SALT`, `NTK_CORS_ORIGINS=https://shomersaf.com`.
 - **ב־worker וב־beat:** `WP_CALLBACK_URL`, `WP_CALLBACK_SECRET`.
 
-## מה נבדק בייצור
-- כל חמשת השירותים רצים. migrations רצו, ו־`/v2/ready` מחזיר ok.
-- קריאה חתומה של התוסף (`whoami`) עוברת, גם מתוך WordPress וגם מבחוץ.
-- presign מול R2 עובד, כלומר המפתחות וה־bucket תקינים.
-- **מקצה לקצה:** פרוטוקול 15.9.2025 (0421) הועלה דרך התוסף, ישירות מהדפדפן ל־R2, ועבר את 14 השלבים ב־worker. התוצאה: 93 עמודים, 1,394 קטעים, 242 זוגות ש/ת, 44 chunks. אלה בדיוק המספרים מהבדיקה המקומית. נפתחו 22 משימות ביקורת. **שום דבר לא פורסם**, כי פרסום דורש אישור אנושי.
+## מה בייצור עכשיו
+- **ארבעה פרוטוקולים נקלטו** (550 עמודים):
+
+  | פרוטוקול | דיון | job |
+  |---|---|---|
+  | 0421 | 15.9 | `6535c612-6eb8-59e1-a900-dd9b640b5d6e` |
+  | 0422 | 16.9 | `a355b596-98ed-54fb-b399-3ee513ffe89d` |
+  | 0423 | 17.9 | `580bbb25-e820-538b-82f2-a40dd9f410ec` |
+  | 0424 | 29.9 | `ec77075c-24ef-5439-a3dd-449741fe7bc0` |
+
+  כל ה־embeddings הם `gemini-embedding-001`: 203 chunks.
+- **פורסמו רק ארבעת המקורות**, באישור המשתמש, ב־corpus versions `cv-000002` עד `cv-000005`:
+  - `sv_e98977d5617fc819dc82e3dd91`
+  - `sv_40f4a8924f3136a752567e7151`
+  - `sv_950c84af03858147cd7529afe8`
+  - `sv_2faa12277963f688354dbfbff9`
+- **לא פורסמו:** תקצירים ו־Claim Cards. שלושה תקצירים נדחו בשער, ואחד ממתין לבדיקה. ראו `docs/pilot-report.md`.
+- **ריצות הערכה** שמורות ב־`ntk.evaluation_runs`, ונקראות ב־`GET /v2/admin/evaluations`. עותקים ב־`golden/reports/*.gemini.json`.
+
+## כלים חדשים ב־API (admin, חתום)
+- `POST /v2/admin/ingestion-jobs/{id}/rerun` עם `{"stages": [...], "force_stale": false}`:
+  - מריץ מחדש שלבים מסוימים, למשל `embed`, `extract_a`, `verify` ו־`review` אחרי החלפת מודל. השלבים הקודמים נשארים כמו שהם;
+  - `publish` נדחה;
+  - `force_stale` מאפשר להריץ משימה שנשארה `running` אחרי ש־worker נעצר. זה מותר רק אחרי 15 דקות בלי התקדמות, כי הודעת Celery חוזרת רק אחרי visibility timeout של שעתיים.
+- `POST /v2/admin/evaluations` עם `{"kind": "search_bench"|"ask_suite", "suite": "<שם ב־golden/>"}`:
+  - מריץ את הסט ב־worker מול הקורפוס והמודלים בייצור;
+  - `GET /v2/admin/evaluations[/{id}]` מחזיר את הדוח. `?report=false` מחזיר תקציר בלבד.
 
 ## פתוח — לפי סדר
-1. **Gemini.** המפתח תקין ויש לו גישה למודלים, אבל Google מחזיר `402 prepayment credits are depleted`. אחרי שתיטען יתרה:
-   - **בדיקה:** בדיקת קריאה אמיתית מהדפדפן, בלי להעביר את המפתח דרך הצ'אט.
-   - **הגדרת ספקים:** ב־api וב־worker: `NTK_MODEL_PROVIDER=gemini`, `NTK_EMBEDDING_PROVIDER=gemini`, `NTK_EMBEDDING_MODEL=gemini-embedding-001`, `GEMINI_API_KEY=${{shared.GEMINI_API_KEY}}`.
-   - **מודלים:** `NTK_MODEL_EXTRACTOR`, `MAPPER`, `JUDICIAL_CLASSIFIER`, `WRITER`, `QA_RELATION` ו־`VERIFIER` מקבלים כולם `gemini-3.8-flash`. אסור Lite לסיווג שיפוטי ולאימות.
-   - **מה מריצים אחר כך:**
-     - קליטה מחדש של הפרוטוקולים;
-     - בניית ה־embeddings;
-     - benchmark החיפוש (`golden/search-bench-real-sept2025-v1.json`), עכשיו עם וקטורים אמיתיים;
-     - סטי השאלות.
-   - המודלים הזמינים במפתח אומתו ב־10.10.2026: `gemini-3.8-flash`, `gemini-3.1-pro-preview`, `gemini-embedding-001`, `gemini-embedding-2`.
-2. **שלושת הפרוטוקולים הנוספים** (0422–0424): להעלות דרך מסך "מקורות וקליטה" בתוסף.
-3. **ביקורת ופרסום ראשון:** במסך "ביקורת ופרסום". אחר כך לבדוק את הדפים הציבוריים `/trial/hearing/...` ואת הבלוקים.
-4. **שירות backup:** pg_dump לילי ל־`ntk-backups`. צריך token נפרד ב־R2, מוגבל ל־`ntk-backups`. מקימים מ־`infra/railway/Dockerfile.backup` עם cron `17 2 * * *`.
-5. **עדכון התיעוד:** Railway הפסיק לתמוך ב־config‑as‑code (`railway.json`) ועבר ל־`.railway/railway.ts`. כרגע ההגדרות נקבעו ישירות בכל שירות, והקבצים ב־`infra/railway/*.json` משמשים כתיעוד בלבד.
+1. **Ask: להוסיף להקשר את תשובת העד לכל שאלה שנשלפה.** זה הכשל המרכזי עם Gemini: 5/10 שאלות הסתיימו ב"אין מספיק חומר". אחר כך מריצים שוב את `real-sept2025-v1`.
+2. **Layer A:**
+   - התקציר מכסה רק את 400 היחידות הראשונות, כלומר עד עמוד 28–36;
+   - הניסוח "בית המשפט קבע" נחסם בשער;
+   - בגלאי יש פער: "ובהמשך קבע" לא נחסם.
+3. **חיפוש:** Recall@20 0.759 מול יעד 0.85. לבנות מחדש את מאגר התיוג עם האות הווקטורי, ואז לכוונן.
+4. **ביקורת:** במסך "ביקורת ופרסום" ממתינות משימות `qa_exchange` ו־`hearing_digest_failure`. לבדוק את הבלוקים בדפים הציבוריים.
+5. **שירות backup:** pg_dump לילי ל־`ntk-backups`. צריך token נפרד ב־R2, מוגבל ל־`ntk-backups`. מקימים מ־`infra/railway/Dockerfile.backup` עם cron `17 2 * * *`.
+6. **עדכון התיעוד:** Railway הפסיק לתמוך ב־config‑as‑code (`railway.json`) ועבר ל־`.railway/railway.ts`. ההגדרות נקבעו ישירות בכל שירות, והקבצים ב־`infra/railway/*.json` משמשים כתיעוד בלבד.
 
 ## לקחים טכניים (חשוב לשיחה הבאה)
-- **אין גישה מהסביבה ל־railway.com ול־Cloudflare.** את Railway מנהלים דרך GraphQL `https://backboard.railway.com/graphql/v2`, מתוך לשונית Railway המחוברת בחלונית הדפדפן (javascript, `credentials:"include"`). למשל `variableCollectionUpsert`, `serviceInstanceUpdate`, `serviceInstanceDeployV2` ו־`environmentStagedChanges` / `environmentPatchCommitStaged`.
+- **אין גישה מהסביבה ל־railway.com, ל־Cloudflare ול־Gemini** (`generativelanguage.googleapis.com` מחזיר 403 מה־proxy).
+  - את Railway מנהלים דרך GraphQL `https://backboard.railway.com/graphql/v2`, מתוך לשונית Railway המחוברת בחלונית הדפדפן (javascript, `credentials:"include"`). למשל `variableCollectionUpsert` עם `skipDeploys`, `serviceInstanceDeployV2` ו־`deployments`.
+  - Gemini נבדק מאותה לשונית.
 - **`serviceInstanceUpdate` עם `builder` נכשל.** במקום זה מגדירים `RAILWAY_DOCKERFILE_PATH`.
 - **פקודות start רצות ב־exec form.** כדי שמשתנים כמו `$PORT` ימולאו, צריך לעטוף ב־`/bin/sh -c`.
-- **ה־API הציבורי נגיש מהסביבה,** כך שאפשר לשלוח קריאות admin חתומות עם `tools/e2e_live.py` או עם `ntk_api.security.sign`. הסוד נמצא ב־`NTK_SERVICE_KEYS` ב־Railway.
+- **קריאות admin מהסביבה** נחתמות במפתח `claude-ops`. הסוד שמור רק בקובץ זמני בסביבת השיחה וב־Railway, ולא נכנס ל־repo. מנגנון הבטיחות **חוסם** קריאה של `NTK_SERVICE_KEYS` הקיים, גם לחתימה בדפדפן. בשיחה חדשה צריך מפתח חדש באישור המשתמש, או להמשיך עם הקיים אם הסוד זמין.
+- **כל פריסה לייצור דורשת אישור מפורש של המשתמש באותה שיחה.** מנגנון הבטיחות חוסם `serviceInstanceDeployV2` בלי אישור כזה.
+- **פריסה של worker הורגת משימה רצה.** המשימה נשארת `running` עד ה־visibility timeout (שעתיים). לכן פורסים בין משימות, ומשתמשים ב־`rerun` עם `force_stale` אם צריך.
 - **התחברות ל־Cloudflare נכשלת בחלונית הדפדפן** (Turnstile). כל עבודה מול Cloudflare נעשית בדפדפן הרגיל של המשתמש, לפי הוראות.
 - **בחירת קבצים ב־WordPress** נעשית על ידי המשתמש. אין לי גישה לבורר הקבצים.
-- **סודות:** אף פעם לא בצ'אט. סודות של צד שלישי מדביק המשתמש ישירות ב־Railway. סודות שאני יוצר (מפתח השירות וסוד ה־webhook) הוזנו ישירות ל־Railway ולתוסף.
+- **סודות:** אף פעם לא בצ'אט. סודות של צד שלישי מדביק המשתמש ישירות ב־Railway. סודות שאני יוצר (מפתח השירות, סוד ה־webhook ו־`claude-ops`) הוזנו ישירות ל־Railway ולתוסף.

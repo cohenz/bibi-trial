@@ -85,14 +85,8 @@ class GeminiProvider:
         """``response_schema`` (the output contract) constrains decoding via ``responseJsonSchema``. If the API
         rejects the schema (HTTP 400), the call is repeated once with the schema written into the prompt instead;
         the contract is validated afterwards either way."""
-        gen: dict[str, Any] = {"temperature": temperature, "responseMimeType": "application/json"}
-        if response_schema:
-            gen["responseJsonSchema"] = gemini_schema(response_schema)
-        body = {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": gen,
-        }
+        body = self.request_body(system=system, user=user, temperature=temperature, response_schema=response_schema)
+        gen = body["generationConfig"]
         try:
             data = self._post(f"models/{model_id}:generateContent", body)
         except ProviderError as exc:
@@ -103,6 +97,21 @@ class GeminiProvider:
             body["contents"] = [{"role": "user", "parts": [{"text": user + "\n<output_json_schema>\n" + schema_text
                                                              + "\n</output_json_schema>"}]}]
             data = self._post(f"models/{model_id}:generateContent", body)
+        return self.result_of(data)
+
+    @staticmethod
+    def request_body(*, system: str, user: str, temperature: float, response_schema: dict | None) -> dict:
+        gen: dict[str, Any] = {"temperature": temperature, "responseMimeType": "application/json"}
+        if response_schema:
+            gen["responseJsonSchema"] = gemini_schema(response_schema)
+        return {
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "generationConfig": gen,
+        }
+
+    @staticmethod
+    def result_of(data: dict) -> ProviderResult:
         cands = data.get("candidates") or []
         if not cands:
             fb = data.get("promptFeedback", {})
@@ -111,6 +120,52 @@ class GeminiProvider:
         text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
         usage = data.get("usageMetadata", {})
         return ProviderResult(text=text, usage=usage, model_version=data.get("modelVersion"), raw=None)
+
+    # -- Batch API (half price, asynchronous: results within 24 hours) -----------------------------------------------
+    def create_batch(self, *, model_id: str, items: list[dict], display_name: str) -> str:
+        """items: [{"key": str, "request": GenerateContentRequest}]. Returns the batch name ("batches/…")."""
+        body = {"batch": {"display_name": display_name, "input_config": {"requests": {"requests": [
+            {"request": it["request"], "metadata": {"key": it["key"]}} for it in items]}}}}
+        data = self._post(f"models/{model_id}:batchGenerateContent", body)
+        name = data.get("name") or (data.get("metadata") or {}).get("name")
+        if not name:
+            raise ProviderError(f"gemini batch create returned no name: {str(data)[:200]}", retryable=False)
+        return name
+
+    def get_batch(self, name: str) -> dict:
+        """{"state", "done", "responses": {key: ProviderResult | {"error": …}}} (responses only when done)."""
+        import requests as _rq  # noqa: F401 - session already set
+
+        try:
+            resp = self.session.get(f"{self.base_url}/{name}", headers=self._headers(), timeout=self.timeout)
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderError(f"gemini batch get failed: {type(exc).__name__}", retryable=True) from exc
+        if resp.status_code >= 400:
+            raise ProviderError(f"gemini HTTP {resp.status_code}: {resp.text[:300]}", retryable=resp.status_code >= 500,
+                                status=resp.status_code)
+        data = resp.json()
+        meta = data.get("metadata") or {}
+        state = str(meta.get("state") or data.get("state") or "")
+        done = bool(data.get("done")) or state.endswith(("SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"))
+        out: dict[str, Any] = {}
+        for item in _find_inlined(data):
+            key = (item.get("metadata") or {}).get("key") or item.get("key")
+            if not key:
+                continue
+            if item.get("response"):
+                try:
+                    out[key] = self.result_of(item["response"])
+                except ProviderError as exc:
+                    out[key] = {"error": str(exc)}
+            else:
+                out[key] = {"error": str(item.get("error"))[:300]}
+        return {"state": state, "done": done, "responses": out, "error": data.get("error")}
+
+    def model_info(self, model_id: str) -> dict:
+        resp = self.session.get(f"{self.base_url}/models/{model_id}", headers=self._headers(), timeout=30)
+        return {"status": resp.status_code, "body": resp.json() if resp.headers.get("content-type", "").startswith(
+            "application/json") else resp.text[:300]}
+
 
     def embed(self, *, model_id: str, texts: list[str], dim: int, task: str) -> list[list[float]]:
         task_type = "RETRIEVAL_QUERY" if task == "query" else "RETRIEVAL_DOCUMENT"
@@ -403,6 +458,27 @@ class MockProvider:
                 "significance_reason": "כלל מילים של עניינים טכניים" if procedural else "תוכן מהותי",
                 "hearing_days": days}
 
+    # batch: answered at once (key = "task|run_id"; the payload is read back from the rendered prompt)
+    _batches: dict[str, list[dict]] = {}
+
+    def request_body(self, *, system: str, user: str, temperature: float, response_schema: dict | None) -> dict:
+        return {"systemInstruction": {"parts": [{"text": system}]}, "contents": [{"role": "user", "parts": [{"text": user}]}]}
+
+    def create_batch(self, *, model_id: str, items: list[dict], display_name: str) -> str:
+        name = f"batches/mock-{len(MockProvider._batches) + 1}-{display_name}"
+        MockProvider._batches[name] = items
+        return name
+
+    def get_batch(self, name: str) -> dict:
+        out = {}
+        for it in MockProvider._batches.get(name, []):
+            task = it["key"].split("|", 1)[0]
+            user = it["request"]["contents"][0]["parts"][0]["text"]
+            payload = json.loads(user.split("<task_input_json>\n", 1)[1].rsplit("\n</task_input_json>", 1)[0])
+            out[it["key"]] = self.generate_json(model_id="mock", system="", user=user, temperature=0, task_type=task,
+                                                payload=payload)
+        return {"state": "BATCH_STATE_SUCCEEDED", "done": True, "responses": out, "error": None}
+
     def _task_classify_document(self, p: dict) -> dict:
         from ..inbox import classify_by_rules
 
@@ -447,3 +523,23 @@ def build_provider(name: str, *, api_key: str = "", base_url: str = "", timeout:
 
 def backoff_sleep(attempt: int, base: float = 1.0, cap: float = 30.0) -> None:
     time.sleep(min(cap, base * (2 ** attempt)))
+
+
+def _find_inlined(obj: Any) -> list[dict]:
+    """The batch result's inlined responses, wherever the API nests them."""
+    if isinstance(obj, dict):
+        v = obj.get("inlinedResponses")
+        if isinstance(v, list):
+            return v
+        if isinstance(v, dict):
+            return _find_inlined(v)
+        for x in obj.values():
+            found = _find_inlined(x)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for x in obj:
+            found = _find_inlined(x)
+            if found:
+                return found
+    return []

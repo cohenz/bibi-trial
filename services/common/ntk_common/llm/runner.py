@@ -122,15 +122,24 @@ class ModelRunner:
             raise KeyError(f"no provider instance for {spec.provider!r}")
         return self.providers[spec.provider]
 
-    def run(self, task_type: str, payload: dict, *, input_source_ids: list[str], corpus_version: str,
-            semantic_check: SemanticCheck | None = None, role: str | None = None) -> ModelRunRecord:
+    def request_for(self, task_type: str, payload: dict, *, role: str | None = None) -> dict:
+        """Everything that identifies a model call: the run id (deterministic), the prompt texts and the schema.
+        Used by the batch path: a request answered by a batch is saved under the same run id, so the regular
+        ``run()`` later finds it in the run store and does not call the model again."""
         prompt = PROMPTS[task_type]
         role = role or ROLE_FOR_TASK[task_type]
         spec = self.registry.get(role)
         user = prompt.render_user(payload)
         input_hash = ids.sha256_json({"system": prompt.system, "user": user, "schema": prompt.schema})
         run_id = str(ids.derived_uuid("model_run", task_type, spec.provider, spec.model_id, prompt.version, input_hash))
-        cached = self.store.get_run(run_id)
+        return {"run_id": run_id, "task_type": task_type, "role": role, "spec": spec, "prompt": prompt, "user": user,
+                "input_hash": input_hash, "response_schema": contracts.json_schema_for(prompt.schema)}
+
+    def run(self, task_type: str, payload: dict, *, input_source_ids: list[str], corpus_version: str,
+            semantic_check: SemanticCheck | None = None, role: str | None = None) -> ModelRunRecord:
+        req = self.request_for(task_type, payload, role=role)
+        spec, prompt = req["spec"], req["prompt"]
+        cached = self.store.get_run(req["run_id"])
         if cached is not None and cached.ok:
             return cached
 
@@ -140,27 +149,35 @@ class ModelRunner:
         result = None
         for attempt in range(self.max_retries + 1):
             try:
-                result = provider.generate_json(model_id=spec.model_id, system=prompt.system, user=user,
+                result = provider.generate_json(model_id=spec.model_id, system=prompt.system, user=req["user"],
                                                 temperature=spec.temperature, task_type=task_type, payload=payload,
-                                                response_schema=contracts.json_schema_for(prompt.schema))
+                                                response_schema=req["response_schema"])
                 break
             except ProviderError as exc:
                 last_error = exc
                 if not exc.retryable or attempt >= self.max_retries:
                     break
                 self.sleep(attempt)
-        duration = int((time.monotonic() - started) * 1000)
+        return self.record(req, result, payload=payload, input_source_ids=input_source_ids, corpus_version=corpus_version,
+                           semantic_check=semantic_check, duration_ms=int((time.monotonic() - started) * 1000),
+                           error=last_error)
+
+    def record(self, req: dict, result: Any, *, payload: dict | None, input_source_ids: list[str], corpus_version: str,
+               semantic_check: SemanticCheck | None = None, duration_ms: int = 0, error: Any = None) -> ModelRunRecord:
+        """Validate a provider result against the contract and save the run (also used for batch results)."""
+        spec, prompt, task_type = req["spec"], req["prompt"], req["task_type"]
         base = dict(
-            id=run_id, task_type=task_type, role=role, provider=spec.provider, model_family=spec.model_family,
+            id=req["run_id"], task_type=task_type, role=req["role"], provider=spec.provider, model_family=spec.model_family,
             model_id=spec.model_id, prompt_version=prompt.version, schema_version=f"{prompt.schema}@2.0",
-            corpus_version=corpus_version, temperature=spec.temperature, input_hash=input_hash,
-            input={"payload_sha256": ids.sha256_json(payload), "source_ids": input_source_ids[:2000]},
-            input_source_ids=input_source_ids, duration_ms=duration, registry_id=spec.registry_id,
+            corpus_version=corpus_version, temperature=spec.temperature, input_hash=req["input_hash"],
+            input={"payload_sha256": ids.sha256_json(payload) if payload is not None else None,
+                   "source_ids": input_source_ids[:2000]},
+            input_source_ids=input_source_ids, duration_ms=duration_ms, registry_id=spec.registry_id,
         )
         if result is None:
             run = ModelRunRecord(**base, model_version=spec.model_id, output={}, output_hash=None, usage={},
                                  status="provider_error",
-                                 error={"message": str(last_error)[:500], "status": getattr(last_error, "status", None)})
+                                 error={"message": str(error)[:500], "status": getattr(error, "status", None)})
             self.store.save_run(run)
             return run
 

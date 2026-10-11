@@ -596,7 +596,8 @@ class Pipeline:
             raise StageError("hearing_not_found", f"hearing {hearing_id} not found")
         return self.build_hearing_digest(hearing_id, svid)[0]
 
-    def build_hearing_digest(self, hid: str, svid: str) -> tuple[dict, dict]:
+    def digest_material(self, hid: str, svid: str) -> tuple[list, list, str]:
+        """Units, Q/A exchanges and corpus version a hearing digest is built from (direct and batch paths)."""
         with self.s.engine.connect() as conn:
             unit_rows = sources.units_for_version(conn, svid)
             views = units_by_ids(conn, [r["id"] for r in unit_rows], published_only=False)
@@ -607,6 +608,10 @@ class Pipeline:
             cv = ops.current_corpus_version(conn)
         exchanges = [ExchangeView(r["id"], r["question_unit_id"], r["answer_unit_id"], r["rel"], float(r["confidence"]),
                                   r["interpreted_proposition"], r["st"] in {"machine_verified", "approved", "published"}) for r in ex_rows]
+        return units, exchanges, cv
+
+    def build_hearing_digest(self, hid: str, svid: str) -> tuple[dict, dict]:
+        units, exchanges, cv = self.digest_material(hid, svid)
         res = build_hearing_digest(hearing_id=hid, units=units, exchanges=exchanges, runner=self.s.runner,
                                    corpus_version=cv, citation_base=self.cfg.citation_base, env=self.cfg.env)
         if res.payload is None:

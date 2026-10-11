@@ -89,16 +89,10 @@ def _now() -> str:
 # Layer A
 # =============================================================================
 
-def build_hearing_digest(
-    *, hearing_id: str, units: list[UnitView], exchanges: list[ExchangeView], runner: ModelRunner,
-    corpus_version: str, citation_base: str, env: str, max_units: int = 4000, unit_chars: int = 1200,
-) -> BuildResult:
-    """Layer A digest of a whole hearing.
-
-    Every non-caption unit is sent (up to ``max_units``), so the digest covers the hearing from start to end. If the
-    first draft fails the judicial-wording gate ("בית המשפט קבע…" without an approved ruling), the model gets one
-    second attempt told which phrases to avoid; a second failure is returned as rejected."""
-    by_id = {u.id: u for u in units}
+def digest_input(*, hearing_id: str, units: list[UnitView], exchanges: list[ExchangeView], max_units: int = 4000,
+                 unit_chars: int = 1200) -> dict:
+    """The model input of a hearing digest (first attempt). Shared by the direct path and the batch path, so both
+    produce the same request and the same run id."""
     sample = [u for u in units if u.unit_type != "caption"][:max_units]
     pages = sorted({u.page for u in sample})
     base_in = {
@@ -116,6 +110,21 @@ def build_hearing_digest(
             for e in exchanges
         ],
     }
+    return base_in
+
+
+def build_hearing_digest(
+    *, hearing_id: str, units: list[UnitView], exchanges: list[ExchangeView], runner: ModelRunner,
+    corpus_version: str, citation_base: str, env: str, max_units: int = 4000, unit_chars: int = 1200,
+) -> BuildResult:
+    """Layer A digest of a whole hearing.
+
+    Every non-caption unit is sent (up to ``max_units``), so the digest covers the hearing from start to end. If the
+    first draft fails the judicial-wording gate ("בית המשפט קבע…" without an approved ruling), the model gets one
+    second attempt told which phrases to avoid; a second failure is returned as rejected."""
+    by_id = {u.id: u for u in units}
+    base_in = digest_input(hearing_id=hearing_id, units=units, exchanges=exchanges, max_units=max_units,
+                           unit_chars=unit_chars)
     allowed_units = {u["id"] for u in base_in["units"]}
 
     def semantic(out: dict) -> list[dict]:

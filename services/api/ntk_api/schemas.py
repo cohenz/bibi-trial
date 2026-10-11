@@ -202,6 +202,12 @@ class DigestBuildRequest(BaseModel):
     limit: int = Field(default=20, ge=1, le=500)
 
 
+class DigestBatchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hearing_ids: list[str] | None = Field(default=None, max_length=1000)
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
 class BriefBuildRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_version_ids: list[str] | None = Field(default=None, max_length=2000)

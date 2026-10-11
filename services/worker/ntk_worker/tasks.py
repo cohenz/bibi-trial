@@ -21,9 +21,11 @@ from ntk_common.jobs import (
     TASK_BUILD_GUIDES,
     TASK_CLASSIFY_INBOX,
     TASK_DELIVER_WEBHOOKS,
+    TASK_POLL_BATCHES,
     TASK_RUN_EVALUATION,
     TASK_RUN_JOB,
     TASK_SCAN_INBOX,
+    TASK_SUBMIT_DIGEST_BATCH,
     TASK_VERIFY_ARTIFACT,
 )
 from ntk_common.orchestrator import Pipeline, StageError, build_services
@@ -164,6 +166,38 @@ def classify_inbox_batch(item_ids: list[str], process: str = "0") -> dict:
         q = inbox.queue_items(p.s, _CeleryJobQueue(), task_name=TASK_RUN_JOB, item_ids=item_ids, requested_by="inbox:auto")
         out["jobs_created"] = q["jobs_created"]
     return out
+
+
+@app.task(name=TASK_SUBMIT_DIGEST_BATCH)
+def submit_digest_batch(spec: str) -> dict:
+    """Send hearing digests through the Batch API (half price). ``spec`` JSON: {"hearing_ids"?, "limit"?}."""
+    from ntk_common import batches
+
+    p = _pipeline()
+    args = json.loads(spec or "{}")
+    try:
+        out = batches.submit_digests(p, hearing_ids=args.get("hearing_ids"), limit=int(args.get("limit", 200)))
+    except Exception as exc:  # noqa: BLE001 - recorded, not redelivered
+        log.error("submit_digest_batch failed: %s: %s", type(exc).__name__, str(exc)[:300])
+        out = {"error": {"type": type(exc).__name__, "message": str(exc)[:1000]}}
+    with p.s.engine.begin() as conn:
+        ops.audit(conn, actor="worker", action="batch.submit_requested", object_type="model_batch", object_id="digest",
+                  details=json.loads(json.dumps(out, ensure_ascii=False, default=str)))
+    return {"ok": "error" not in out}
+
+
+@app.task(name=TASK_POLL_BATCHES)
+def poll_batches() -> dict:
+    """Collect finished batches (beat, every 10 minutes); builds and publishes digests under the usual gates."""
+    from ntk_common import batches
+
+    p = _pipeline()
+    try:
+        out = batches.poll(p)
+    except Exception as exc:  # noqa: BLE001
+        log.error("poll_batches failed: %s: %s", type(exc).__name__, str(exc)[:300])
+        return {"error": type(exc).__name__}
+    return {"batches": len(out["batches"])}
 
 
 @app.task(name=TASK_BUILD_DIGESTS)

@@ -19,7 +19,9 @@ from ntk_common.config import get_settings
 settings = get_settings()
 
 app = Celery("ntk-worker", broker=settings.redis_url, backend=None, include=["ntk_worker.tasks"])
-_schedule = {"deliver-webhooks": {"task": "ntk.deliver_webhooks", "schedule": 30.0}}
+_schedule = {"deliver-webhooks": {"task": "ntk.deliver_webhooks", "schedule": 30.0},
+             # Batch API results (digests at half price) are collected when ready; cheap when nothing is open
+             "poll-batches": {"task": "ntk.poll_batches", "schedule": 600.0}}
 if settings.inbox_enabled:
     # daily look for new documents in the object-store inbox (classify; ingest when NTK_INBOX_AUTO_PROCESS)
     _schedule["inbox-daily"] = {"task": "ntk.scan_inbox", "args": ("schedule",),

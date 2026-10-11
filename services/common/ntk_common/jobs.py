@@ -19,6 +19,8 @@ TASK_CLASSIFY_INBOX = "ntk.classify_inbox_batch"
 TASK_BUILD_GUIDES = "ntk.build_guides"
 TASK_BUILD_BRIEFS = "ntk.build_briefs"
 TASK_BUILD_DIGESTS = "ntk.build_digests"
+TASK_SUBMIT_DIGEST_BATCH = "ntk.submit_digest_batch"
+TASK_POLL_BATCHES = "ntk.poll_batches"
 
 
 class JobQueue(Protocol):

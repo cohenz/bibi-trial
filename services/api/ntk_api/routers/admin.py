@@ -22,9 +22,11 @@ from ntk_common.jobs import (
     TASK_BUILD_CLAIM,
     TASK_BUILD_DIGESTS,
     TASK_BUILD_GUIDES,
+    TASK_POLL_BATCHES,
     TASK_RUN_EVALUATION,
     TASK_RUN_JOB,
     TASK_SCAN_INBOX,
+    TASK_SUBMIT_DIGEST_BATCH,
     TASK_VERIFY_ARTIFACT,
 )
 from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempotency_key
@@ -35,6 +37,7 @@ from ..schemas import (
     BriefBuildRequest,
     CaseEventIn,
     ClaimIn,
+    DigestBatchRequest,
     DigestBuildRequest,
     DuplicateDecision,
     EvaluationRequest,
@@ -199,6 +202,44 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
 
 
 # ------------------------------------------------------------------ evaluation runs
+@router.post("/digests/batch", status_code=202)
+def submit_digest_batch(body: DigestBatchRequest, request: Request, st: AppState = Depends(get_state),
+                        p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Hearing digests through the provider's Batch API: half price, results within 24 hours (collected every 10
+    minutes by beat; GET /v2/admin/batches shows progress)."""
+    spec = body.model_dump(exclude_none=True)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="batch.requested", object_type="model_batch", object_id="digest",
+                  request_id=_rid(request), details=spec)
+    tid = st.queue.enqueue(TASK_SUBMIT_DIGEST_BATCH, json.dumps(spec))
+    return _json({"queued": TASK_SUBMIT_DIGEST_BATCH, "task_id": tid, **spec}, cache="no-store", status=202)
+
+
+@router.get("/batches")
+def list_batches(st: AppState = Depends(get_state), limit: int = Query(50, le=500),
+                 p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    from ntk_common import batches
+
+    with st.services.engine.connect() as conn:
+        return _json({"items": batches.listing(conn, limit)}, cache="no-store")
+
+
+@router.post("/batches/poll", status_code=202)
+def poll_batches_now(st: AppState = Depends(get_state), p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    tid = st.queue.enqueue(TASK_POLL_BATCHES)
+    return _json({"queued": TASK_POLL_BATCHES, "task_id": tid}, cache="no-store", status=202)
+
+
+@router.get("/models/check")
+def check_model(model: str = Query(..., pattern=r"^[a-z0-9.\-]{3,80}$"), st: AppState = Depends(get_state),
+                p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """Does the configured provider know this model id? (before switching a role to it)"""
+    prov = st.services.runner.providers.get("gemini")
+    if prov is None or not hasattr(prov, "model_info"):
+        raise ApiError(400, "invalid_request", "gemini provider not configured")
+    return _json(prov.model_info(model), cache="no-store")
+
+
 @router.post("/digests/build", status_code=202)
 def build_digests(body: DigestBuildRequest, request: Request, st: AppState = Depends(get_state),
                   p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:

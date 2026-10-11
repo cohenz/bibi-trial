@@ -20,8 +20,8 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `7e9d831`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `7e9d831`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `9356004`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `9356004`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
 | beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `dd3488f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
 **Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`) ו־0006 (`ntk.inbox_items`, `ntk.inbox_scans`, וסוגי מקור `response`, `notice` ו־`affidavit`).
@@ -74,6 +74,22 @@
   - **אחרי הניקוי:** נשארו 14 דיונים אמיתיים.
 - **כותרות:** הכותרת נלקחת משם הארכיון, אם קיים עותק כזה (`apply_best_name`). 41 מסמכים קיבלו כותרת חדשה.
   - **בעיה פתוחה:** כ־35 החלטות נקראות "שניתנה ע\"י רבקה פרידמן-פלדמן", כי זה מה שכתוב בשם הקובץ, ואין מזה כותרת מועילה.
+
+## תקצירי מסמכים (11.10.2026 ערב)
+- **מה זה:** לכל מסמך שאינו פרוטוקול נבנה תקציר:
+  - כותרת שאומרת במה המסמך עוסק;
+  - משפט עד שלושה משפטים, עם ציטוט;
+  - הכרעה "מהותי / פרוצדורלי בלבד", עם נימוק;
+  - "ימי דיון" מהודעות של בית המשפט: מי העיד, לאיזה צד, והדיון הבא.
+- **פרסום:** תקציר נקי מתפרסם לבד. ב־pipeline התקציר נבנה בשלב `extract_a` ומתפרסם יחד עם המקור.
+- **השלמה למסמכים קיימים:** `POST /v2/admin/briefs/build`.
+  - ריצה ראשונה: 42 תקצירים נבנו (23 מהותיים, 19 פרוצדורליים).
+  - 26 תקצירים נכשלו, כי התאריכים נכתבו בפורמט שלא תאם את החוזה (`18.05.2021`). התיקון נפרס ב־`9356004`, והריצה חוזרת עליהם.
+- **התוסף 2.4.0** (`dist/trial-knowledge-2.4.0.zip`):
+  - כותרת ותקציר בכל רשימה;
+  - מסמכים פרוצדורליים מוסתרים כברירת מחדל, ויש כפתור להציג אותם;
+  - ימי דיון מסומנים על ציר הזמן ובעמודי העדים;
+  - עמוד עד גם לעדים שמופיעים רק בהודעות של בית המשפט.
 
 ## מה בייצור עכשיו
 - **ארבעה פרוטוקולים נקלטו** (550 עמודים):

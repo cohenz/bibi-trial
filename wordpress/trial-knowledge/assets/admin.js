@@ -377,4 +377,51 @@
 			showArtifact(id);
 		});
 	}
+
+	// ------------------------------------------------------------- local copy (2.5)
+	var store = document.getElementById('tk-store');
+	if (store && A.nonces.store) {
+		var msg = document.getElementById('tk-store-msg');
+		var timer = null;
+		var paint = function (d) {
+			if (!d) { return; }
+			['count', 'size', 'stale', 'failed', 'changes', 'next_changes', 'refresh', 'full'].forEach(function (k) {
+				var node = store.querySelector('[data-tk="' + k + '"]');
+				if (node && typeof d[k] !== 'undefined') { node.textContent = d[k]; }
+			});
+			var bar = store.querySelector('[data-tk-progress]');
+			if (bar) { bar.value = d.full_pct || 0; bar.hidden = !d.full_running; }
+			var kinds = document.getElementById('tk-store-kinds');
+			if (kinds && d.kinds) {
+				kinds.textContent = '';
+				d.kinds.forEach(function (k) {
+					kinds.appendChild(el('tr', {}, [el('td', { text: k.label }), el('td', { text: k.count }), el('td', { text: k.size })]));
+				});
+			}
+			if (d.message) { msg.textContent = d.message; }
+			schedule(d);
+		};
+		var poll = function () {
+			timer = null;
+			post('tk_store_status', A.nonces.store, { step: '1' }).then(function (r) { paint(r.data); });
+		};
+		var schedule = function (d) {
+			if (timer || !d) { return; }
+			if (d.busy) { timer = window.setTimeout(poll, 4000); }
+		};
+		store.querySelectorAll('[data-tk-store]').forEach(function (b) {
+			b.addEventListener('click', function () {
+				var c = b.getAttribute('data-tk-confirm');
+				if (c && !window.confirm(c)) { return; }
+				b.disabled = true;
+				msg.textContent = '…';
+				post(b.getAttribute('data-tk-store'), A.nonces.store).then(function (r) {
+					b.disabled = false;
+					if (!r.ok) { msg.textContent = 'שגיאה: ' + ((r.data && r.data.message) || ''); return; }
+					paint(r.data);
+				}, function () { b.disabled = false; msg.textContent = 'שגיאה'; });
+			});
+		});
+		post('tk_store_status', A.nonces.store).then(function (r) { schedule(r.data); });
+	}
 }());

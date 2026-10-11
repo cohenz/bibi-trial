@@ -23,6 +23,7 @@ class TK_Admin_Settings {
 		add_submenu_page( 'trial-knowledge', __( 'ביקורת ופרסום', 'trial-knowledge' ), __( 'ביקורת ופרסום', 'trial-knowledge' ), TK_Permissions::CAP_REVIEW, 'trial-knowledge', array( 'TK_Admin_Review', 'page' ) );
 		add_submenu_page( 'trial-knowledge', __( 'מקורות וקליטה', 'trial-knowledge' ), __( 'מקורות וקליטה', 'trial-knowledge' ), TK_Permissions::CAP_SOURCES, 'trial-knowledge-sources', array( 'TK_Admin_Sources', 'page' ) );
 		add_submenu_page( 'trial-knowledge', __( 'כפילויות', 'trial-knowledge' ), __( 'כפילויות', 'trial-knowledge' ), TK_Permissions::CAP_SOURCES, 'trial-knowledge-duplicates', array( 'TK_Admin_Duplicates', 'page' ) );
+		add_submenu_page( 'trial-knowledge', __( 'עותק מקומי', 'trial-knowledge' ), __( 'עותק מקומי', 'trial-knowledge' ), TK_Permissions::CAP_SETTINGS, 'trial-knowledge-store', array( 'TK_Admin_Store', 'page' ) );
 		add_submenu_page( 'trial-knowledge', __( 'הגדרות', 'trial-knowledge' ), __( 'הגדרות', 'trial-knowledge' ), TK_Permissions::CAP_SETTINGS, 'trial-knowledge-settings', array( __CLASS__, 'page' ) );
 	}
 
@@ -43,6 +44,7 @@ class TK_Admin_Settings {
 					'jobs'    => wp_create_nonce( 'tk_jobs' ),
 					'review'  => wp_create_nonce( 'tk_review' ),
 					'publish' => wp_create_nonce( 'tk_publish' ),
+					'store'   => wp_create_nonce( 'tk_store' ),
 				),
 				'i18n'   => array(
 					'hashing'   => __( 'מחשב טביעת אצבע (SHA-256)…', 'trial-knowledge' ),
@@ -88,8 +90,9 @@ class TK_Admin_Settings {
 					<tr><th scope="row"><label for="tk_webhook"><?php esc_html_e( 'סוד webhook לניקוי מטמון', 'trial-knowledge' ); ?></label></th>
 						<td><input type="password" id="tk_webhook" name="webhook_secret" class="regular-text code" dir="ltr" value="" autocomplete="new-password" placeholder="<?php echo $cfg['webhook_secret'] ? '••••••' : ''; ?>">
 						<p class="description"><?php echo esc_html( sprintf( __( 'כתובת ה־webhook להגדרה ב־API (WP_CALLBACK_URL): %s', 'trial-knowledge' ), rest_url( 'trial-knowledge/v1/webhook' ) ) ); ?></p></td></tr>
-					<tr><th scope="row"><label for="tk_ttl"><?php esc_html_e( 'זמן מטמון (שניות)', 'trial-knowledge' ); ?></label></th>
-						<td><input type="number" id="tk_ttl" name="cache_ttl" min="30" max="86400" value="<?php echo esc_attr( (string) $cfg['cache_ttl'] ); ?>"></td></tr>
+					<tr><th scope="row"><?php esc_html_e( 'עותק מקומי', 'trial-knowledge' ); ?></th>
+						<td><p class="description"><?php esc_html_e( 'הקוראים מקבלים את התוכן מהעותק המקומי במסד הנתונים של האתר; הוא מתעדכן ברקע מה־webhook ומסנכרון תקופתי.', 'trial-knowledge' ); ?>
+						<a href="<?php echo esc_url( admin_url( 'admin.php?page=trial-knowledge-store' ) ); ?>"><?php esc_html_e( 'למסך העותק המקומי', 'trial-knowledge' ); ?></a></p></td></tr>
 					<tr><th scope="row"><label for="tk_slug"><?php esc_html_e( 'נתיב העמודים הציבוריים', 'trial-knowledge' ); ?></label></th>
 						<td><input type="text" id="tk_slug" name="public_slug" dir="ltr" value="<?php echo esc_attr( $cfg['public_slug'] ); ?>"></td></tr>
 					<tr><th scope="row"><label for="tk_disclosure"><?php esc_html_e( 'הצהרת עדשה (מוצגת בכל כרטיס טענה)', 'trial-knowledge' ); ?></label></th>
@@ -109,6 +112,7 @@ class TK_Admin_Settings {
 			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ), 403 );
 		}
 		check_admin_referer( 'tk_save_settings' );
+		$old  = TK_Settings_Store::get();
 		$base = isset( $_POST['api_base'] ) ? esc_url_raw( wp_unslash( $_POST['api_base'] ) ) : '';
 		if ( $base && 0 !== strpos( $base, 'https://' ) && ! preg_match( '#^http://(localhost|127\.0\.0\.1)#', $base ) ) {
 			$base = ''; // HTTPS required outside local development.
@@ -119,12 +123,13 @@ class TK_Admin_Settings {
 				'key_id'         => isset( $_POST['key_id'] ) ? sanitize_text_field( wp_unslash( $_POST['key_id'] ) ) : '',
 				'secret'         => isset( $_POST['secret'] ) ? trim( (string) wp_unslash( $_POST['secret'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- secret, stored encrypted
 				'webhook_secret' => isset( $_POST['webhook_secret'] ) ? trim( (string) wp_unslash( $_POST['webhook_secret'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-				'cache_ttl'      => isset( $_POST['cache_ttl'] ) ? max( 30, min( 86400, absint( $_POST['cache_ttl'] ) ) ) : 300,
 				'public_slug'    => isset( $_POST['public_slug'] ) ? sanitize_title( wp_unslash( $_POST['public_slug'] ) ) : 'trial',
 				'disclosure'     => isset( $_POST['disclosure'] ) ? sanitize_textarea_field( wp_unslash( $_POST['disclosure'] ) ) : '',
 			)
 		);
-		TK_Cache::purge_all();
+		if ( untrailingslashit( $base ) !== (string) $old['api_base'] ) {
+			TK_Cache::purge_all(); // another API: refresh the whole local copy in the background
+		}
 		flush_rewrite_rules();
 		wp_safe_redirect( admin_url( 'admin.php?page=trial-knowledge-settings&saved=1' ) );
 		exit;

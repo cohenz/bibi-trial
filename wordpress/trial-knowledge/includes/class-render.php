@@ -219,7 +219,7 @@ class TK_Render {
 	public static function in_context_url( array $c ) {
 		$cit  = $c['citation'];
 		$page = (int) $cit['page'];
-		$from = max( 1, $page - ( ( $page - 1 ) % 25 ) );
+		$from = TK_Paths::window_start( $page ); // the same 25-page window the page requests (one stored copy)
 		if ( ! empty( $c['hearing_id'] ) ) {
 			$url = TK_Public_Pages::url( 'hearing', $c['hearing_id'] );
 		} elseif ( ! empty( $cit['source_version_id'] ) ) {

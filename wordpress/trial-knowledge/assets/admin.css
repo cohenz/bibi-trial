@@ -35,3 +35,6 @@
 .tk-gate--fail.tk-gate--review { background: #fcf9e8; color: #8a6100; }
 .tk-raw { margin-block: 1rem; }
 .tk-raw > summary { cursor: pointer; font-weight: 600; }
+/* 2.5: local copy screen */
+.tk-store-table th { width: 32%; }
+.tk-store-table progress { display: block; width: 100%; max-width: 420px; margin-block-start: .4rem; }

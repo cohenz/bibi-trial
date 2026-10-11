@@ -22,10 +22,7 @@ $tk_cur = TK_Public_Pages::$current;
 		$tk_slugs = TK_Guides::slug_map( TK_Guides::witnesses() );
 		$tk_t     = null;
 		try {
-			$tk_t = TK_Rest_Proxy::cached_get(
-				'/v2/hearings/' . $tk_h['id'] . '/transcript?page_from=' . TK_Public_Pages::page_param(),
-				array( 'hearing:' . $tk_h['id'], 'citations' )
-			);
+			$tk_t = TK_Rest_Proxy::cached_get( TK_Public_Pages::transcript_path( $tk_h['id'] ) );
 		} catch ( TK_Api_Error $e ) {
 			$tk_t = null;
 		}

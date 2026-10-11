@@ -16,9 +16,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class TK_Blocks {
 
-	/** Cache tags of document lists (purged when a document or its brief is published). */
-	const DOC_TAGS = array( 'documents', 'lists' );
-
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'register' ) );
 		add_action( 'init', array( __CLASS__, 'register_assets' ) );
@@ -74,7 +71,7 @@ class TK_Blocks {
 			$opts['latest_day'] = null;
 		}
 		try {
-			$ld                  = TK_Rest_Proxy::cached_get( '/v2/documents?limit=3&significance=substantive', self::DOC_TAGS );
+			$ld                  = TK_Rest_Proxy::cached_get( TK_Paths::latest_documents() );
 			$opts['latest_docs'] = (array) ( $ld['items'] ?? array() );
 		} catch ( TK_Api_Error $e ) {
 			$opts['latest_docs'] = array();
@@ -133,22 +130,39 @@ class TK_Blocks {
 	 *                    procedural (hide|show; default hide).
 	 */
 	public static function documents( $atts ) {
-		$atts  = shortcode_atts( array( 'type' => '', 'limit' => 50, 'procedural' => 'hide' ), (array) $atts );
-		$type  = preg_replace( '/[^a-z_]/', '', (string) $atts['type'] );
-		$limit = max( 1, min( 200, (int) $atts['limit'] ) );
+		$req = self::documents_request( $atts, self::all_param() );
 		wp_enqueue_style( 'trial-knowledge' );
-		$mode = 'show' === $atts['procedural'] ? 'all' : ( self::all_param() ? 'with_procedural' : 'substantive' );
-		$base = '/v2/documents?limit=' . $limit . ( $type ? '&type=' . $type : '' );
 		try {
-			$d = TK_Rest_Proxy::cached_get( $base . ( 'substantive' === $mode ? '&significance=substantive' : '' ), self::DOC_TAGS );
+			$d = TK_Rest_Proxy::cached_get( $req['path'] );
 		} catch ( TK_Api_Error $e ) {
 			return TK_Render::unavailable();
 		}
-		$opts = array_merge( self::toggle_opts(), array( 'mode' => $mode ) );
-		if ( 'substantive' === $mode ) {
-			$opts['hidden_count'] = self::procedural_count( $type );
+		$opts = array_merge( self::toggle_opts(), array( 'mode' => $req['mode'] ) );
+		if ( 'substantive' === $req['mode'] ) {
+			$opts['hidden_count'] = self::procedural_count( $req['type'] );
 		}
 		return TK_Render::documents( $d, $opts );
+	}
+
+	/**
+	 * API requests of one [tk_documents] instance (shared with the full sync, so both use the same paths).
+	 *
+	 * @param array $atts Shortcode attributes.
+	 * @param bool  $all  ?tk_all=1 (procedural documents shown).
+	 * @return array type, limit, mode (substantive|with_procedural|all), path, procedural_path ('' unless substantive)
+	 */
+	public static function documents_request( $atts, $all ) {
+		$atts  = shortcode_atts( array( 'type' => '', 'limit' => TK_Paths::DOC_LIMIT, 'procedural' => 'hide' ), (array) $atts );
+		$type  = preg_replace( '/[^a-z_]/', '', (string) $atts['type'] );
+		$limit = max( 1, min( 200, (int) $atts['limit'] ) );
+		$mode  = 'show' === $atts['procedural'] ? 'all' : ( $all ? 'with_procedural' : 'substantive' );
+		return array(
+			'type'            => $type,
+			'limit'           => $limit,
+			'mode'            => $mode,
+			'path'            => TK_Paths::documents_list( $type, $limit, 'substantive' === $mode ? 'substantive' : '' ),
+			'procedural_path' => 'substantive' === $mode ? TK_Paths::documents_list( $type, TK_Paths::PROCEDURAL_LIMIT, 'procedural' ) : '',
+		);
 	}
 
 	/** ?tk_all=1 — show procedural documents too (lists and timeline). */
@@ -163,12 +177,12 @@ class TK_Blocks {
 	 */
 	public static function procedural_count( $type ) {
 		try {
-			$p = TK_Rest_Proxy::cached_get( '/v2/documents?limit=200&significance=procedural' . ( $type ? '&type=' . $type : '' ), self::DOC_TAGS );
+			$p = TK_Rest_Proxy::cached_get( TK_Paths::documents_list( $type, TK_Paths::PROCEDURAL_LIMIT, 'procedural' ) );
 		} catch ( TK_Api_Error $e ) {
 			return null;
 		}
 		$n = count( (array) ( $p['items'] ?? array() ) );
-		return $n >= 200 ? null : $n;
+		return $n >= TK_Paths::PROCEDURAL_LIMIT ? null : $n;
 	}
 
 	public static function register() {
@@ -211,7 +225,7 @@ class TK_Blocks {
 		}
 		wp_enqueue_style( 'trial-knowledge' );
 		try {
-			$card = TK_Rest_Proxy::cached_get( '/v2/claims/' . strtolower( $id ), array( 'claim:' . strtolower( $id ), 'claims' ) );
+			$card = TK_Rest_Proxy::cached_get( TK_Paths::claim( $id ) );
 		} catch ( TK_Api_Error $e ) {
 			return 404 === $e->status ? ( current_user_can( 'edit_posts' ) ? TK_Render::error_box( __( 'הטענה טרם פורסמה.', 'trial-knowledge' ) ) : '' ) : TK_Render::unavailable();
 		}
@@ -226,7 +240,7 @@ class TK_Blocks {
 		}
 		wp_enqueue_style( 'trial-knowledge' );
 		try {
-			$c = TK_Rest_Proxy::cached_get( '/v2/citations/' . $id, array( 'citations', 'citation:' . $id ) );
+			$c = TK_Rest_Proxy::cached_get( TK_Paths::citation( $id ) );
 		} catch ( TK_Api_Error $e ) {
 			return 404 === $e->status ? '' : TK_Render::unavailable();
 		}
@@ -239,9 +253,14 @@ class TK_Blocks {
 		if ( $as_of && ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $as_of ) ) {
 			$as_of = '';
 		}
-		$path = '/v2/timeline' . ( $as_of ? '?as_of=' . rawurlencode( $as_of . 'T23:59:59Z' ) : '' );
+		// stored per day (2.5): a future day is "now"; days before the investigations are the first day
+		if ( $as_of && $as_of > gmdate( 'Y-m-d' ) ) {
+			$as_of = '';
+		} elseif ( $as_of && $as_of < '2016-01-01' ) {
+			$as_of = '2016-01-01';
+		}
 		try {
-			$t = TK_Rest_Proxy::cached_get( $path, array( 'timeline', 'lists' ) );
+			$t = TK_Rest_Proxy::cached_get( TK_Paths::timeline( $as_of ) );
 		} catch ( TK_Api_Error $e ) {
 			return TK_Render::unavailable();
 		}

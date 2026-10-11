@@ -125,8 +125,8 @@ $bt = TK_Webhooks::tags_for( array( 'event' => 'artifact.published', 'payload' =
 TK_T::ok( in_array( 'document:' . $bsv, $bt, true ) && in_array( 'documents', $bt, true ) && in_array( 'timeline', $bt, true ) && in_array( 'guide', $bt, true ) && in_array( 'lists', $bt, true ), 'webhook: document brief purges document page, lists, timeline, guides' );
 $bt = TK_Webhooks::tags_for( array( 'event' => 'artifact.unpublished', 'payload' => array( 'artifact_type' => 'summary', 'object_type' => 'document', 'object_id' => $bsv ) ) );
 TK_T::ok( in_array( 'document:' . $bsv, $bt, true ) && in_array( 'timeline', $bt, true ), 'webhook: unpublished brief purges too' );
-$bn = 0;
-TK_Cache::remember( '/v2/documents/' . $bsv . '?page_from=1', function () use ( &$bn ) { ++$bn; return array( 'x' => 1 ); }, array( 'document:' . $bsv, 'documents' ) );
+tk_test_reset_store();
+TK_Cache::remember( TK_Paths::document( $bsv, 1 ), function () { return array( 'x' => 1 ); } );
 TK_Cache::purge( TK_Webhooks::tags_for( array( 'event' => 'artifact.published', 'payload' => array( 'artifact_type' => 'summary', 'object_type' => 'document', 'object_id' => $bsv ) ) ) );
-TK_Cache::remember( '/v2/documents/' . $bsv . '?page_from=1', function () use ( &$bn ) { ++$bn; return array( 'x' => 1 ); }, array( 'document:' . $bsv, 'documents' ) );
-TK_T::eq( 2, $bn, 'webhook: document page refetched after its brief is published' );
+TK_Sync::run_refresh();
+TK_T::eq( array( TK_Paths::document( $bsv, 1 ) ), tk_api()->calls, 'webhook: document page refetched after its brief is published' );

@@ -74,9 +74,10 @@ class TK_Public_Pages {
 		return in_array( $c, array( '1000', '2000', '4000' ), true ) ? $c : '';
 	}
 
-	/** New URL patterns after a plugin update take effect without re-activating the plugin. */
+	/** After a plugin update: new URL patterns and the upgrade routine run without re-activating the plugin. */
 	public static function maybe_flush() {
 		if ( get_option( 'tk_rewrite_version' ) !== TK_VERSION ) {
+			TK_Sync::upgrade(); // 2.5: local-copy tables (dbDelta) and sync schedules
 			flush_rewrite_rules();
 			update_option( 'tk_rewrite_version', TK_VERSION );
 		}
@@ -116,13 +117,6 @@ class TK_Public_Pages {
 		if ( ! $type || ! $id ) {
 			return null;
 		}
-		$paths = array(
-			'claim'   => array( '/v2/claims/' . strtolower( $id ), array( 'claim:' . strtolower( $id ) ) ),
-			'answer'  => array( '/v2/answers/' . strtolower( $id ), array( 'answer:' . strtolower( $id ) ) ),
-			'source'  => array( '/v2/citations/' . $id, array( 'citations' ) ),
-			'hearing'  => array( '/v2/hearings/' . $id, array( 'hearing:' . $id ) ),
-			'document' => array( '/v2/documents/' . $id . '?page_from=' . self::page_param(), array( 'document:' . $id, 'documents', 'lists' ) ),
-		);
 		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary' );
 		if ( in_array( $type, $guides, true ) ) {
 			try {
@@ -133,16 +127,44 @@ class TK_Public_Pages {
 			}
 			return self::$current;
 		}
-		if ( ! isset( $paths[ $type ] ) ) {
+		$path = self::request_path( $type, $id );
+		if ( '' === $path ) {
 			return null;
 		}
 		try {
-			$data         = TK_Rest_Proxy::cached_get( $paths[ $type ][0], $paths[ $type ][1] );
+			$data          = TK_Rest_Proxy::cached_get( $path );
 			self::$current = array( 'type' => $type, 'id' => $id, 'data' => $data, 'error' => null );
 		} catch ( TK_Api_Error $e ) {
 			self::$current = array( 'type' => $type, 'id' => $id, 'data' => null, 'error' => $e->status ? $e->status : 503 );
 		}
 		return self::$current;
+	}
+
+	/**
+	 * API path of a non-guide virtual page (shared with the full sync); '' for unknown types.
+	 *
+	 * @param string $type claim|answer|source|hearing|document.
+	 * @param string $id   Object id.
+	 */
+	public static function request_path( $type, $id ) {
+		switch ( $type ) {
+			case 'claim':
+				return TK_Paths::claim( $id );
+			case 'answer':
+				return TK_Paths::answer( $id );
+			case 'source':
+				return TK_Paths::citation( $id );
+			case 'hearing':
+				return TK_Paths::hearing( $id );
+			case 'document':
+				return TK_Paths::document( $id, self::page_param() );
+		}
+		return '';
+	}
+
+	/** Transcript request of the hearing page (the 25-page window containing ?tk_p=). */
+	public static function transcript_path( $hearing_id ) {
+		return TK_Paths::transcript( $hearing_id, self::page_param() );
 	}
 
 	/**

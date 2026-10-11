@@ -9,7 +9,8 @@
  *   GET /v2/guide/timeline          dual-track timeline
  *   GET /v2/glossary                editorial glossary
  *
- * Every response is tagged 'guide'/'lists' so that artifact and corpus webhooks purge it.
+ * Responses come from the local copy (TK_Store); their tags (TK_Paths::tags) let artifact and
+ * corpus webhooks mark them stale.
  *
  * @package TrialKnowledge
  */
@@ -32,7 +33,7 @@ class TK_Guides {
 
 	/** @return array /v2/guide */
 	public static function home() {
-		return TK_Rest_Proxy::cached_get( '/v2/guide', array( 'guide', 'guide:home', 'lists' ) );
+		return TK_Rest_Proxy::cached_get( TK_Paths::guide() );
 	}
 
 	/**
@@ -47,39 +48,29 @@ class TK_Guides {
 		if ( ! self::valid_case( $key ) ) {
 			return null;
 		}
-		$path = '/v2/guide/cases/' . $key;
-		$cfg  = TK_Settings_Store::get();
+		$path = TK_Paths::guide_case( $key );
 		$data = TK_Cache::remember(
 			$path,
 			static function () use ( $path ) {
-				try {
-					return tk_api()->get( $path );
-				} catch ( TK_Api_Error $e ) {
-					if ( 404 === $e->status ) {
-						return array( '__missing' => true );
-					}
-					throw $e;
-				}
-			},
-			array( 'guide', 'guide:case:' . $key, 'case:' . $key, 'lists' ),
-			(int) $cfg['cache_ttl']
+				return TK_Store::fetch_live( $path ); // 404 → array( '__missing' => true )
+			}
 		);
 		return empty( $data['__missing'] ) ? $data : null;
 	}
 
 	/** @return array /v2/guide/witnesses/{slug} (throws 404 for unknown slugs) */
 	public static function witness( $slug ) {
-		return TK_Rest_Proxy::cached_get( '/v2/guide/witnesses/' . $slug, array( 'guide', 'witness:' . $slug, 'lists' ) );
+		return TK_Rest_Proxy::cached_get( TK_Paths::guide_witness( $slug ) );
 	}
 
 	/** @return array /v2/guide/timeline */
 	public static function timeline() {
-		return TK_Rest_Proxy::cached_get( '/v2/guide/timeline', array( 'guide', 'timeline', 'lists' ) );
+		return TK_Rest_Proxy::cached_get( TK_Paths::guide_timeline() );
 	}
 
 	/** @return array /v2/glossary */
 	public static function glossary() {
-		return TK_Rest_Proxy::cached_get( '/v2/glossary', array( 'glossary', 'lists' ) );
+		return TK_Rest_Proxy::cached_get( TK_Paths::glossary() );
 	}
 
 	/** Witness list from the start-page data; empty on API errors (callers degrade to plain names). */

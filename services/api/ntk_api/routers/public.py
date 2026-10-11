@@ -284,3 +284,55 @@ def _uuid(v: str) -> None:
         _u.UUID(v)
     except ValueError as exc:
         raise ApiError(400, "invalid_request", "invalid id") from exc
+
+
+# ------------------------------------------------------------------ reader guides (ADR-0015)
+@router.get("/guide", dependencies=[Depends(rate_limit("public"))])
+def guide_home(st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import guides_public as gp
+
+    with st.services.engine.connect() as conn:
+        return _json(gp.home(conn))
+
+
+@router.get("/guide/cases/{key}", dependencies=[Depends(rate_limit("public"))],
+            responses={404: {"description": "not found or not published"}})
+def guide_case(key: str, st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import guides_public as gp
+
+    if key not in {"1000", "2000", "4000"}:
+        raise ApiError(404, "not_found", "unknown case")
+    with st.services.engine.connect() as conn:
+        page = gp.case_page(conn, key)
+    if page is None:
+        raise ApiError(404, "unpublished_object", "case guide not published")
+    return _json(page)
+
+
+@router.get("/guide/witnesses/{slug}", dependencies=[Depends(rate_limit("public"))],
+            responses={404: {"description": "not found"}})
+def guide_witness(slug: str, st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import guides_public as gp
+
+    if not slug.startswith("w_") or len(slug) != 12:
+        raise ApiError(404, "not_found", "unknown witness")
+    with st.services.engine.connect() as conn:
+        page = gp.witness_page(conn, slug)
+    if page is None:
+        raise ApiError(404, "not_found", "unknown witness")
+    return _json(page)
+
+
+@router.get("/guide/timeline", dependencies=[Depends(rate_limit("public"))])
+def guide_timeline(st: AppState = Depends(get_state)) -> JSONResponse:
+    from ntk_common.db import guides_public as gp
+
+    with st.services.engine.connect() as conn:
+        return _json(gp.timeline(conn))
+
+
+@router.get("/glossary", dependencies=[Depends(rate_limit("public"))])
+def glossary() -> JSONResponse:
+    from ntk_common.glossary import glossary as g
+
+    return _json(g(), cache="public, max-age=3600")

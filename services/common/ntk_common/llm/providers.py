@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -334,6 +335,48 @@ class MockProvider:
         return {"schema_version": "2.0", "answer_status": "answered",
                 "answer_short": f"{who}: \"{self._first_words(lead['text'], 20)}\"",
                 "answer_short_citation_ids": [lead["id"]], "sections": sections, "premise_issues": []}
+
+    # guides: extractive, every item quotes the unit it cites and is framed as an allegation
+    def _guide_items(self, units: list[dict], n: int, prefix: str = "לפי כתב האישום, ") -> list[dict]:
+        out = []
+        for u in units:
+            if len(u.get("text", "").split()) < 6:
+                continue
+            out.append({"text": prefix + self._first_words(u["text"], 16), "source_unit_ids": [u["id"]]})
+            if len(out) >= n:
+                break
+        return out
+
+    def _task_indictment_overview(self, p: dict) -> dict:
+        units = p.get("units", [])
+        items = self._guide_items(units, 4) or [{"text": "לפי כתב האישום, מסמך", "source_unit_ids": [units[0]["id"]]}]
+        defs = []
+        for u in units:
+            m = re.search(r"^\s*\d+\.\s*([א-ת'\"]+\s+[א-ת'\"]+)", u.get("text", ""))
+            if m and "הנאשם" in u.get("text", ""):
+                defs.append({"name": m.group(1), "text": "לפי כתב האישום, " + self._first_words(u["text"], 12),
+                             "case_keys": [k for k in p.get("counts", [])][:1], "source_unit_ids": [u["id"]]})
+        return {"schema_version": "2.0", "overview": items, "defendants": defs[:4]}
+
+    def _task_case_guide(self, p: dict) -> dict:
+        units = p.get("units", [])
+        items = self._guide_items(units, 8) or [{"text": "לפי כתב האישום, מסמך", "source_unit_ids": [units[0]["id"]]}]
+        events = []
+        for u in units:
+            m = re.search(r"(\d{1,2})\.(\d{1,2})\.(20\d{2})", u.get("text", ""))
+            if m:
+                d = f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+                events.append({"date": d, "date_precision": "day", "title": self._first_words(u["text"], 5),
+                               "text": "לפי כתב האישום, " + self._first_words(u["text"], 14), "source_unit_ids": [u["id"]]})
+        return {"schema_version": "2.0", "case_key": p.get("case_key", "4000"), "subtitle": "תיאור התיק",
+                "one_line": items[0], "alleged": items[1:] or items, "people": [], "charges": [], "events": events[:40]}
+
+    def _task_witness_guide(self, p: dict) -> dict:
+        role = self._guide_items(p.get("indictment_mentions", []), 1)
+        testimony = []
+        for h in p.get("hearings", []):
+            testimony += self._guide_items(h.get("units", []), 2, prefix=f"בדיון מיום {h.get('date')}: ")
+        return {"schema_version": "2.0", "role": role, "testimony": testimony[:10]}
 
     def _task_classify_document(self, p: dict) -> dict:
         from ..inbox import classify_by_rules

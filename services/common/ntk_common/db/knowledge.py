@@ -208,6 +208,9 @@ def _citation_paths(payload: dict) -> list[tuple[str, str]]:
         out += [("court_position", c) for c in cp["citation_ids"]]
     for i, s in enumerate(payload.get("sections", []) or []):
         out += [(f"sections/{i}", c) for c in s["citation_ids"]]
+    for bi, b in enumerate(payload.get("blocks", []) or []):
+        for ii, it in enumerate(b.get("items", [])):
+            out += [(f"blocks/{bi}/items/{ii}", c) for c in it["citation_ids"]]
     if not out:
         out = [("citations", c["source_unit_id"]) for c in payload.get("citations", [])]
     return list(dict.fromkeys(out))
@@ -439,6 +442,9 @@ def _public_path(art: dict) -> str:
         return f"claims/{art['object_id']}"
     if t == "summary" and art["object_type"] == "hearing":
         return f"hearings/{art['object_id']}"
+    if t == "guide":
+        return {"case": f"guide/cases/{art['object_id']}", "witness": f"guide/witnesses/{art['object_id']}"}.get(
+            art["object_type"], "guide")
     return f"artifacts/{art['id']}"
 
 

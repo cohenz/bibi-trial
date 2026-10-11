@@ -16,6 +16,7 @@ from ntk_common.db import ops
 from ntk_common.db.core import get_engine
 from ntk_common.jobs import (
     TASK_BUILD_CLAIM,
+    TASK_BUILD_GUIDES,
     TASK_CLASSIFY_INBOX,
     TASK_DELIVER_WEBHOOKS,
     TASK_RUN_EVALUATION,
@@ -160,6 +161,25 @@ def classify_inbox_batch(item_ids: list[str], process: str = "0") -> dict:
     if process == "1":
         q = inbox.queue_items(p.s, _CeleryJobQueue(), task_name=TASK_RUN_JOB, item_ids=item_ids, requested_by="inbox:auto")
         out["jobs_created"] = q["jobs_created"]
+    return out
+
+
+@app.task(name=TASK_BUILD_GUIDES)
+def build_guides(spec: str) -> dict:
+    """Build reader guides (ADR-0015). ``spec`` is JSON: {"kind", "source_version_id"?, "keys"?}. The result is audited."""
+    from ntk_common import guide_service
+
+    p = _pipeline()
+    args = json.loads(spec or "{}")
+    try:
+        out = guide_service.build(p, kind=args.get("kind", "all"), source_version_id=args.get("source_version_id"),
+                                  keys=args.get("keys"))
+    except Exception as exc:  # noqa: BLE001 - recorded, not redelivered (model calls are expensive)
+        log.error("build_guides failed: %s: %s", type(exc).__name__, str(exc)[:300])
+        out = {"error": {"type": type(exc).__name__, "message": str(exc)[:1000]}}
+    with p.s.engine.begin() as conn:
+        ops.audit(conn, actor="worker", action="guides.built", object_type="guide", object_id=args.get("kind", "all"),
+                  details=json.loads(json.dumps(out, ensure_ascii=False, default=str)))
     return out
 
 

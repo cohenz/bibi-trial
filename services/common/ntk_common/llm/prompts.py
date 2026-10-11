@@ -133,7 +133,65 @@ CLASSIFY_DOCUMENT = Prompt(
     "author: the court or party that issued or filed it. Never guess: use null when the pages do not say.",
 )
 
-ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION, CLASSIFY_DOCUMENT)}
+_GUIDE = (
+    "You write for ordinary readers who are not lawyers: short, plain Hebrew sentences (about 25 words at most), no "
+    "legal jargon without a short explanation, no adjectives of judgement, no speculation. Explain who people are the "
+    "first time they appear, using only what the material says about them. "
+)
+_ALLEGATION = (
+    "The material is an indictment: everything in it is the prosecution's allegation, not a proven fact and not a "
+    "ruling. Frame every sentence as an allegation, for example 'לפי כתב האישום…', 'כתב האישום מייחס ל…', 'נטען כי…', "
+    "'המאשימה טוענת ש…'. Never write that a defendant committed, took or received anything as a plain fact, and never "
+    "write that something was proven or determined. If wording_rules is present, a previous draft was rejected: follow it. "
+)
+
+INDICTMENT_OVERVIEW = Prompt(
+    task_type="indictment_overview",
+    version="indictment-overview-2026-10-11.1",
+    schema="ModelIndictmentOverviewOutput",
+    system=_COMMON + _GUIDE + _ALLEGATION
+    + "Task: from the general part of the indictment, the summary and the charge sections, write overview: 3 to 6 "
+    "sentences that tell a newcomer what this indictment is about as a whole (who is charged, how many counts, what "
+    "the counts are about, the period). Then list defendants: for each defendant, name, one or two sentences on who "
+    "they are and what they are charged with according to the indictment, and case_keys: which of the counts "
+    "(identified by their case numbers 1000, 2000, 4000 as printed in the count headings) concern them.",
+)
+
+CASE_GUIDE = Prompt(
+    task_type="case_guide",
+    version="case-guide-2026-10-11.1",
+    schema="ModelCaseGuideOutput",
+    system=_COMMON + _GUIDE + _ALLEGATION
+    + "Task: write a reader's guide to one count of the indictment, given in case_key. subtitle: a short plain "
+    "description of what the case is about, 2 to 6 words, taken from the material (who and what, e.g. the companies "
+    "or relationships involved), without quotation marks and without the word פרשת. one_line: one sentence that "
+    "explains the whole case to a newcomer. alleged: 6 to 12 sentences that tell the story the indictment alleges in "
+    "chronological order: the background, what each side allegedly wanted, what was allegedly given or done, and why "
+    "the prosecution says it is an offense. people: everyone who plays a role in this count (defendants, officials, "
+    "employees, associates), up to 20, each with one sentence on their role according to the indictment; use the "
+    "name as printed. charges: for each defendant in this count, the offenses as listed in the charge provisions "
+    "('הוראות החיקוק'), in plain words with the statute name. events: up to 40 dated events the indictment describes, "
+    "in chronological order; date is YYYY-MM-DD, YYYY-MM or YYYY exactly as precise as the material states (never "
+    "invent a day or a month) and date_precision says which; title is up to 8 words; text is one sentence framed as "
+    "an allegation. Cite the units each item relies on.",
+)
+
+WITNESS_GUIDE = Prompt(
+    task_type="witness_guide",
+    version="witness-guide-2026-10-11.1",
+    schema="ModelWitnessGuideOutput",
+    system=_COMMON + _GUIDE
+    + "Task: write a reader's guide to one witness, named in witness. role: up to 3 sentences on who this person is, "
+    "only as the material describes them (the indictment's description is the prosecution's allegation: say "
+    "'לפי כתב האישום'). Leave role empty if the material does not say. testimony: 3 to 10 sentences that summarise "
+    "what the witness said in court, in chronological order across the hearings (each hearing has a date), saying "
+    "who was asking (prosecution in direct examination, defense in cross-examination, the judges) and on what topics. "
+    "Report what the witness said, not whether it is true; never judge credibility; a judge's question is not a "
+    "ruling. Cite the units each sentence relies on.",
+)
+
+ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION, CLASSIFY_DOCUMENT,
+                                INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE)}
 ROLE_FOR_TASK = {
     "digest": "extractor",
     "judicial": "judicial_classifier",
@@ -142,4 +200,7 @@ ROLE_FOR_TASK = {
     "answer": "writer",
     "qa_relation": "qa_relation",
     "classify_document": "extractor",
+    "indictment_overview": "writer",
+    "case_guide": "writer",
+    "witness_guide": "writer",
 }

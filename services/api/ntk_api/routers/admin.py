@@ -19,6 +19,7 @@ from ntk_common.db.public import units_by_ids
 from ntk_common.evaluation import SuiteNotFound, resolve_suite
 from ntk_common.jobs import (
     TASK_BUILD_CLAIM,
+    TASK_BUILD_GUIDES,
     TASK_RUN_EVALUATION,
     TASK_RUN_JOB,
     TASK_SCAN_INBOX,
@@ -32,6 +33,7 @@ from ..schemas import (
     CaseEventIn,
     ClaimIn,
     EvaluationRequest,
+    GuideBuildRequest,
     InboxItemOverride,
     InboxProcessRequest,
     InboxScanRequest,
@@ -182,6 +184,18 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
 
 
 # ------------------------------------------------------------------ evaluation runs
+@router.post("/guides/build", status_code=202)
+def build_guides(body: GuideBuildRequest, request: Request, st: AppState = Depends(get_state),
+                 p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Build reader guides (ADR-0015) in the worker. Results are audited as ``guides.built``; new guides enter review."""
+    spec = body.model_dump(exclude_none=True)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="guides.build.requested", object_type="guide", object_id=body.kind,
+                  request_id=_rid(request), details=spec)
+    tid = st.queue.enqueue(TASK_BUILD_GUIDES, json.dumps(spec))
+    return _json({"queued": TASK_BUILD_GUIDES, "task_id": tid, **spec}, cache="no-store", status=202)
+
+
 @router.post("/evaluations", status_code=202)
 def create_evaluation(body: EvaluationRequest, request: Request, st: AppState = Depends(get_state),
                       p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:

@@ -16,6 +16,7 @@ TASK_DELIVER_WEBHOOKS = "ntk.deliver_webhooks"
 TASK_RUN_EVALUATION = "ntk.run_evaluation"
 TASK_SCAN_INBOX = "ntk.scan_inbox"
 TASK_CLASSIFY_INBOX = "ntk.classify_inbox_batch"
+TASK_BUILD_GUIDES = "ntk.build_guides"
 
 
 class JobQueue(Protocol):

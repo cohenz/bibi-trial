@@ -445,7 +445,7 @@ defs["Artifact"] = obj(
     {
         "schema_version": {"const": SV},
         "id": UUID,
-        "artifact_type": {"enum": ["summary", "claim_card", "answer", "seo_excerpt"]},
+        "artifact_type": {"enum": ["summary", "claim_card", "answer", "seo_excerpt", "guide"]},
         "object_type": NESTR,
         "object_id": NESTR,
         "current_version_id": nullable("string", format="uuid"),
@@ -749,6 +749,75 @@ defs["ModelDocumentClassification"] = obj(
         "hearing_date": nullable("string"),
         "confidence": CONF,
         "rationale": nullable("string"),
+    },
+)
+
+# --- guides: entry points for readers (ADR-0015) --------------------------------
+CASE_KEYS = ["1000", "2000", "4000"]
+GUIDE_KINDS = ["indictment", "case", "witness"]
+GUIDE_BLOCKS = ["one_line", "overview", "defendants", "alleged", "people", "charges", "events", "role", "testimony"]
+DATE_PRECISION = ["day", "month", "year"]
+FUZZY_DATE = {"type": "string", "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$"}
+SU_LIST = arr({"type": "string", "pattern": SU_ID}, minItems=1)
+M_ITEM = obj(["text", "source_unit_ids"], {"text": NESTR, "source_unit_ids": SU_LIST})
+
+defs["GuideItem"] = obj(
+    ["text", "citation_ids"],
+    {
+        "label": nullable("string"),
+        "text": NESTR,
+        "date": nullable("string", format="date"),
+        "date_precision": {"enum": [*DATE_PRECISION, None]},
+        "case_keys": arr({"enum": CASE_KEYS}),
+        "witness_slug": nullable("string"),
+        "citation_ids": arr({"type": "string", "pattern": SU_ID}, minItems=1),
+    },
+)
+defs["GuideObject"] = obj(
+    ["schema_version", "id", "kind", "key", "title", "blocks", "citations", "review"],
+    {
+        "schema_version": {"const": SV},
+        "id": UUID,
+        "kind": {"enum": GUIDE_KINDS},
+        "key": NESTR,
+        "title": NESTR,
+        "subtitle": nullable("string"),
+        "source_version_ids": arr({"type": "string", "pattern": SV_ID}),
+        "blocks": arr(obj(["block", "items"], {"block": {"enum": GUIDE_BLOCKS}, "items": arr(ref("GuideItem"))})),
+        "citations": arr(ref("Citation")),
+        "review": ref("Review"),
+    },
+)
+defs["ModelIndictmentOverviewOutput"] = obj(
+    ["schema_version", "overview", "defendants"],
+    {
+        "schema_version": {"const": SV},
+        "overview": arr(M_ITEM, minItems=1),
+        "defendants": arr(obj(["name", "text", "case_keys", "source_unit_ids"],
+                              {"name": NESTR, "text": NESTR, "case_keys": arr({"enum": CASE_KEYS}), "source_unit_ids": SU_LIST})),
+    },
+)
+defs["ModelCaseGuideOutput"] = obj(
+    ["schema_version", "case_key", "subtitle", "one_line", "alleged", "people", "charges", "events"],
+    {
+        "schema_version": {"const": SV},
+        "case_key": {"enum": CASE_KEYS},
+        "subtitle": NESTR,
+        "one_line": M_ITEM,
+        "alleged": arr(M_ITEM, minItems=1),
+        "people": arr(obj(["name", "text", "source_unit_ids"], {"name": NESTR, "text": NESTR, "source_unit_ids": SU_LIST})),
+        "charges": arr(obj(["defendant", "text", "source_unit_ids"], {"defendant": NESTR, "text": NESTR, "source_unit_ids": SU_LIST})),
+        "events": arr(obj(["date", "date_precision", "title", "text", "source_unit_ids"],
+                          {"date": FUZZY_DATE, "date_precision": {"enum": DATE_PRECISION}, "title": NESTR, "text": NESTR,
+                           "source_unit_ids": SU_LIST})),
+    },
+)
+defs["ModelWitnessGuideOutput"] = obj(
+    ["schema_version", "role", "testimony"],
+    {
+        "schema_version": {"const": SV},
+        "role": arr(M_ITEM),
+        "testimony": arr(M_ITEM),
     },
 )
 

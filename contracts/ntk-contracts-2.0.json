@@ -1686,7 +1686,8 @@
             "summary",
             "claim_card",
             "answer",
-            "seo_excerpt"
+            "seo_excerpt",
+            "guide"
           ]
         },
         "object_type": {
@@ -2976,6 +2977,483 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "GuideItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "text",
+        "citation_ids"
+      ],
+      "properties": {
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date"
+        },
+        "date_precision": {
+          "enum": [
+            "day",
+            "month",
+            "year",
+            null
+          ]
+        },
+        "case_keys": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "1000",
+              "2000",
+              "4000"
+            ]
+          }
+        },
+        "witness_slug": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "citation_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^su_[0-9a-f]{26}$"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "GuideObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "id",
+        "kind",
+        "key",
+        "title",
+        "blocks",
+        "citations",
+        "review"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "enum": [
+            "indictment",
+            "case",
+            "witness"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subtitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_version_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^sv_[0-9a-f]{26}$"
+          }
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "block",
+              "items"
+            ],
+            "properties": {
+              "block": {
+                "enum": [
+                  "one_line",
+                  "overview",
+                  "defendants",
+                  "alleged",
+                  "people",
+                  "charges",
+                  "events",
+                  "role",
+                  "testimony"
+                ]
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/GuideItem"
+                }
+              }
+            }
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Citation"
+          }
+        },
+        "review": {
+          "$ref": "#/$defs/Review"
+        }
+      }
+    },
+    "ModelIndictmentOverviewOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "overview",
+        "defendants"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "2.0"
+        },
+        "overview": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "defendants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "text",
+              "case_keys",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "case_keys": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "1000",
+                    "2000",
+                    "4000"
+                  ]
+                }
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "ModelCaseGuideOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "case_key",
+        "subtitle",
+        "one_line",
+        "alleged",
+        "people",
+        "charges",
+        "events"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "2.0"
+        },
+        "case_key": {
+          "enum": [
+            "1000",
+            "2000",
+            "4000"
+          ]
+        },
+        "subtitle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "one_line": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "source_unit_ids"
+          ],
+          "properties": {
+            "text": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source_unit_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^su_[0-9a-f]{26}$"
+              },
+              "minItems": 1
+            }
+          }
+        },
+        "alleged": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          },
+          "minItems": 1
+        },
+        "people": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "charges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "defendant",
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "defendant": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "date",
+              "date_precision",
+              "title",
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "date": {
+                "type": "string",
+                "pattern": "^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$"
+              },
+              "date_precision": {
+                "enum": [
+                  "day",
+                  "month",
+                  "year"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "ModelWitnessGuideOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "role",
+        "testimony"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "2.0"
+        },
+        "role": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        "testimony": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text",
+              "source_unit_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_unit_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^su_[0-9a-f]{26}$"
+                },
+                "minItems": 1
+              }
+            }
+          }
         }
       }
     }

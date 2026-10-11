@@ -189,6 +189,13 @@ class EvaluationRequest(BaseModel):
     as_of: dt.datetime | None = None
 
 
+class GuideBuildRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["indictment", "cases", "witnesses", "all"] = "all"
+    source_version_id: str | None = Field(default=None, pattern=r"^sv_[0-9a-f]{26}$")
+    keys: list[str] | None = Field(default=None, max_length=50)
+
+
 class InboxScanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # None: follow NTK_INBOX_AUTO_PROCESS; False: classify only (a map of the documents); True: classify and ingest

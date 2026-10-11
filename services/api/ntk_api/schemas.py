@@ -173,6 +173,9 @@ class StageRerunRequest(BaseModel):
     """Re-run named stages of an existing job (e.g. after a model change). Other stages keep their results."""
     model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"stages": ["embed", "extract_a", "verify"]}]})
     stages: list[str] = Field(min_length=1, max_length=15)
+    # a job left 'running' by a worker that was stopped mid-task (its message only comes back after the broker's
+    # visibility timeout) may be re-run once it has not progressed for STALE_JOB_MINUTES
+    force_stale: bool = False
 
 
 class EvaluationRequest(BaseModel):

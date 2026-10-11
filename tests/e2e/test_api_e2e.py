@@ -233,3 +233,28 @@ def test_evaluation_runs(client, pipeline):
         assert signed(client, "GET", "/v2/admin/evaluations/not-a-uuid").status_code == 400
     finally:
         client.queue.handlers.pop(TASK_RUN_EVALUATION, None)
+
+
+def test_rerun_stale_running_job(client, fixture_pdf, services):
+    from sqlalchemy import text
+
+    sha = hashlib.sha256(fixture_pdf).hexdigest()
+    up = signed(client, "POST", "/v2/admin/uploads/presign",
+                {"filename": "12.04.21.pdf", "mime_type": "application/pdf", "size_bytes": len(fixture_pdf), "sha256": sha}).json()
+    body = {"upload_id": up["upload_id"], "document": {"title": "SYNTHETIC e2e", "hearing_date": "2021-04-12",
+                                                        "court_record_status": "filed"}}
+    job_id = signed(client, "POST", "/v2/admin/ingestion-jobs", body).json()["job_id"]
+    with services.engine.begin() as conn:
+        conn.execute(text("UPDATE ntk.ingestion_jobs SET status='running', updated_at = now() WHERE id = CAST(:j AS uuid)"), {"j": job_id})
+        conn.execute(text("UPDATE ntk.ingestion_job_stages SET status='running' WHERE job_id = CAST(:j AS uuid) AND stage='verify'"),
+                     {"j": job_id})
+    assert signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["verify"]}).status_code == 409
+    # recently active: force is refused too
+    assert signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun",
+                  {"stages": ["verify"], "force_stale": True}).status_code == 409
+    with services.engine.begin() as conn:
+        conn.execute(text("UPDATE ntk.ingestion_jobs SET updated_at = now() - interval '20 minutes' WHERE id = CAST(:j AS uuid)"),
+                     {"j": job_id})
+    r = signed(client, "POST", f"/v2/admin/ingestion-jobs/{job_id}/rerun", {"stages": ["verify", "review"], "force_stale": True})
+    assert r.status_code == 202, r.text
+    assert signed(client, "GET", f"/v2/admin/ingestion-jobs/{job_id}").json()["status"] == "succeeded"

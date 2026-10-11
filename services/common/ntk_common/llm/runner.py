@@ -123,7 +123,8 @@ class ModelRunner:
         for attempt in range(self.max_retries + 1):
             try:
                 result = provider.generate_json(model_id=spec.model_id, system=prompt.system, user=user,
-                                                temperature=spec.temperature, task_type=task_type, payload=payload)
+                                                temperature=spec.temperature, task_type=task_type, payload=payload,
+                                                response_schema=contracts.json_schema_for(prompt.schema))
                 break
             except ProviderError as exc:
                 last_error = exc

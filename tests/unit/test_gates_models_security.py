@@ -274,3 +274,30 @@ def test_extra_service_keys_merge_without_overriding():
     assert keys["ops"]["secret"] == "ops-secret-xyz" and keys["wp"]["secret"] == "a"
     assert "ops-secret-xyz" not in str(s.safe_dict())
     assert Settings(service_keys_extra_json="not json").service_keys == {}
+
+
+def test_gemini_structured_output_schema_from_contract():
+    from ntk_common import contracts
+    from ntk_common.llm.providers import GeminiProvider, gemini_schema
+
+    for name in ("ModelDigestOutput", "ModelJudicialOutput", "ModelMapperOutput", "ModelVerifierOutput",
+                 "ModelAnswerDraft", "ModelQARelationOutput"):
+        g = gemini_schema(contracts.json_schema_for(name))
+        text = json.dumps(g)
+        assert '"pattern"' not in text and '"const"' not in text and '"minLength"' not in text
+        assert g["properties"]["schema_version"] == {"enum": ["2.0"], "type": "string"}
+        assert set(g["required"]) == set(contracts.json_schema_for(name)["required"])
+
+    schema = contracts.json_schema_for("ModelQARelationOutput")
+    sess = _FakeSession(_FakeResp(200, {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}))
+    GeminiProvider("k", "https://x.test/v1beta", session=sess).generate_json(
+        model_id="m", system="s", user="u", temperature=0, task_type="qa_relation", response_schema=schema)
+    assert sess.calls[0]["body"]["generationConfig"]["responseJsonSchema"]["required"] == ["schema_version", "items"]
+
+    # schema rejected (400) → one retry with the schema in the prompt instead
+    sess = _FakeSession(_FakeResp(400, {"error": "Invalid JSON payload: responseJsonSchema"}),
+                        _FakeResp(200, {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}))
+    GeminiProvider("k", "https://x.test/v1beta", session=sess).generate_json(
+        model_id="m", system="s", user="u", temperature=0, task_type="qa_relation", response_schema=schema)
+    assert len(sess.calls) == 2 and "responseJsonSchema" not in sess.calls[1]["body"]["generationConfig"]
+    assert "<output_json_schema>" in sess.calls[1]["body"]["contents"][0]["parts"][0]["text"]

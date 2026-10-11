@@ -41,7 +41,7 @@ class ModelProvider(Protocol):
     name: str
 
     def generate_json(self, *, model_id: str, system: str, user: str, temperature: float, task_type: str,
-                      payload: dict | None = None) -> ProviderResult: ...
+                      payload: dict | None = None, response_schema: dict | None = None) -> ProviderResult: ...
 
     def embed(self, *, model_id: str, texts: list[str], dim: int, task: str) -> list[list[float]]: ...
 
@@ -80,13 +80,28 @@ class GeminiProvider:
         return resp.json()
 
     def generate_json(self, *, model_id: str, system: str, user: str, temperature: float, task_type: str,
-                      payload: dict | None = None) -> ProviderResult:
+                      payload: dict | None = None, response_schema: dict | None = None) -> ProviderResult:
+        """``response_schema`` (the output contract) constrains decoding via ``responseJsonSchema``. If the API
+        rejects the schema (HTTP 400), the call is repeated once with the schema written into the prompt instead;
+        the contract is validated afterwards either way."""
+        gen: dict[str, Any] = {"temperature": temperature, "responseMimeType": "application/json"}
+        if response_schema:
+            gen["responseJsonSchema"] = gemini_schema(response_schema)
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
+            "generationConfig": gen,
         }
-        data = self._post(f"models/{model_id}:generateContent", body)
+        try:
+            data = self._post(f"models/{model_id}:generateContent", body)
+        except ProviderError as exc:
+            if not (response_schema and exc.status == 400):
+                raise
+            gen.pop("responseJsonSchema", None)
+            schema_text = json.dumps(response_schema, ensure_ascii=False)
+            body["contents"] = [{"role": "user", "parts": [{"text": user + "\n<output_json_schema>\n" + schema_text
+                                                             + "\n</output_json_schema>"}]}]
+            data = self._post(f"models/{model_id}:generateContent", body)
         cands = data.get("candidates") or []
         if not cands:
             fb = data.get("promptFeedback", {})
@@ -116,6 +131,39 @@ class GeminiProvider:
         return out
 
 
+# JSON Schema keywords Gemini's responseJsonSchema accepts; others (pattern, minLength, format, ...) are dropped here
+# and still enforced by contract validation after the call
+_GEMINI_KEYWORDS = {"type", "properties", "required", "items", "enum", "anyOf", "additionalProperties", "minItems",
+                    "maxItems", "minimum", "maximum", "description"}
+
+
+def gemini_schema(schema: Any) -> Any:
+    """Translate a contract (JSON Schema 2020-12) into the subset Gemini's structured output accepts."""
+    if isinstance(schema, list):
+        return [gemini_schema(x) for x in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out: dict[str, Any] = {}
+    if "const" in schema:  # const → single-value enum
+        c = schema["const"]
+        out["enum"] = [c]
+        out["type"] = "string" if isinstance(c, str) else ("boolean" if isinstance(c, bool) else "number")
+    for k, v in schema.items():
+        if k not in _GEMINI_KEYWORDS:
+            continue
+        if k == "properties":
+            out[k] = {name: gemini_schema(sub) for name, sub in v.items()}
+        elif k in {"items", "additionalProperties"} and isinstance(v, dict):
+            out[k] = gemini_schema(v)
+        elif k == "anyOf":
+            out[k] = [gemini_schema(x) for x in v]
+        else:
+            out[k] = v
+    if "enum" in out and "type" not in out and all(isinstance(x, str) for x in out["enum"]):
+        out["type"] = "string"
+    return out
+
+
 def _l2(v: list[float]) -> list[float]:
     n = math.sqrt(sum(x * x for x in v)) or 1.0
     return [x / n for x in v]
@@ -136,7 +184,7 @@ class MockProvider:
     name = "mock"
 
     def generate_json(self, *, model_id: str, system: str, user: str, temperature: float, task_type: str,
-                      payload: dict | None = None) -> ProviderResult:
+                      payload: dict | None = None, response_schema: dict | None = None) -> ProviderResult:
         payload = payload or {}
         fn = getattr(self, f"_task_{task_type}", None)
         if fn is None:

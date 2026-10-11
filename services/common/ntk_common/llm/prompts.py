@@ -43,7 +43,7 @@ _COMMON = (
 
 DIGEST = Prompt(
     task_type="digest",
-    version="digest-2026-10-10.1",
+    version="digest-2026-10-11.1",
     schema="ModelDigestOutput",
     system=_COMMON
     + "Task: produce a neutral digest of one hearing. Write 3–8 short summary sentences in chronological order; each "
@@ -54,7 +54,7 @@ DIGEST = Prompt(
 
 JUDICIAL = Prompt(
     task_type="judicial",
-    version="judicial-2026-10-10.1",
+    version="judicial-2026-10-11.1",
     schema="ModelJudicialOutput",
     system=_COMMON
     + "Task: classify each candidate unit. level must be one of question_or_comment (a question or passing remark), "
@@ -65,7 +65,7 @@ JUDICIAL = Prompt(
 
 MAP_CLAIM = Prompt(
     task_type="map_claim",
-    version="map-claim-2026-10-10.1",
+    version="map-claim-2026-10-11.1",
     schema="ModelMapperOutput",
     system=_COMMON
     + "Task: for the given claim, find which candidate units support it, weaken it, give context, or are neutral. "
@@ -78,7 +78,7 @@ MAP_CLAIM = Prompt(
 
 VERIFY = Prompt(
     task_type="verify",
-    version="verify-2026-10-10.1",
+    version="verify-2026-10-11.1",
     schema="ModelVerifierOutput",
     system=_COMMON
     + "Task: you are an independent verifier. You receive assertions with their cited source units, and the other "
@@ -91,7 +91,7 @@ VERIFY = Prompt(
 
 ANSWER = Prompt(
     task_type="answer",
-    version="answer-2026-10-10.1",
+    version="answer-2026-10-11.1",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Task: answer the user's question using only the published context. Structure: answer_short, then sections "
@@ -105,7 +105,7 @@ ANSWER = Prompt(
 
 QA_RELATION = Prompt(
     task_type="qa_relation",
-    version="qa-relation-2026-10-10.1",
+    version="qa-relation-2026-10-11.1",
     schema="ModelQARelationOutput",
     system=_COMMON
     + "Task: for each question/answer exchange classify how the answer relates to the proposition in the question: "

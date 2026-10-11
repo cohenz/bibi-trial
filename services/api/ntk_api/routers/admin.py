@@ -39,6 +39,7 @@ from ..security import Principal
 from .public import _json
 
 router = APIRouter(prefix="/v2/admin", tags=["admin"])
+STALE_JOB_MINUTES = 15
 
 
 def _rid(request: Request) -> str:
@@ -157,10 +158,14 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
         if job is None:
             raise ApiError(404, "not_found", "job not found")
         if job["status"] in {"running", "queued"}:
-            raise ApiError(409, "conflict", f"job is {job['status']}")
+            idle = dt.datetime.now(dt.UTC) - job["updated_at"]
+            if not (body.force_stale and idle >= dt.timedelta(minutes=STALE_JOB_MINUTES)):
+                raise ApiError(409, "conflict", f"job is {job['status']}"
+                               + (f"; force_stale needs {STALE_JOB_MINUTES} idle minutes" if body.force_stale else ""))
         n = ops.reset_stages(conn, job_id, list(dict.fromkeys(body.stages)))
         ops.audit(conn, actor=p.label, action="ingestion_job.rerun", object_type="ingestion_job", object_id=job_id,
-                  request_id=_rid(request), details={"stages": body.stages, "stages_reset": n})
+                  request_id=_rid(request), details={"stages": body.stages, "stages_reset": n,
+                                                     "forced_stale": job["status"] in {"running", "queued"}})
     st.queue.enqueue(TASK_RUN_JOB, job_id)
     return _json({"job_id": job_id, "status": "queued", "stages_reset": n}, cache="no-store", status=202)
 

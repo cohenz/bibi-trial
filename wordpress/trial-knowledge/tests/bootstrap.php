@@ -44,6 +44,10 @@ function get_bloginfo( $s ) { return 'Site'; }
 function add_action() {}
 function add_filter() {}
 function add_shortcode() {}
+function add_query_arg( $k, $v, $u ) { return $u . ( false === strpos( $u, '?' ) ? '?' : '&' ) . rawurlencode( $k ) . '=' . rawurlencode( (string) $v ); }
+function _n( $s, $p, $n, $d = null ) { return 1 === (int) $n ? $s : $p; }
+function absint( $v ) { return abs( (int) $v ); }
+function wp_unslash( $v ) { return $v; }
 
 require TK_DIR . 'includes/class-settings-store.php';
 require TK_DIR . 'includes/class-api-client.php';

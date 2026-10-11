@@ -44,6 +44,22 @@ class TK_Render {
 		'unknown'                   => 'מעמד בתיק לא ידוע',
 	);
 
+	const TYPES = array(
+		'protocol'   => 'פרוטוקול דיון',
+		'decision'   => 'החלטה',
+		'motion'     => 'בקשה',
+		'response'   => 'תגובה',
+		'notice'     => 'הודעה',
+		'affidavit'  => 'תצהיר',
+		'indictment' => 'כתב אישום',
+		'exhibit'    => 'מוצג',
+		'other'      => 'מסמך',
+	);
+
+	public static function type_label( $type ) {
+		return self::TYPES[ $type ] ?? self::TYPES['other'];
+	}
+
 	public static function error_box( $message ) {
 		return '<div class="tk-notice tk-notice--error" role="status">' . esc_html( $message ) . '</div>';
 	}
@@ -164,6 +180,10 @@ class TK_Render {
 		if ( ! empty( $doc['canonical_url'] ) ) {
 			$out .= '<p><a href="' . esc_url( $doc['canonical_url'] ) . '" rel="noopener nofollow">' . esc_html__( 'למסמך הרשמי', 'trial-knowledge' ) . '</a></p>';
 		}
+		$in_context = self::in_context_url( $c );
+		if ( $in_context ) {
+			$out .= '<p><a class="tk-button" href="' . esc_url( $in_context ) . '">' . esc_html__( 'לקטע בתוך המסמך המלא', 'trial-knowledge' ) . '</a></p>';
+		}
 		if ( ! empty( $c['superseded_by_version'] ) ) {
 			$out .= '<p class="tk-notice">' . esc_html__( 'קיימת גרסה מתוקנת של המסמך; ציטוט זה מתייחס לגרסה המקורית.', 'trial-knowledge' ) . '</p>';
 		}
@@ -179,6 +199,96 @@ class TK_Render {
 		return $out;
 	}
 
+	/** Link to a unit inside its full transcript/document page, on the right page of text. */
+	public static function in_context_url( array $c ) {
+		$cit  = $c['citation'];
+		$page = (int) $cit['page'];
+		$from = max( 1, $page - ( ( $page - 1 ) % 25 ) );
+		if ( ! empty( $c['hearing_id'] ) ) {
+			$url = TK_Public_Pages::url( 'hearing', $c['hearing_id'] );
+		} elseif ( ! empty( $cit['source_version_id'] ) ) {
+			$url = TK_Public_Pages::url( 'document', $cit['source_version_id'] );
+		} else {
+			return '';
+		}
+		return add_query_arg( 'tk_p', $from, $url ) . '#' . rawurlencode( $cit['source_unit_id'] );
+	}
+
+	private static function pager( array $t, $base_url ) {
+		$out = '<nav class="tk-pager" aria-label="' . esc_attr__( 'עמודי המסמך', 'trial-knowledge' ) . '">';
+		if ( ! empty( $t['prev_page_from'] ) ) {
+			$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['prev_page_from'], $base_url ) ) . '">' . esc_html__( '→ עמודים קודמים', 'trial-knowledge' ) . '</a> ';
+		}
+		$out .= '<span class="tk-pager__where">' . esc_html( sprintf( __( 'עמודים %1$d–%2$d מתוך %3$d', 'trial-knowledge' ), $t['page_from'], $t['page_to'], $t['page_count'] ) ) . '</span>';
+		if ( ! empty( $t['next_page_from'] ) ) {
+			$out .= ' <a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['next_page_from'], $base_url ) ) . '">' . esc_html__( 'עמודים הבאים ←', 'trial-knowledge' ) . '</a>';
+		}
+		if ( ! empty( $t['pdf_url'] ) ) {
+			$out .= ' <a class="tk-button tk-button--pdf" href="' . esc_url( $t['pdf_url'] ) . '" rel="nofollow">' . esc_html__( 'PDF המקורי', 'trial-knowledge' ) . '</a>';
+		}
+		return $out . '</nav>';
+	}
+
+	/**
+	 * Full text of a protocol or document, page by page, every unit linkable.
+	 *
+	 * @param array  $t        Response of /v2/hearings/{id}/transcript or /v2/documents/{sv}.
+	 * @param string $base_url Page URL without tk_p.
+	 */
+	public static function transcript( array $t, $base_url ) {
+		$out  = '<section class="tk-transcript" dir="rtl" lang="he">' . self::pager( $t, $base_url );
+		$page = null;
+		foreach ( (array) $t['units'] as $u ) {
+			if ( $u['page'] !== $page ) {
+				$out .= ( null === $page ? '' : '</ol>' ) . '<h3 class="tk-transcript__page" id="page-' . (int) $u['page'] . '">' .
+					esc_html( sprintf( __( 'עמוד %d', 'trial-knowledge' ), $u['page'] ) ) . '</h3><ol class="tk-transcript__units">';
+				$page = $u['page'];
+			}
+			$type  = preg_replace( '/[^a-z_]/', '', (string) $u['unit_type'] );
+			$out  .= '<li id="' . esc_attr( $u['id'] ) . '" class="tk-u tk-u--' . esc_attr( $type ) . '">';
+			$out  .= '<a class="tk-u__lines" href="' . esc_url( self::citation_url( $u['id'] ) ) . '" title="' . esc_attr__( 'קישור קבוע לקטע', 'trial-knowledge' ) . '">' .
+				esc_html( $u['line_start'] === $u['line_end'] ? (string) $u['line_start'] : $u['line_start'] . '–' . $u['line_end'] ) . '</a>';
+			if ( ! empty( $u['speaker'] ) && 'caption' !== $type ) {
+				$out .= '<span class="tk-u__speaker">' . esc_html( $u['speaker'] ) . '</span>';
+			}
+			$out .= '<span class="tk-u__text">' . nl2br( esc_html( $u['text'] ) ) . '</span>';
+			if ( ! empty( $u['exchange_label'] ) ) {
+				$out .= ' <span class="tk-badge tk-badge--qa">' . esc_html( $u['exchange_label'] ) . '</span>';
+			}
+			$out .= '</li>';
+		}
+		if ( null !== $page ) {
+			$out .= '</ol>';
+		} else {
+			$out .= '<p class="tk-muted">' . esc_html__( 'אין טקסט בעמודים אלה.', 'trial-knowledge' ) . '</p>';
+		}
+		return $out . self::pager( $t, $base_url ) . '</section>';
+	}
+
+	/**
+	 * @param array $d    Response of GET /v2/documents.
+	 * @param array $opts show_type.
+	 */
+	public static function documents( array $d, array $opts = array() ) {
+		$items = (array) ( $d['items'] ?? array() );
+		if ( ! $items ) {
+			return '<p class="tk-empty">' . esc_html__( 'עדיין לא פורסמו מסמכים.', 'trial-knowledge' ) . '</p>';
+		}
+		$out = '<ul class="tk-documents" dir="rtl" lang="he">';
+		foreach ( $items as $it ) {
+			$out .= '<li class="tk-documents__item"><a href="' . esc_url( TK_Public_Pages::url( 'document', $it['source_version_id'] ) ) . '">' . esc_html( $it['title'] ) . '</a> ';
+			$out .= '<span class="tk-badge">' . esc_html( self::type_label( $it['source_type'] ) ) . '</span>';
+			if ( ! empty( $it['document_date'] ) ) {
+				$out .= ' <time datetime="' . esc_attr( $it['document_date'] ) . '">' . esc_html( $it['document_date'] ) . '</time>';
+			}
+			if ( ! empty( $it['page_count'] ) ) {
+				$out .= ' <span class="tk-muted">' . esc_html( sprintf( _n( 'עמוד %d', '%d עמודים', (int) $it['page_count'], 'trial-knowledge' ), (int) $it['page_count'] ) ) . '</span>';
+			}
+			$out .= '</li>';
+		}
+		return $out . '</ul>';
+	}
+
 	/**
 	 * @param array $t Response of GET /v2/timeline.
 	 */
@@ -186,6 +296,12 @@ class TK_Render {
 		$items = array();
 		foreach ( (array) $t['events'] as $e ) {
 			$items[] = array( substr( $e['occurred_at'], 0, 10 ), 'event-' . $e['event_type'], $e['title'], $e['description'] ?? '', '' );
+		}
+		foreach ( (array) ( $t['documents'] ?? array() ) as $doc ) {
+			if ( empty( $doc['document_date'] ) ) {
+				continue;
+			}
+			$items[] = array( $doc['document_date'], 'document-' . preg_replace( '/[^a-z_]/', '', $doc['source_type'] ), self::type_label( $doc['source_type'] ) . ': ' . $doc['title'], '', TK_Public_Pages::url( 'document', $doc['source_version_id'] ) );
 		}
 		foreach ( (array) $t['hearings'] as $h ) {
 			$w       = ! empty( $h['witnesses'] ) ? implode( ', ', $h['witnesses'] ) : '';

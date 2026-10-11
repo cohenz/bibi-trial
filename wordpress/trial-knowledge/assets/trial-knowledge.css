@@ -44,3 +44,30 @@
 	outline: 3px solid #1f4e79; outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) { .tk-claim *, .tk-answer * { transition: none !important; } }
+
+/* 2.2: full transcripts and documents */
+.tk-transcript, .tk-documents { direction: rtl; text-align: start; line-height: 1.75; }
+.tk-pager { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-block: 1rem; }
+.tk-pager__where { color: #4a5560; font-variant-numeric: tabular-nums; }
+.tk-button { display: inline-block; padding: .3em .8em; border: 1px solid #c4cbd2; border-radius: 6px; background: #fff; text-decoration: none; font-size: .9em; }
+.tk-button:hover { background: #f2f4f6; }
+.tk-button--pdf { border-color: #1f4e79; color: #1f4e79; }
+.tk-transcript__page { font-size: .95em; color: #4a5560; border-block-end: 1px solid #e5e8eb; padding-block-end: .25rem; margin-block: 1.5rem .5rem; }
+.tk-transcript__units { list-style: none; margin: 0; padding: 0; }
+.tk-u { display: grid; grid-template-columns: 3.5rem 1fr; column-gap: .75rem; padding-block: .3rem; border-radius: 4px; }
+.tk-u:target { background: #fff4d6; }
+.tk-u__lines { grid-row: span 2; color: #8a949d; font-size: .8em; font-variant-numeric: tabular-nums; text-decoration: none; padding-block-start: .2em; }
+.tk-u__speaker { font-weight: 600; }
+.tk-u__text { grid-column: 2; }
+.tk-u--question .tk-u__text { color: #1f3a52; }
+.tk-u--answer { padding-inline-start: 1rem; }
+.tk-u--decision { border-inline-start: 3px solid #1f4e79; padding-inline-start: .5rem; }
+.tk-u--caption .tk-u__text { color: #5b6670; font-size: .92em; }
+.tk-badge--qa { grid-column: 2; justify-self: start; background: #e6f4ea; margin-block-start: .2rem; }
+.tk-documents { list-style: none; padding: 0; }
+.tk-documents__item { padding-block: .45rem; border-block-end: 1px solid #eef1f4; display: flex; flex-wrap: wrap; gap: .5rem; align-items: baseline; }
+.tk-documents__item time { font-variant-numeric: tabular-nums; color: #4a5560; }
+.tk-kicker { display: flex; gap: .5rem; align-items: center; margin-block-end: .25rem; }
+.tk-timeline__item--document-decision { border-inline-start: 3px solid #1f4e79; }
+.tk-transcript a:focus-visible, .tk-documents a:focus-visible, .tk-pager a:focus-visible { outline: 3px solid #1f4e79; outline-offset: 2px; }
+@media (max-width: 600px) { .tk-u { grid-template-columns: 2.75rem 1fr; column-gap: .5rem; } }

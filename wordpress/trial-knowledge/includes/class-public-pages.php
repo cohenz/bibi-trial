@@ -4,7 +4,8 @@
  *   /{slug}/claim/{uuid}/    claim card       (templates/single-claim.php)
  *   /{slug}/answer/{uuid}/   answer permalink (templates/single-answer.php)
  *   /{slug}/source/{su_id}/  citation         (templates/single-source.php)
- *   /{slug}/hearing/{hr_id}/ hearing digest   (templates/single-hearing.php)
+ *   /{slug}/hearing/{hr_id}/ hearing: digest + full protocol (templates/single-hearing.php)
+ *   /{slug}/document/{sv_id}/ decision, motion, notice … (templates/single-document.php)
  *
  * @package TrialKnowledge
  */
@@ -20,6 +21,7 @@ class TK_Public_Pages {
 
 	public static function init() {
 		add_action( 'init', array( __CLASS__, 'rewrite' ) );
+		add_action( 'init', array( __CLASS__, 'maybe_flush' ), 99 );
 		add_filter( 'query_vars', array( __CLASS__, 'vars' ) );
 		add_filter( 'template_include', array( __CLASS__, 'template' ) );
 		add_filter( 'pre_get_document_title', array( __CLASS__, 'title' ) );
@@ -36,6 +38,21 @@ class TK_Public_Pages {
 		add_rewrite_rule( '^' . $s . '/(claim|answer)/([0-9a-fA-F-]{36})/?$', 'index.php?tk_type=$matches[1]&tk_id=$matches[2]', 'top' );
 		add_rewrite_rule( '^' . $s . '/source/(su_[0-9a-f]{26})/?$', 'index.php?tk_type=source&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/hearing/(hr_[0-9a-f]{26})/?$', 'index.php?tk_type=hearing&tk_id=$matches[1]', 'top' );
+		add_rewrite_rule( '^' . $s . '/document/(sv_[0-9a-f]{26})/?$', 'index.php?tk_type=document&tk_id=$matches[1]', 'top' );
+	}
+
+	/** New URL patterns after a plugin update take effect without re-activating the plugin. */
+	public static function maybe_flush() {
+		if ( get_option( 'tk_rewrite_version' ) !== TK_VERSION ) {
+			flush_rewrite_rules();
+			update_option( 'tk_rewrite_version', TK_VERSION );
+		}
+	}
+
+	/** Page number requested for transcripts and documents (?tk_p=). */
+	public static function page_param() {
+		$p = isset( $_GET['tk_p'] ) ? absint( wp_unslash( $_GET['tk_p'] ) ) : 1; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only navigation
+		return max( 1, min( 5000, $p ) );
 	}
 
 	public static function activate() {
@@ -70,7 +87,8 @@ class TK_Public_Pages {
 			'claim'   => array( '/v2/claims/' . strtolower( $id ), array( 'claim:' . strtolower( $id ) ) ),
 			'answer'  => array( '/v2/answers/' . strtolower( $id ), array( 'answer:' . strtolower( $id ) ) ),
 			'source'  => array( '/v2/citations/' . $id, array( 'citations' ) ),
-			'hearing' => array( '/v2/hearings/' . $id, array( 'hearing:' . $id ) ),
+			'hearing'  => array( '/v2/hearings/' . $id, array( 'hearing:' . $id ) ),
+			'document' => array( '/v2/documents/' . $id . '?page_from=' . self::page_param(), array( 'document:' . $id, 'lists' ) ),
 		);
 		if ( ! isset( $paths[ $type ] ) ) {
 			return null;
@@ -116,6 +134,8 @@ class TK_Public_Pages {
 				return sprintf( '%s — עמ׳ %d | %s', $d['document']['title'], $d['citation']['page'], get_bloginfo( 'name' ) );
 			case 'hearing':
 				return sprintf( 'דיון %s | %s', $d['hearing']['hearing_date'], get_bloginfo( 'name' ) );
+			case 'document':
+				return $d['document']['title'] . ' | ' . get_bloginfo( 'name' );
 		}
 		return $title;
 	}

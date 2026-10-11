@@ -3,7 +3,8 @@
  * Gutenberg blocks (dynamic, server-rendered) and equivalent shortcodes.
  *
  * Blocks: trial-knowledge/claim-card, source-citation, hearing-timeline, ask-the-trial
- * Shortcodes: [tk_claim_card id=""], [tk_citation id=""], [tk_hearing_timeline], [tk_ask]
+ * Shortcodes: [tk_claim_card id=""], [tk_citation id=""], [tk_hearing_timeline], [tk_ask],
+ *             [tk_documents type="decision" limit="50"]
  *
  * @package TrialKnowledge
  */
@@ -21,6 +22,26 @@ class TK_Blocks {
 		add_shortcode( 'tk_citation', array( __CLASS__, 'citation' ) );
 		add_shortcode( 'tk_hearing_timeline', array( __CLASS__, 'timeline' ) );
 		add_shortcode( 'tk_ask', array( __CLASS__, 'ask' ) );
+		add_shortcode( 'tk_documents', array( __CLASS__, 'documents' ) );
+	}
+
+	/**
+	 * Published decisions, motions, notices … newest first.
+	 *
+	 * @param array $atts type (protocol excluded; decision|motion|response|notice|affidavit|indictment|exhibit|other), limit.
+	 */
+	public static function documents( $atts ) {
+		$atts  = shortcode_atts( array( 'type' => '', 'limit' => 50 ), (array) $atts );
+		$type  = preg_replace( '/[^a-z_]/', '', (string) $atts['type'] );
+		$limit = max( 1, min( 200, (int) $atts['limit'] ) );
+		wp_enqueue_style( 'trial-knowledge' );
+		$path = '/v2/documents?limit=' . $limit . ( $type ? '&type=' . $type : '' );
+		try {
+			$d = TK_Rest_Proxy::cached_get( $path, array( 'lists' ) );
+		} catch ( TK_Api_Error $e ) {
+			return TK_Render::unavailable();
+		}
+		return TK_Render::documents( $d );
 	}
 
 	public static function register() {

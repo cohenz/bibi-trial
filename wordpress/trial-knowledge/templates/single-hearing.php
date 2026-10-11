@@ -1,6 +1,6 @@
 <?php
 /**
- * Hearing page: published digest with citations.
+ * Hearing page: published digest with citations, then the full protocol page by page.
  *
  * @package TrialKnowledge
  */
@@ -44,6 +44,18 @@ $tk_cur = TK_Public_Pages::$current;
 		<?php else : ?>
 			<p class="tk-muted"><?php esc_html_e( 'טרם פורסם סיכום לדיון זה.', 'trial-knowledge' ); ?></p>
 		<?php endif; ?>
+		<h2 id="protocol"><?php esc_html_e( 'הפרוטוקול', 'trial-knowledge' ); ?></h2>
+		<?php
+		try {
+			$tk_t = TK_Rest_Proxy::cached_get(
+				'/v2/hearings/' . $tk_h['id'] . '/transcript?page_from=' . TK_Public_Pages::page_param(),
+				array( 'hearing:' . $tk_h['id'], 'citations' )
+			);
+			echo TK_Render::transcript( $tk_t, TK_Public_Pages::url( 'hearing', $tk_h['id'] ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		} catch ( TK_Api_Error $e ) {
+			echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+		?>
 	<?php else : ?>
 		<?php echo TK_Render::unavailable(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 	<?php endif; ?>

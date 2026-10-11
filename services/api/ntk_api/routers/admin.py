@@ -372,6 +372,16 @@ def review_artifact(artifact_id: str, body: ReviewRequest, request: Request, st:
         with st.services.engine.begin() as conn:
             res = kdb.review_artifact(conn, artifact_id=artifact_id, decision=body.decision, reviewer=p.label,
                                       notes=body.notes, request_id=_rid(request))
+            # under NTK_AUTO_PUBLISH=gates a person's approval is the last step: publish right away (sources must be public)
+            if body.decision == "approve" and st.settings.auto_publish == "gates" and p.has("admin:publish"):
+                try:
+                    with conn.begin_nested():
+                        pub_res = kdb.publish_artifact(conn, artifact_id=artifact_id, actor=p.label, env=st.settings.env,
+                                                       public_base_url=st.settings.public_base_url, include_sources=False,
+                                                       request_id=_rid(request))
+                    res = {**res, "review_state": pub_res["review_state"], "published_on_approval": True}
+                except kdb.PublicationError as exc:
+                    res = {**res, "published_on_approval": False, "publish_blocked": str(exc)}
     except kdb.PublicationError as exc:
         raise _pub_error(exc) from exc
     return _json(res, cache="no-store")

@@ -326,3 +326,25 @@ def test_public_transcript_documents_and_pdf(client, services, pipeline):
     r = client.get(f"/v2/sources/{mine[0]['source_version_id']}/pdf", follow_redirects=False)
     assert r.status_code == 302 and r.headers["location"].startswith("file://")
     assert client.get("/v2/sources/sv_00000000000000000000000000/pdf", follow_redirects=False).status_code == 404
+
+
+def test_approval_publishes_under_gates_policy(settings, services, pipeline):
+    import dataclasses
+
+    hearings = [h for h in TestClient(create_app(build_state(settings, queue=InlineQueue({}), services=services,
+                                                            redis_client=None))).get("/v2/hearings").json()["items"]]
+    assert hearings
+    out = pipeline.rebuild_hearing_digest(hearings[0]["id"])
+    if out.get("state") not in {"machine_verified", "human_review_required"}:
+        pytest.skip("mock digest rejected on this fixture")
+    with services.engine.begin() as conn:  # make sure it is a fresh, unpublished version
+        conn.execute(__import__("sqlalchemy").text(
+            "UPDATE ntk.generated_artifacts SET review_state = 'human_review_required' WHERE id = CAST(:a AS uuid) AND review_state <> 'published'"),
+            {"a": out["artifact_id"]})
+    gated = dataclasses.replace(settings, auto_publish="gates")
+    app = create_app(build_state(gated, queue=InlineQueue({}), services=services, redis_client=None))
+    with TestClient(app) as c:
+        r = signed(c, "POST", f"/v2/admin/artifacts/{out['artifact_id']}/review", {"decision": "approve", "notes": "ok"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body.get("published_on_approval") is True and body["review_state"] == "published"

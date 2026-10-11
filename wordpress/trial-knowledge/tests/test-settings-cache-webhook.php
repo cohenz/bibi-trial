@@ -10,18 +10,22 @@ $cfg = TK_Settings_Store::get();
 TK_T::eq( 'abc', $cfg['secret'], 'secret available server-side' );
 TK_T::ok( ! isset( get_option( TK_OPTION )['secret'] ), 'plain secret never stored' );
 
-// cache: remember, tag purge, generation purge
+// local copy (2.5): remember, tag purge marks stale (still served), background refresh, purge_all
+tk_test_reset_store();
 $calls = 0;
 $f     = function () use ( &$calls ) { ++$calls; return array( 'v' => $calls ); };
 TK_Cache::remember( '/v2/claims/x', $f, array( 'claim:x' ) );
 TK_Cache::remember( '/v2/claims/x', $f, array( 'claim:x' ) );
-TK_T::eq( 1, $calls, 'cached second call' );
-TK_T::ok( TK_Cache::purge( array( 'claim:x' ) ) >= 1, 'purge by tag' );
-TK_Cache::remember( '/v2/claims/x', $f, array( 'claim:x' ) );
-TK_T::eq( 2, $calls, 'refetched after purge' );
+TK_T::eq( 1, $calls, 'stored: second call served locally' );
+TK_T::ok( TK_Cache::purge( array( 'claim:x' ) ) >= 1, 'purge by tag marks the row stale' );
+TK_T::eq( array( 'v' => 1 ), TK_Cache::remember( '/v2/claims/x', $f, array( 'claim:x' ) ), 'stale row still served (no inline refetch)' );
+TK_T::eq( 1, $calls, 'no API call on a page view after purge' );
+TK_T::ok( false !== wp_next_scheduled( TK_Sync::HOOK_REFRESH ), 'purge schedules the background refresh' );
+tk_test_run_cron( TK_Sync::HOOK_REFRESH, array( 'TK_Sync', 'run_refresh' ) );
+TK_T::eq( array( '/v2/claims/x' ), tk_api()->calls, 'refresh refetched the stale row' );
+TK_T::eq( '/v2/claims/x', TK_Cache::remember( '/v2/claims/x', $f )['path'] ?? '', 'refreshed copy served' );
 TK_Cache::purge_all();
-TK_Cache::remember( '/v2/claims/x', $f, array( 'claim:x' ) );
-TK_T::eq( 3, $calls, 'refetched after generation bump' );
+TK_T::eq( 1, TK_Store::stats()['stale'], 'purge_all marks everything stale' );
 
 // webhook signature
 $body = '{"event":"artifact.published","payload":{"object_type":"claim","object_id":"abc"}}';

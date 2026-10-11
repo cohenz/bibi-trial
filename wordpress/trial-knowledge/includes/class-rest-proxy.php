@@ -1,8 +1,8 @@
 <?php
 /**
  * Public REST proxy used by front-end blocks. It forwards only to PUBLIC API
- * endpoints, caches only published responses, and never exposes credentials.
- * Ask the Trial is forwarded without caching (the API caches by corpus version).
+ * endpoints, stores only published responses (local copy, TK_Store), and never exposes
+ * credentials. Ask the Trial is always forwarded live (the API caches by corpus version).
  *
  * @package TrialKnowledge
  */
@@ -97,7 +97,7 @@ class TK_Rest_Proxy {
 	public static function citation( $req ) {
 		$id = (string) $req['id'];
 		try {
-			$data = self::cached_get( '/v2/citations/' . $id, array( 'citations', 'citation:' . $id ) );
+			$data = self::cached_get( TK_Paths::citation( $id ) );
 		} catch ( TK_Api_Error $e ) {
 			return new WP_REST_Response( array( 'error' => 'not_found' ), 404 === $e->status ? 404 : 503 );
 		}
@@ -105,21 +105,22 @@ class TK_Rest_Proxy {
 	}
 
 	/**
-	 * Cached GET of a PUBLIC endpoint (published objects only).
+	 * GET of a PUBLIC endpoint (published objects only) through the local copy (TK_Store):
+	 * served from the WordPress database; the API is called only when the path is not stored yet.
 	 *
-	 * @param string $path Path.
-	 * @param array  $tags Purge tags.
+	 * @param string $path Path (built with TK_Paths).
+	 * @param array  $tags Extra object tags (the path's own tags are added automatically).
 	 * @return array
+	 * @throws TK_Api_Error When the path is not stored and the API fails.
 	 */
 	public static function cached_get( $path, array $tags = array() ) {
-		$cfg = TK_Settings_Store::get();
+		$canonical = TK_Paths::canonical( $path );
 		return TK_Cache::remember(
-			$path,
-			static function () use ( $path ) {
-				return tk_api()->get( $path );
+			$canonical,
+			static function () use ( $canonical ) {
+				return tk_api()->get( $canonical );
 			},
-			$tags,
-			(int) $cfg['cache_ttl']
+			$tags
 		);
 	}
 }

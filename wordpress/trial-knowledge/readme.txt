@@ -4,7 +4,7 @@ Tags: knowledge base, legal, citations, rtl
 Requires at least: 6.4
 Tested up to: 6.6
 Requires PHP: 8.1
-Stable tag: 2.4.0
+Stable tag: 2.5.0
 License: GPLv2 or later
 
 Presentation and editorial layer for the Netanyahu trial Knowledge API.
@@ -17,7 +17,8 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 * Stable public URLs: /trial/claim/{id}/, /trial/answer/{id}/, /trial/source/{su_id}/, /trial/hearing/{hr_id}/.
 * Upload PDFs directly to object storage (Cloudflare R2 / S3) with presigned URLs, create ingestion jobs and follow progress.
 * Review screen showing writer output, verifier output and sources side by side; approve, reject, request changes, publish, unpublish.
-* Only published content is shown or cached. WordPress never stores claims or evidence and never runs AI models.
+* Local copy (2.5): readers are served from the WordPress database. The Knowledge API prepares and publishes; the site keeps its own copy of the published responses, refreshed in the background by webhooks, a sync every 15 minutes and a daily full sync. Pages keep working when the API is down. Ask, the original PDFs and the admin screens stay live.
+* Only published content is shown or stored. WordPress never stores drafts and never runs AI models.
 
 == Installation ==
 
@@ -28,8 +29,17 @@ Presentation and editorial layer for the Netanyahu trial Knowledge API.
 3. Trial Knowledge → Settings: API base URL and Key ID; run "Test connection".
 4. Configure the API's WP_CALLBACK_URL to the webhook URL shown on the settings screen.
 5. Settings → Permalinks → Save (refreshes rewrite rules) if the public URLs return 404.
+6. Trial Knowledge → עותק מקומי: click "סנכרון מלא" once to fill the local copy (it also runs daily on its own). If DISABLE_WP_CRON is set, make sure a system cron calls wp-cron.php (every few minutes).
 
 == Changelog ==
+
+= 2.5.0 =
+* Local copy: every public GET (start page, guides, witnesses, timeline, glossary, hearings and their transcripts, documents, lists, claim cards, answers, citations) is read from new tables {prefix}tk_store / {prefix}tk_store_tags instead of 5-minute transients. No TTL: a stored response is served until it is refreshed; a missing one is fetched once and stored. Page views never wait for a refresh.
+* Freshness: webhooks mark the stored copies of the changed objects stale (by tag) and schedule a background refresh (WP-Cron tk_store_refresh, 40 requests per run, repeats while stale rows remain; objects that are no longer published are removed). Every 15 minutes GET /v2/sync/changes catches missed webhooks. Daily (and on demand) GET /v2/sync/objects queues every reader path — hearings with every 25-page transcript window, documents, cases, witnesses, claims, document lists — fetches the missing ones, refreshes the index pages and removes unpublished hearings, claims and witnesses (tk_store_full_step, 30 requests per run).
+* Request paths are built by shared functions (TK_Paths) used by the pages and by the sync, with sorted query parameters, so one object has one stored copy. Transcript and document pages request the 25-page window that contains ?tk_p= (as citation links already did).
+* New admin screen "עותק מקומי": stored objects (by type), size, stale rows, last changes sync, refresh and full-sync progress; buttons "סנכרון שינויים עכשיו", "סנכרון מלא", "ניקוי העותק". The screen advances a running sync while it is open.
+* Resilience: when the API is unreachable every stored page still renders; sync jobs back off for 10 minutes. The cache TTL setting was removed (no longer used); saving settings refreshes the copy only when the API base URL changes.
+* Uninstall drops the two tables, the sync schedules and options.
 
 = 2.4.0 =
 * Document briefs: document lists ([tk_documents] and the /decisions/, /motions/, /responses/, /notices/ pages) show the brief title as the link, a one-line summary, date, type, pages and a "פרוצדורלי" badge. Procedural documents are hidden by default with a link "הצגת גם מסמכים פרוצדורליים (N)" (?tk_all=1, works without JS). New attribute procedural="show|hide" (default hide). Documents without a brief yet keep their archive title.

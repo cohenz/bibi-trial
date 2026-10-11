@@ -168,11 +168,11 @@ $tags = TK_Webhooks::tags_for( array( 'event' => 'artifact.unpublished', 'payloa
 TK_T::ok( in_array( 'witness:w_346fdfeda0', $tags, true ) && in_array( 'guide', $tags, true ), 'webhook: unpublished witness guide purges the witness page' );
 $tags = TK_Webhooks::tags_for( array( 'event' => 'source_version.published', 'payload' => array( 'source_version_id' => $sv ) ) );
 TK_T::ok( in_array( 'timeline', $tags, true ) && in_array( 'guide', $tags, true ), 'webhook: corpus change purges guide caches' );
-$n = 0;
-TK_Cache::remember( '/v2/guide', function () use ( &$n ) { ++$n; return array( 'x' => 1 ); }, array( 'guide', 'lists' ) );
+tk_test_reset_store();
+TK_Cache::remember( '/v2/guide', function () { return array( 'x' => 1 ); } );
 TK_Cache::purge( TK_Webhooks::tags_for( array( 'event' => 'artifact.published', 'payload' => array( 'artifact_type' => 'guide', 'object_type' => 'indictment', 'object_id' => 'main' ) ) ) );
-TK_Cache::remember( '/v2/guide', function () use ( &$n ) { ++$n; return array( 'x' => 1 ); }, array( 'guide', 'lists' ) );
-TK_T::eq( 2, $n, 'webhook: start page refetched after an indictment guide is published' );
+TK_Sync::run_refresh();
+TK_T::eq( array( '/v2/guide' ), tk_api()->calls, 'webhook: start page refetched after an indictment guide is published' );
 
 // --- duplicates admin screen (2.3.1)
 require_once TK_DIR . 'includes/class-permissions.php';

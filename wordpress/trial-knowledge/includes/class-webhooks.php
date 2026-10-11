@@ -1,6 +1,7 @@
 <?php
 /**
- * Cache-purge webhook from the Knowledge API.
+ * Change webhook from the Knowledge API: marks the stored copies of the changed objects stale
+ * (TK_Store) and schedules their background refresh; readers keep the stored copy meanwhile.
  * POST /wp-json/trial-knowledge/v1/webhook
  * Headers: X-NTK-Timestamp, X-NTK-Webhook-Signature = hex HMAC-SHA256(secret, "{ts}.{body}")
  *
@@ -63,7 +64,7 @@ class TK_Webhooks {
 			return new WP_Error( 'tk_bad_request', 'invalid payload', array( 'status' => 400 ) );
 		}
 		$n = TK_Cache::purge( self::tags_for( $evt ) );
-		return new WP_REST_Response( array( 'purged' => $n ), 200 );
+		return new WP_REST_Response( array( 'purged' => $n, 'stale' => $n ), 200 );
 	}
 
 	public static function tags_for( array $evt ) {

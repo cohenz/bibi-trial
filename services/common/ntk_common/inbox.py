@@ -318,6 +318,15 @@ def classify_item(services, item_id: str) -> str:
                 _set(conn, item_id, status="possible_duplicate", doc_kind=c.source_type, classification=c.to_json(),
                      duplicate_of=maybe[0], similarity=round(maybe[1], 3), error=None)
         if maybe:
+            # operator rule (11.10.2026): no substantive difference → not processed twice. Same page count and
+            # (almost) identical text is a re-saved copy; it is removed like an exact duplicate.
+            from .inbox_dupes import AUTO_REMOVE_SIMILARITY, remove_copy, same_page_count
+
+            if s.inbox_delete_duplicates and maybe[1] >= AUTO_REMOVE_SIMILARITY and same_page_count(services, maybe[0], c.page_count):
+                res = remove_copy(services, item_id, actor="inbox:auto",
+                                  reason=f"near-identical copy (text similarity {maybe[1]:.2f}, same page count)")
+                if res.get("removed"):
+                    return "removed"
             return "possible_duplicate"
         source_key = services.storage.content_key(sha)
         services.storage.put_bytes(source_key, data, mime_type="application/pdf")

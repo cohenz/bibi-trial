@@ -25,6 +25,7 @@ SKETCH = 256
 SHINGLE = 4
 MIN_SHINGLES = 40
 POSSIBLE_THRESHOLD = 0.9
+AUTO_REMOVE_SIMILARITY = 0.98  # with the same page count: removed automatically (operator rule)
 _WORD = re.compile(r"[0-9a-zא-ת]+")
 
 
@@ -294,3 +295,13 @@ def release(services, item_id: str, *, actor: str) -> dict:
             if remove_copy(services, str(cp["id"]), actor="inbox:auto", reason="exact duplicate (same SHA-256)").get("removed"):
                 removed.append(str(cp["id"]))
     return {"item_id": item_id, "released": True, "status": status, "copies_removed": removed}
+
+
+def same_page_count(services, ref: str, page_count: int) -> bool:
+    with services.engine.connect() as conn:
+        if ref.startswith("sv_"):
+            pc = scalar(conn, "SELECT page_count FROM ntk.source_versions WHERE id = :sv", {"sv": ref})
+        else:
+            pc = scalar(conn, "SELECT (classification->>'page_count')::int FROM ntk.inbox_items WHERE id = CAST(:i AS uuid)",
+                        {"i": ref[6:]})
+    return pc is not None and int(pc) == int(page_count)

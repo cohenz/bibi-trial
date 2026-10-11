@@ -189,3 +189,20 @@ def test_copy_left_behind_follows_the_held_items_removal(svc):
     res = inbox_dupes.remove_copy(svc, str(held["id"]), actor="op", reason="operator")
     assert res["removed"] and res["copies_removed"] == [str(copy["id"])]
     assert svc.storage.head(copy["object_key"]) is None and svc.storage.head(held["object_key"]) is None
+
+
+def test_resaved_copy_with_same_text_and_pages_is_removed(svc):
+    """Operator rule: no substantive difference → not processed twice. Same text and page count, other bytes."""
+    body = [[ln.replace("12 באוקטובר", "17 באוקטובר") for ln in NOTICE[0]] + ["17. פסקה שמבדילה את המסמך הזה."], NOTICE[1]]
+    resaved = [["", *body[0]], body[1]]  # a blank line moves the text: different bytes, same text
+    a, b = make_pdf(body), make_pdf(resaved)
+    assert a != b
+    svc.storage.put_bytes(PREFIX + "g/original.pdf", a, mime_type="application/pdf")
+    _scan(svc)
+    if _item(svc, PREFIX + "g/original.pdf")["status"] != "classified":
+        pytest.skip("original not classified in this database")
+    svc.storage.put_bytes(PREFIX + "g/resaved.pdf", b, mime_type="application/pdf")
+    _scan(svc)
+    it = _item(svc, PREFIX + "g/resaved.pdf")
+    assert it["status"] == "removed" and "near-identical" in it["error"]["removed_reason"]
+    assert svc.storage.head(PREFIX + "g/resaved.pdf") is None

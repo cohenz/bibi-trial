@@ -532,10 +532,13 @@ class Pipeline:
         with self.s.engine.begin() as conn:
             kdb.save_layer_a(conn, object_type="hearing", object_key=hid, version_id=res.payload["id"], payload=res.payload,
                              source_unit_ids=[c["source_unit_id"] for c in res.payload["citations"]],
-                             model_run_id=res.runs[0].id, review_state=res.decision.state)  # type: ignore[union-attr]
+                             model_run_id=next(r.id for r in reversed(res.runs) if r.task_type == "digest"),
+                             review_state=res.decision.state)  # type: ignore[union-attr]
             art_id = str(ids.derived_uuid("summary_artifact", res.payload["id"]))
             kdb.save_artifact(conn, artifact_id=art_id, artifact_type="summary", object_type="hearing", object_id=hid,
-                              payload=res.payload, decision=res.decision, model_run_id=res.runs[-1].id, verifier_run_id=None)  # type: ignore[arg-type]
+                              payload=res.payload, decision=res.decision,  # type: ignore[arg-type]
+                              model_run_id=next(r.id for r in reversed(res.runs) if r.task_type == "digest"),
+                              verifier_run_id=next((r.id for r in reversed(res.runs) if r.task_type == "verify"), None))
         published = self.auto_publish(art_id, res.decision)  # type: ignore[arg-type]
         return {"digest_id": res.payload["id"], "artifact_id": art_id, "state": res.decision.state,  # type: ignore[union-attr]
                 "risk_flags": res.decision.risk_flags, "attempts": len(res.runs),  # type: ignore[union-attr]

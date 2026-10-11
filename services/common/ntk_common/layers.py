@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass, field
 
-from . import contracts, gates, ids
+from . import contracts, gates, hebrew, ids
 from .llm.runner import ModelRunner, ModelRunRecord, unknown_ids_check
 
 SCHEMA_VERSION = "2.0"
@@ -240,6 +240,13 @@ def _digest_from_output(run: ModelRunRecord, *, hearing_id: str, by_id: dict[str
     except contracts.ContractError as ce:
         return BuildResult(None, [run], None, ce.errors)
 
+    decision = _gate_digest(payload, units, model_family=run.model_family, env=env)
+    if decision.state == "human_review_required" and _complete_citations(payload, decision, units, by_id, citation_base):
+        decision = _gate_digest(payload, units, model_family=run.model_family, env=env)
+    return BuildResult(payload, [run], decision, [], digest_id)
+
+
+def _gate_digest(payload: dict, units: list[UnitView], *, model_family: str, env: str) -> gates.GateDecision:
     facts = {u.id: u.facts() for u in units}
     assertions = [gates.Assertion(f"summary_sentences/{i}", s["text"], s["citation_ids"])
                   for i, s in enumerate(payload["summary_sentences"])]
@@ -249,13 +256,69 @@ def _digest_from_output(run: ModelRunRecord, *, hearing_id: str, by_id: dict[str
         gates.support_gate(assertions, facts),
         gates.judicial_wording_gate(assertions, facts),
         gates.absolute_wording_gate(assertions, status=None),
-        gates.provenance_gate([run.model_family], env=env),
+        gates.provenance_gate([model_family], env=env),
     ]
     decision = gates.decide(results, flags=flags)
     payload["review"]["state"] = decision.state
     payload["review"]["risk_flags"] = decision.risk_flags
     contracts.validate("HearingDigest", payload)
-    return BuildResult(payload, [run], decision, [], digest_id)
+    return decision
+
+
+_CITE_STOP = {"את", "של", "על", "לא", "כי", "גם", "אמר", "השיב", "שאל", "העד", "בית", "המשפט", "עוד", "זה", "הוא", "היא",
+              "הדיון", "עו\"ד", "חקר", "העיד", "ציין", "טען", "מסר", "אישר"}
+
+
+def _complete_citations(payload: dict, decision: gates.GateDecision, units: list[UnitView], by_id: dict[str, UnitView],
+                        citation_base: str, *, window: int = 60, max_extra: int = 3) -> bool:
+    """A summary sentence often compresses several turns but cites only some of them: the names, dates or figures it
+    mentions sit in nearby units. For each sentence below the lexical floor, add up to ``max_extra`` units from the
+    same stretch of the hearing (±``window`` units around what it cites) that contain its missing terms. Only real
+    units are added, so citations stay exact; the gates then run again. Returns True if anything was added."""
+    sup = next((r for r in decision.results if r.gate == "support" and not r.passed), None)
+    if sup is None:
+        return False
+    order = {u.id: i for i, u in enumerate(units)}
+    terms_of = {u.id: set(hebrew.search_terms(u.text)) for u in units}
+    changed = False
+    for d in sup.details:
+        path = d.get("path") or ""
+        if not path.startswith("summary_sentences/"):
+            continue
+        sent = payload["summary_sentences"][int(path.rsplit("/", 1)[-1])]
+        cited = [c for c in sent["citation_ids"] if c in order]
+        if not cited:
+            continue
+        want = {t for t in hebrew.search_terms(sent["text"]) if len(t) > 2 and t not in _CITE_STOP}
+        have: set[str] = set()
+        for c in cited:
+            have |= terms_of[c]
+        missing = want - have
+        if not missing:
+            continue
+        lo, hi = min(order[c] for c in cited) - window, max(order[c] for c in cited) + window
+        scored = sorted(((len(missing & terms_of[u.id]), -abs(order[u.id] - order[cited[0]]), u.id)
+                         for u in units[max(0, lo): hi + 1] if u.id not in cited and u.unit_type != "caption"), reverse=True)
+        added = []
+        for score, _, uid in scored:
+            if score == 0 or len(added) >= max_extra:
+                break
+            gain = missing & terms_of[uid]
+            if not gain:
+                continue
+            added.append(uid)
+            missing -= gain
+        if added:
+            sent["citation_ids"] = sorted(set(cited) | set(added), key=lambda x: order[x])
+            changed = True
+    if changed:
+        known = {c["source_unit_id"] for c in payload["citations"]}
+        for s_ in payload["summary_sentences"]:
+            for c in s_["citation_ids"]:
+                if c not in known and c in by_id:
+                    payload["citations"].append(citation_for(by_id[c], citation_base))
+                    known.add(c)
+    return changed
 
 
 # =============================================================================

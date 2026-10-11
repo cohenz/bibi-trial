@@ -43,7 +43,7 @@ _COMMON = (
 
 DIGEST = Prompt(
     task_type="digest",
-    version="digest-2026-10-11.2",
+    version="digest-2026-10-11.3",
     schema="ModelDigestOutput",
     system=_COMMON
     + "Task: produce a neutral digest of one whole hearing. The input holds every unit of the hearing in order; cover "
@@ -53,7 +53,7 @@ DIGEST = Prompt(
     "(קבע, פסק, הכריע, החליט, דחה, קיבל); describe procedural steps neutrally, e.g. 'הדיון הבא יתקיים ביום…'. "
     "If wording_rules is present, a previous draft was rejected: follow it. List topics, persons, exhibits and dates "
     "mentioned. notable_exchange_ids may only contain ids from the given exchanges. judicial_candidate_unit_ids lists "
-    "units where a judge or the court speaks or decides (high recall).",
+    "up to 60 units where a judge or the court decides or remarks on substance (not every judge's turn).",
 )
 
 JUDICIAL = Prompt(

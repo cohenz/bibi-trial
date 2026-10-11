@@ -177,6 +177,17 @@ def save_artifact(conn: Connection, *, artifact_id: str, artifact_type: str, obj
         cits.append({"a": artifact_id, "p": path, "u": uid})
     execute(conn, """INSERT INTO ntk.artifact_citations (artifact_id, assertion_path, source_unit_id)
                      VALUES (CAST(:a AS uuid), :p, :u) ON CONFLICT DO NOTHING""", cits)
+    # a newer version replaces older drafts of the same object in the review queue (published versions stay live)
+    execute(conn, """UPDATE ntk.review_tasks SET status = 'cancelled', decided_by = 'pipeline:superseded', updated_at = now(),
+                            completed_at = now()
+                     WHERE object_type = 'artifact' AND status = 'open' AND object_id IN (
+                         SELECT id::text FROM ntk.generated_artifacts WHERE artifact_type = :t AND object_type = :ot
+                           AND object_id = :oid AND id <> CAST(:id AS uuid))""",
+            {"t": artifact_type, "ot": object_type, "oid": object_id, "id": artifact_id})
+    execute(conn, """UPDATE ntk.generated_artifacts SET review_state = 'superseded', updated_at = now()
+                     WHERE artifact_type = :t AND object_type = :ot AND object_id = :oid AND id <> CAST(:id AS uuid)
+                       AND review_state IN ('draft', 'machine_verified', 'human_review_required')""",
+            {"t": artifact_type, "ot": object_type, "oid": object_id, "id": artifact_id})
     if decision.state != "rejected":
         open_review_task(conn, object_type="artifact", object_id=artifact_id, risk_flags=decision.risk_flags,
                          reason=f"{artifact_type} for {object_type}:{object_id} ({decision.state})")

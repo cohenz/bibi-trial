@@ -407,3 +407,31 @@ def test_low_lexical_support_goes_to_the_verifier_before_a_person():
         assert res.decision.state == state and len(res.runs) == 2
         sup = next(r for r in res.decision.results if r.gate == "support")
         assert sup.passed is (supported == "yes")
+
+
+def test_citation_completion_adds_nearby_units_with_the_missing_details():
+    from ntk_common.layers import UnitView, build_hearing_digest
+
+    def uv(i, text, spk="העד"):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=spk, speaker_role="witness", unit_type="speech_turn", text=text)
+
+    units = [uv(1, "כן, ישבתי איתה כמה פעמים"), uv(2, "הפרקליטה הדר ויינשטיין מפרקליטות מחוז תל אביב בדקה את החשבוניות"),
+             uv(3, "לא נערך מזכר על הפגישות האלה"), uv(40, "נושא אחר לגמרי בעמוד אחר")]
+    out = json.dumps({"schema_version": "2.0", "summary_sentences": [{
+        "text": "העד מסר כי ישב עם הפרקליטה הדר ויינשטיין מפרקליטות מחוז תל אביב לבדיקת החשבוניות",
+        "source_unit_ids": [units[0].id]}], "topics": [], "persons": [], "notable_exchange_ids": [],
+        "judicial_candidate_unit_ids": ["su_bad", units[2].id]})
+
+    class One(MockProvider):
+        def generate_json(self, **kw):
+            return ProviderResult(text=out)
+
+    runner = ModelRunner(_registry(), {"mock": One()}, MemoryRunStore(), sleep=lambda _: None)
+    res = build_hearing_digest(hearing_id="hr_" + "b" * 26, units=units, exchanges=[], runner=runner, corpus_version="cv",
+                               citation_base="https://x.test/c/", env="test")
+    assert res.payload is not None and res.decision.state == "machine_verified", res.decision.report()
+    assert res.payload["summary_sentences"][0]["citation_ids"] == [units[0].id, units[1].id]
+    assert {c["source_unit_id"] for c in res.payload["citations"]} == {units[0].id, units[1].id}
+    assert res.payload["judicial_candidates"] == [units[2].id]  # malformed candidate dropped, digest kept
+    assert len(res.runs) == 1  # no verifier call needed

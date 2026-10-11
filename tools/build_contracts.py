@@ -632,7 +632,8 @@ defs["ModelDigestOutput"] = obj(
         "dates": arr(STR),
         "claims_mentioned": arr(STR),
         "notable_exchange_ids": arr({"type": "string", "pattern": QX_ID}),
-        "judicial_candidate_unit_ids": arr({"type": "string", "pattern": SU_ID}),
+        # a high-recall hint list, not citations: malformed or unknown ids are dropped by the pipeline (ADR-0014)
+        "judicial_candidate_unit_ids": arr({"type": "string"}),
     },
 )
 defs["ModelMapperOutput"] = obj(

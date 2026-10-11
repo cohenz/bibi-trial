@@ -2540,8 +2540,7 @@
         "judicial_candidate_unit_ids": {
           "type": "array",
           "items": {
-            "type": "string",
-            "pattern": "^su_[0-9a-f]{26}$"
+            "type": "string"
           }
         }
       }

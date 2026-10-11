@@ -20,8 +20,8 @@
 |---|---|---|---|
 | postgres | `b03a4ac5-f086-47d5-b322-468fc51e6314` | image `pgvector/pgvector:pg16` | volume `/var/lib/postgresql/data`. משתנים: `POSTGRES_USER=postgres`, `POSTGRES_DB=ntk`, `PGDATA=…/pgdata`. הסיסמה נוצרה אקראית בדפדפן |
 | redis | `5d414dd5-8824-4f48-9db2-8fa59262fd87` | image `redis:7-alpine` | volume `/data`. start: `redis-server --requirepass $REDIS_PASSWORD --appendonly yes` |
-| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `e20e368`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
-| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `e20e368`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| api | `bc38fe78-ed4b-474c-b84b-714a269da527` | repo `cohenz/bibi-trial` | `Dockerfile.base`. pre‑deploy: `trial-knowledge migrate`. start: `/bin/sh -c "exec uvicorn … --port ${PORT:-8000} …"`. healthcheck `/v2/ready`. **פרוס: `7e9d831`** (migrations 0009–0010). `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
+| worker | `04d3035c-c44b-4487-8669-4ffaba94b312` | repo | start: `celery -A ntk_worker.celery_app worker -Q ntk --concurrency 2`. **פרוס: `7e9d831`**. `NTK_INBOX_AUTO_PROCESS=true`, `NTK_INBOX_DELETE_DUPLICATES=true` |
 | beat | `9d413561-a1b3-4ea9-82b6-1d25a258b2a5` | repo | start: `celery -A ntk_worker.celery_app beat`. **מופע אחד בלבד.** **פרוס: `dd3488f`**. מתזמן webhooks כל 30 שניות, וסריקת inbox יומית ב־02:47 UTC |
 
 **Railway לא פורס אוטומטית ב־push.** פריסה נעשית ב־`serviceInstanceDeployV2(serviceId, environmentId, commitSha)`. ה־pre‑deploy של api מריץ migrations, כולל 0005 (`ntk.evaluation_runs`) ו־0006 (`ntk.inbox_items`, `ntk.inbox_scans`, וסוגי מקור `response`, `notice` ו־`affidavit`).
@@ -61,6 +61,19 @@
   - עותק כמעט זהה מוחזק, ומחכה להחלטה במסך "כפילויות" בתוסף 2.3.1;
   - פירוט ב־`docs/inbox.md`.
 - **התוסף 2.3.1** (`dist/trial-knowledge-2.3.1.zip`, כולל את 2.3.0 ומסך כפילויות): `[tk_start]`, עמודי תיק/עד/ציר זמן/עדים/מילון תחת `/trial/trial/…`, לשוניות בעמוד הדיון, מילון בריחוף, ותצוגת מדריכים בתור הבדיקה. אחרי ההתקנה: להחליף את תוכן עמוד הבית (עמוד 9) ב־`[tk_start]`.
+
+## אצוות 100 הקבצים (11.10.2026, 13:41)
+- **מה הועלה:** 100 קבצים. כמעט כל מסמך הועלה פעמיים, פעם בשם ארכיון ופעם בשם `NNNN_1.pdf`.
+  - 50 עותקים זהים נמחקו אוטומטית מ־`inbox/`;
+  - פריט אחד מוחזק כ"כמעט זהה": `0015_1`, זהה בטקסט ל־0025;
+  - העותק הזהה שלו, `0015 — …`, ממתין להחלטה עליו;
+  - 48 מסמכים חדשים נקלטו.
+- **באג בסיווג (תוקן ב־`7e9d831`):** כל מסמך שהופיעה בו המילה "פרוטוקול" סווג כפרוטוקול. כך הפכו 34 החלטות קצרות של בית המשפט ל"דיונים" מדומים.
+  - **הכלל החדש:** פרוטוקול הוא רק מסמך עם רשימת נוכחים או עם תורות דוברים. גם ה־pipeline בודק זאת אחרי הניתוח.
+  - **ניקוי:** `POST /v2/admin/maintenance/non-hearings` (`apply: true`) הפך את 34 ה"דיונים" להחלטות. התקצירים שלהם הוסרו.
+  - **אחרי הניקוי:** נשארו 14 דיונים אמיתיים.
+- **כותרות:** הכותרת נלקחת משם הארכיון, אם קיים עותק כזה (`apply_best_name`). 41 מסמכים קיבלו כותרת חדשה.
+  - **בעיה פתוחה:** כ־35 החלטות נקראות "שניתנה ע\"י רבקה פרידמן-פלדמן", כי זה מה שכתוב בשם הקובץ, ואין מזה כותרת מועילה.
 
 ## מה בייצור עכשיו
 - **ארבעה פרוטוקולים נקלטו** (550 עמודים):

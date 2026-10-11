@@ -1,6 +1,8 @@
 # Railway — פריסה ותפעול
 
-מקור לסכמת ההגדרות: https://docs.railway.com/config-as-code/reference
+> **עדכון 10.10.2026:** Railway הפסיק לתמוך ב־config‑as‑code (`railway.json` / `railway.toml`) ועבר ל־Infrastructure as Code (`.railway/railway.ts`). בפריסה הקיימת ההגדרות נקבעו ישירות בכל שירות, והקבצים ב־`infra/railway/*.json` משמשים כתיעוד של ההגדרות בלבד. המצב בפועל, כולל מזהים, מתועד ב־`docs/deployment-state.md`.
+
+מקור (היסטורי): https://docs.railway.com/config-as-code/reference
 
 ## שירותים
 

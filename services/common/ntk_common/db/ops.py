@@ -259,6 +259,12 @@ class PgRunStore:
             registry_id=r["registry_id"] or "", created_at=r["created_at"].isoformat(),
         )
 
+    def invalidate_run(self, run_id: str, errors: list[dict]) -> None:
+        """A stored answer that fails a check made at reuse time (e.g. unknown cited passages): not reused again."""
+        with self.engine.begin() as conn:
+            execute(conn, """UPDATE ntk.model_runs SET status = 'invalid_output', validation_errors = CAST(:e AS jsonb)
+                             WHERE id = CAST(:id AS uuid)""", {"id": run_id, "e": j(errors)})
+
     def save_run(self, run: ModelRunRecord) -> None:
         with self.engine.begin() as conn:
             execute(conn, """

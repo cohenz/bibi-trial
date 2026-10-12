@@ -101,15 +101,19 @@ def submit_digests(pipeline, *, hearing_ids: list[str] | None = None, limit: int
         hearings = _hearings_without_digest(conn, hearing_ids, limit) if limit > 0 else []
     items: list[dict] = []
     built_directly = 0
+    failed: list[dict] = []
     for h in hearings:
         units, exchanges, _cv = pipeline.digest_material(h["id"], h["source_version_id"])
         if not units:
             continue
         req = runner.request_for("digest", digest_input(hearing_id=h["id"], units=units, exchanges=exchanges))
         cached = runner.store.get_run(req["run_id"])
-        if cached is not None and cached.ok:  # already answered (e.g. an earlier batch): build directly, no cost
-            pipeline.rebuild_hearing_digest(h["id"])
-            built_directly += 1
+        if cached is not None and cached.ok:  # already answered (e.g. an earlier batch): build directly
+            try:
+                pipeline.rebuild_hearing_digest(h["id"])
+                built_directly += 1
+            except Exception as exc:  # noqa: BLE001 - one hearing must not block the rest of the approval
+                failed.append({"hearing_id": h["id"], "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
             continue
         provider = runner.provider_for(req["spec"])
         body = provider.request_body(system=req["prompt"].system, user=with_schema_text(req["user"], req["response_schema"]),
@@ -154,7 +158,7 @@ def submit_digests(pipeline, *, hearing_ids: list[str] | None = None, limit: int
         _set_allowance(pipeline.s.engine, left_allowance, approved_total=None if from_allowance else limit,
                        by=None if from_allowance else approved_by, error=quota_error)
     return {"hearings": len(hearings), "requests": len(items), "batches": submitted, "built_directly": built_directly,
-            "not_sent_now": len(not_sent), "quota_full": bool(quota_error)}
+            "not_sent_now": len(not_sent), "quota_full": bool(quota_error), "failed": failed}
 
 
 def poll(pipeline) -> dict:
@@ -206,8 +210,8 @@ def poll(pipeline) -> dict:
     if left > 0:  # approved requests the provider could not take earlier: send what it takes now
         try:
             res["submitted"] = submit_digests(pipeline, limit=left, from_allowance=True)
-        except ProviderError as exc:
-            res["submit_error"] = str(exc)[:300]
+        except Exception as exc:  # noqa: BLE001 - collecting finished batches must not fail because of sending
+            res["submit_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
     return res
 
 

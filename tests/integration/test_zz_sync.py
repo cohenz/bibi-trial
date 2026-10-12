@@ -7,7 +7,7 @@ import datetime as dt
 import pytest
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import sync
-from ntk_common.db.core import execute, scalar
+from ntk_common.db.core import execute, j, scalar
 
 pytestmark = pytest.mark.db
 
@@ -173,3 +173,38 @@ def test_digest_batch_quota_allowance(services, fixture_path):
         batches.poll(p)  # collect the open batch so later tests start clean
     finally:
         prov.create_batch = orig_create
+
+
+def test_cached_answer_with_unknown_citation_is_not_reused(services, fixture_path):
+    """A stored digest answer (e.g. from a batch) citing a passage that does not exist is checked again at reuse:
+    marked invalid and asked again, instead of failing on the citation insert (12.10.2026 incident)."""
+    import dataclasses
+
+    from ntk_common.db.core import row
+    from ntk_common.layers import digest_input
+    from ntk_common.orchestrator import Pipeline
+
+    from tests.conftest import make_job
+
+    p = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, hearing_digests="deferred")))
+    job = p.run_job(make_job(services, fixture_path, key="stale-answer"))
+    hid = {s["stage"]: s for s in job["stages"]}["extract_a"]["output"]["hearing_id"]
+    first = p.rebuild_hearing_digest(hid)
+    assert first.get("digest_id"), first
+    with services.engine.connect() as conn:
+        svid = row(conn, "SELECT source_version_id FROM ntk.hearings WHERE id = :h", {"h": hid})["source_version_id"]
+    units, exchanges, _cv = p.digest_material(hid, svid)
+    req = p.s.runner.request_for("digest", digest_input(hearing_id=hid, units=units, exchanges=exchanges))
+    bad = "su_" + "f" * 26
+    with services.engine.begin() as conn:  # the stored answer now cites a passage that does not exist
+        out = row(conn, "SELECT output FROM ntk.model_runs WHERE id = CAST(:i AS uuid)", {"i": req["run_id"]})["output"]
+        out["summary_sentences"][0]["source_unit_ids"] = [bad]
+        execute(conn, "UPDATE ntk.model_runs SET output = CAST(:o AS jsonb), status = 'succeeded' WHERE id = CAST(:i AS uuid)",
+                {"o": j(out), "i": req["run_id"]})
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'hearing' AND object_id = :h",
+                {"h": hid})
+    again = p.rebuild_hearing_digest(hid)  # no IntegrityError
+    assert again.get("digest_id"), again
+    with services.engine.connect() as conn:
+        st = row(conn, "SELECT status FROM ntk.model_runs WHERE id = CAST(:i AS uuid)", {"i": req["run_id"]})["status"]
+    assert st in {"invalid_output", "succeeded"}  # marked invalid, then (mock) answered again

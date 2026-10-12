@@ -72,6 +72,11 @@ class MemoryRunStore:
     def save_run(self, run: ModelRunRecord) -> None:
         self.runs[run.id] = run
 
+    def invalidate_run(self, run_id: str, errors: list[dict]) -> None:
+        run = self.runs.get(run_id)
+        if run is not None:
+            run.status, run.validation_errors = "invalid_output", errors
+
 
 _FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.S)
 
@@ -141,7 +146,14 @@ class ModelRunner:
         spec, prompt = req["spec"], req["prompt"]
         cached = self.store.get_run(req["run_id"])
         if cached is not None and cached.ok:
-            return cached
+            # a stored answer (e.g. from the Batch API, recorded without this check) is checked again before reuse;
+            # one that cites unknown passages is marked invalid and the model is asked again, once
+            stale = semantic_check(cached.output) if semantic_check else []
+            if not stale:
+                return cached
+            invalidate = getattr(self.store, "invalidate_run", None)
+            if invalidate:
+                invalidate(cached.id, stale[:20])
 
         provider = self.provider_for(spec)
         started = time.monotonic()

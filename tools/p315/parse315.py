@@ -1,5 +1,5 @@
 import pdfplumber, subprocess, json, re, sys
-PDF = '/root/.claude/uploads/10184f3e-f86f-529f-bdff-c813dcbc6cb7/78021d0d-315_-_full_list_-_V3.pdf'
+PDF = sys.argv[1] if len(sys.argv) > 1 else '315 - full list - V3.pdf'  # Project 315's table
 CLEAN = re.compile('[‎‏‪-‮⁦-⁩]')
 def cell_text(pno, bbox, scale=1.0):
     x0, top, x1, bottom = bbox

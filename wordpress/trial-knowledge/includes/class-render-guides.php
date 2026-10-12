@@ -205,7 +205,10 @@ class TK_Render_Guides {
 	public static function witness_link( $raw, array $slugs ) {
 		list( $name, $label ) = TK_Guides::split_label( $raw );
 		$slug                 = TK_Guides::slug_for( $raw, $slugs );
-		$text                 = esc_html( $name ) . ( $label ? ' <span class="tk-badge tk-badge--label">' . esc_html( $label ) . '</span>' : '' );
+		if ( $slug && TK_Guides::name_for( $slug ) ) {
+			$name = TK_Guides::name_for( $slug ); // one spelling per person, whatever the protocol printed
+		}
+		$text = esc_html( $name ) . ( $label ? ' <span class="tk-badge tk-badge--label">' . esc_html( $label ) . '</span>' : '' );
 		return $slug ? '<a href="' . esc_url( TK_Public_Pages::url( 'witness', $slug ) ) . '">' . $text . '</a>' : $text;
 	}
 

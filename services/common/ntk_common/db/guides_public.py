@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.engine import Connection
 
 from .. import guides, hebrew
+from ..guide_service import slug_by_raw
 from ..guide_service import witnesses as all_witnesses
 from .core import row, rows
 from .public import public_documents, public_hearings, units_by_ids
@@ -70,7 +71,8 @@ def _witness_summary(ws: list[dict], wcases: dict[str, list[str]], with_guides: 
              "appearance_count": len([a for a in w["appearances"] if not a["has_transcript"]]), "side": w.get("side"),
              "first_date": _all_dates(w)[0], "last_date": _all_dates(w)[-1],
              "cases": sorted(wcases.get(w["slug"], []), key=lambda k: CASE_ORDER.get(k, 9)),
-             "has_guide": w["slug"] in with_guides} for w in ws]
+             "has_guide": w["slug"] in with_guides or any(a in with_guides for a in w.get("aliases", [])),
+             "aliases": w.get("aliases", []), "variants": w.get("variants", [])} for w in ws]
 
 
 def _hearing_digest(conn: Connection, hearing_id: str) -> dict | None:
@@ -134,10 +136,12 @@ def case_page(conn: Connection, key: str) -> dict | None:
 
 
 def witness_page(conn: Connection, slug: str) -> dict | None:
-    w = next((w for w in all_witnesses(conn) if w["slug"] == slug), None)
+    w = next((w for w in all_witnesses(conn) if w["slug"] == slug or slug in w.get("aliases", [])), None)
     if w is None:
         return None
-    g = published_guide(conn, "witness", slug)
+    requested, slug = slug, w["slug"]  # an old slug of a folded name answers with the person's page
+    g = published_guide(conn, "witness", slug) or next(
+        (x for x in (published_guide(conn, "witness", a) for a in w.get("aliases", [])) if x), None)
     cases = published_guides(conn, "case")
     citations: dict[str, dict] = {c["source_unit_id"]: c for c in (g or {}).get("citations", [])}
     hearings, notable = [], []
@@ -160,7 +164,8 @@ def witness_page(conn: Connection, slug: str) -> dict | None:
                                         "question_speaker": q.speaker_label, "answer_speaker": a.speaker_label})
         hearings.append({"id": h["id"], "hearing_date": h["hearing_date"], "digest_sentences": sents})
     wcases = _witness_cases(cases, [w]).get(slug, [])
-    return {"slug": slug, "name": w["name"], "label": w["label"], "artifact_id": g["artifact_id"] if g else None,
+    return {"slug": slug, "requested_slug": requested, "aliases": w.get("aliases", []),
+            "name": w["name"], "label": w["label"], "artifact_id": g["artifact_id"] if g else None,
             "blocks": g["blocks"] if g else [], "cases": sorted(wcases, key=lambda k: CASE_ORDER.get(k, 9)),
             "hearings": hearings, "appearances": w["appearances"], "side": w.get("side"),
             "notable_exchanges": notable[:12], "citations": list(citations.values())}
@@ -184,9 +189,19 @@ def timeline(conn: Connection) -> dict:
             for cid in it["citation_ids"]:
                 if cid in cmap:
                     cits[cid] = cmap[cid]
-    slug_of = {raw: w["slug"] for w in ws for raw in w["raw"]}
+    person_of = slug_by_raw(ws)
+    slug_of = {raw: w["slug"] for raw, w in person_of.items()}
+
+    def names_of(raws: list[str]) -> list[str]:
+        out: list[str] = []
+        for x in raws:
+            n = person_of[x]["name"] if x in person_of else guides.witness_name(x)[0]
+            if n not in out:
+                out.append(n)
+        return out
+
     for h in public_hearings(conn):
-        names = [guides.witness_name(x)[0] for x in (h["witnesses"] or [])]
+        names = names_of(h["witnesses"] or [])
         keys = sorted({k for x in (h["witnesses"] or []) for k in wcases.get(slug_of.get(x, ""), [])},
                       key=lambda k: CASE_ORDER.get(k, 9))
         d = _hearing_digest(conn, h["id"]) if h["has_digest"] else None
@@ -200,11 +215,13 @@ def timeline(conn: Connection) -> dict:
     day_docs: set[str] = set()
     for d in published_hearing_days(conn):
         day_docs.add(d["source_version_id"])
-        names = [guides.witness_name(w["name"])[0] for w in d["witnesses"]]
+        names = [person_of[w["name"]]["name"] if w["name"] in person_of else guides.witness_name(w["name"])[0]
+                 for w in d["witnesses"]]
         side_he = {"defense": "עד/ת הגנה", "prosecution": "עד/ת תביעה"}
         who = ", ".join(f"{n} ({side_he[w['side']]})" if w.get("side") in side_he else n
                         for n, w in zip(names, d["witnesses"], strict=False))
-        keys = sorted({k for n in names for k in wcases.get(guides.witness_slug(n), [])}, key=lambda k: CASE_ORDER.get(k, 9))
+        keys = sorted({k for w in d["witnesses"] for k in wcases.get(slug_of.get(w["name"], ""), [])},
+                      key=lambda k: CASE_ORDER.get(k, 9))
         known = by_date.get(d["hearing_date"])
         if known is not None:  # the hearing has a transcript: the notice only adds who testified
             known.setdefault("notice_witnesses", []).extend(names)

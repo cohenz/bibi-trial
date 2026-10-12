@@ -24,6 +24,11 @@ TK_T::eq( array( 'בנימין נתניהו', 'נאשם 1' ), TK_Guides::split_l
 $slugs = TK_Guides::slug_map( $witnesses );
 TK_T::eq( 'w_72da315abb', TK_Guides::slug_for( 'נאשם 1 — בנימין נתניהו', $slugs ), 'witness slug from raw hearing name' );
 TK_T::eq( '', TK_Guides::slug_for( 'מישהו אחר', $slugs ), 'unknown witness → no slug' );
+$wv     = array( array( 'slug' => 'w_d1dc28ccdd', 'name' => 'אבירם אלעד', 'variants' => array( 'מר אבירם אלעד', 'מר אלעד אבירם', 'אבירם אלעד' ) ) );
+$wslugs = TK_Guides::slug_map( $wv );
+TK_T::eq( 'w_d1dc28ccdd', TK_Guides::slug_for( 'מר אלעד אבירם', $wslugs ), 'a printed variant maps to the one person' );
+TK_T::ok( false !== strpos( TK_Render_Guides::witness_link( 'מר אלעד אבירם', $wslugs ), '>אבירם אלעד<' ), 'witness link shows the person\'s one spelling' );
+$slugs = TK_Guides::slug_map( $witnesses );
 
 // --- start page without published guides
 $g0 = array(

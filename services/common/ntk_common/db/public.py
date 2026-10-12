@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import Engine
 from sqlalchemy.engine import Connection
 
-from .. import hebrew
+from .. import hebrew, people
 from ..layers import UnitView
 from .core import execute, j, row, rows, scalar
 from .ops import audit, current_corpus_version
@@ -146,18 +146,19 @@ def public_hearing(conn: Connection, hearing_id: str) -> dict | None:
     stats = row(conn, """SELECT count(*) AS units, count(*) FILTER (WHERE unit_type='question') AS questions,
                                 count(*) FILTER (WHERE unit_type='answer') AS answers
                          FROM ntk.source_units WHERE hearing_id = :id AND superseded_at IS NULL""", {"id": hearing_id})
+    h = {**h, "judges": people.clean_judges(h["judges"])}
     return {"hearing": h, "digest": digest["payload"] if digest else None,
             "digest_artifact_id": str(digest["id"]) if digest else None, "stats": stats}
 
 
 def public_hearings(conn: Connection) -> list[dict]:
-    return rows(conn, """
+    return [{**h, "judges": people.clean_judges(h["judges"])} for h in rows(conn, """
         SELECT h.id, h.hearing_date::text AS hearing_date, h.witnesses, h.judges, sv.document_id, h.source_version_id,
                EXISTS (SELECT 1 FROM ntk.generated_artifacts ga JOIN ntk.publications p ON p.artifact_id = ga.id
                        AND p.unpublished_at IS NULL WHERE ga.object_type='hearing' AND ga.object_id = h.id) AS has_digest
         FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
         WHERE sv.publication_state = 'published' ORDER BY h.hearing_date
-    """)
+    """)]
 
 
 def public_timeline(conn: Connection, *, case_id: str, as_of: Any = None, known_at: Any = None) -> list[dict]:

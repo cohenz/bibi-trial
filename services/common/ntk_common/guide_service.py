@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import guides, ids
+from . import guides, ids, people
 from .db import knowledge as kdb
 from .db import ops, sources
 from .db.core import rows, scalar
@@ -46,44 +46,71 @@ def _all_dates(w: dict) -> list[str]:
 
 
 def witnesses(conn) -> list[dict]:
-    """Everyone listed as a witness in a published hearing, or named as testifying in a court notice, grouped by name.
-    ``hearings`` are hearings with a transcript; ``appearances`` are days known only from a court notice."""
+    """Everyone listed as a witness in a published hearing, or named as testifying in a court notice, one entry per
+    person (``people.Resolver``: titles, word order, spelling variants and checked aliases are folded together).
+    ``hearings`` are hearings with a transcript; ``appearances`` are days known only from a court notice.
+    ``aliases`` are slugs the same person had before the names were folded (old links keep working);
+    ``variants`` are the strings as printed (the site links any of them to the person)."""
     hs = rows(conn, """
         SELECT h.id, h.hearing_date::text AS hearing_date, h.witnesses, h.source_version_id
         FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
         WHERE sv.publication_state = 'published' ORDER BY h.hearing_date
     """)
-    out: dict[str, dict] = {}
+    days = published_hearing_days(conn)
+    res = people.Resolver()
+    for h in hs:
+        for raw in h["witnesses"] or []:
+            res.add(raw, h["hearing_date"])
+    for d in days:
+        for wt in d["witnesses"]:
+            res.add(wt["name"], d["hearing_date"])
+    who = res.resolve()
+    out: dict[int, dict] = {}
 
-    def entry(name: str, label: str | None) -> dict:
-        slug = guides.witness_slug(name)
-        return out.setdefault(slug, {"slug": slug, "name": name, "label": label, "raw": set(), "hearings": [],
-                                     "appearances": [], "side": None})
+    def entry(raw: str) -> dict | None:
+        p = who.get(raw)
+        if p is None:
+            return None
+        w = out.get(id(p))
+        if w is None:
+            slug = guides.witness_slug(p.name)
+            w = out[id(p)] = {"slug": slug, "name": p.name, "label": p.label, "raw": set(), "hearings": [],
+                              "appearances": [], "side": None, "aliases": set(), "variants": set(p.forms)}
+        w["raw"].add(raw)
+        w["variants"].add(raw)
+        legacy = guides.witness_slug(guides.witness_name(raw)[0])  # the slug before names were folded
+        if legacy != w["slug"]:
+            w["aliases"].add(legacy)
+        return w
 
     for h in hs:
         for raw in h["witnesses"] or []:
-            name, label = guides.witness_name(raw)
-            if not name:
+            w = entry(raw)
+            if w is None or any(x["id"] == h["id"] for x in w["hearings"]):
                 continue
-            w = entry(name, label)
-            w["raw"].add(raw)
             w["hearings"].append({"id": h["id"], "hearing_date": h["hearing_date"], "source_version_id": h["source_version_id"]})
-    for d in published_hearing_days(conn):
+    for d in days:
         for wt in d["witnesses"]:
-            name, label = guides.witness_name(wt["name"])
-            if not name:
+            w = entry(wt["name"])
+            if w is None:
                 continue
-            w = entry(name, label)
+            if wt.get("side") in {"prosecution", "defense"}:
+                w["side"] = wt["side"]
             if any(a["date"] == d["hearing_date"] for a in w["appearances"]):
                 continue
             w["appearances"].append({"date": d["hearing_date"], "side": wt.get("side"), "description": wt.get("description"),
                                      "source_version_id": d["source_version_id"], "document_title": d["document_title"],
                                      "has_transcript": any(h["hearing_date"] == d["hearing_date"] for h in w["hearings"])})
-            if wt.get("side") in {"prosecution", "defense"}:
-                w["side"] = wt["side"]
     for w in out.values():
         w["raw"] = sorted(w["raw"])
+        w["aliases"] = sorted(w["aliases"])
+        w["variants"] = sorted(w["variants"])
     return sorted(out.values(), key=lambda w: (_all_dates(w)[0], w["name"]))
+
+
+def slug_by_raw(ws: list[dict]) -> dict[str, dict]:
+    """Printed witness string → its person entry (for hearing pages and the timeline)."""
+    return {raw: w for w in ws for raw in w["variants"]}
 
 
 def _sample(units: list[UnitView], keep: set[str], n: int) -> list[UnitView]:

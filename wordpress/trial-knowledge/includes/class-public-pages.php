@@ -203,6 +203,11 @@ class TK_Public_Pages {
 		if ( ! $cur ) {
 			return $template;
 		}
+		if ( 'witness' === $cur['type'] && ! empty( $cur['data']['slug'] ) && $cur['data']['slug'] !== $cur['id'] ) {
+			// an old link to a name that is now folded into one person
+			wp_safe_redirect( self::url( 'witness', $cur['data']['slug'] ), 301 );
+			exit;
+		}
 		if ( 404 === $cur['error'] && 'case' === $cur['type'] ) {
 			status_header( 404 ); // friendly "guide in preparation" page, still a 404 for crawlers
 		} elseif ( 404 === $cur['error'] ) {

@@ -101,8 +101,12 @@ class TK_Guides {
 		return preg_replace( '/\s+/u', ' ', trim( (string) $name ) );
 	}
 
+	/** slug → the person's name as the site shows it (filled by slug_map()). */
+	private static $names = array();
+
 	/**
-	 * name → slug map from a witness list.
+	 * name → slug map from a witness list. Every way a name was printed (``variants``: "מר אילן ישועה",
+	 * "אלעד אבירם" for "אבירם אלעד", …) maps to the one person.
 	 *
 	 * @param array $witnesses /v2/guide witnesses.
 	 * @return array
@@ -110,8 +114,15 @@ class TK_Guides {
 	public static function slug_map( array $witnesses ) {
 		$map = array();
 		foreach ( $witnesses as $w ) {
-			if ( ! empty( $w['name'] ) && ! empty( $w['slug'] ) ) {
-				$map[ self::fold( $w['name'] ) ] = $w['slug'];
+			if ( empty( $w['name'] ) || empty( $w['slug'] ) ) {
+				continue;
+			}
+			self::$names[ $w['slug'] ] = $w['name'];
+			$map[ self::fold( $w['name'] ) ] = $w['slug'];
+			foreach ( (array) ( $w['variants'] ?? array() ) as $v ) {
+				$map[ self::fold( $v ) ] = $map[ self::fold( $v ) ] ?? $w['slug'];
+				list( $n ) = self::split_label( $v );
+				$map[ self::fold( $n ) ] = $map[ self::fold( $n ) ] ?? $w['slug'];
 			}
 		}
 		return $map;
@@ -119,9 +130,18 @@ class TK_Guides {
 
 	/** Slug for a raw hearing witness string, or ''. */
 	public static function slug_for( $raw, array $map ) {
+		$whole = self::fold( $raw );
+		if ( isset( $map[ $whole ] ) ) {
+			return $map[ $whole ];
+		}
 		list( $name ) = self::split_label( $raw );
 		$name         = self::fold( $name );
 		return isset( $map[ $name ] ) ? $map[ $name ] : '';
+	}
+
+	/** The person's name for a slug from the last slug_map(), or ''. */
+	public static function name_for( $slug ) {
+		return (string) ( self::$names[ $slug ] ?? '' );
 	}
 
 	/**

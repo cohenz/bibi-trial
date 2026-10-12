@@ -122,3 +122,54 @@ def test_digest_batch_invalid_answer_falls_back_to_direct(services, fixture_path
         prov.create_batch, prov.get_batch = orig_create, orig_get
     built = next(b for b in res["batches"] if b["name"] == name)["built"]
     assert built[0].get("digest_id") and built[0]["via"] == "direct_fallback", built
+
+
+def test_digest_batch_quota_allowance(services, fixture_path):
+    """The provider refuses for quota (HTTP 429): nothing is lost — the approval is kept as an allowance and poll()
+    sends it as soon as the provider accepts; never more than approved; limit=0 cancels."""
+    import dataclasses
+
+    from ntk_common import batches
+    from ntk_common.llm.providers import ProviderError
+    from ntk_common.orchestrator import Pipeline
+
+    from tests.conftest import make_job
+
+    p = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, hearing_digests="deferred")))
+    job = p.run_job(make_job(services, fixture_path, key="batch-quota"))
+    hid = {s["stage"]: s for s in job["stages"]}["extract_a"]["output"]["hearing_id"]
+    with services.engine.begin() as conn:
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'hearing' AND object_id = :h",
+                {"h": hid})
+        execute(conn, "UPDATE ntk.model_runs SET status = 'provider_error' WHERE task_type = 'digest'")
+        execute(conn, "UPDATE ntk.model_batches SET finished_at = now() WHERE finished_at IS NULL")
+    prov = p.s.runner.providers["mock"]
+    orig_create = prov.create_batch
+    full = {"on": True}
+    sent: list[int] = []
+
+    def quota(**kw):
+        if full["on"]:
+            raise ProviderError("gemini HTTP 429: You exceeded your current quota", retryable=True, status=429)
+        sent.append(len(kw["items"]))
+        return orig_create(**kw)
+
+    prov.create_batch = quota
+    try:
+        out = batches.submit_digests(p, limit=3, approved_by="test")
+        assert out["quota_full"] and not out["batches"] and out["not_sent_now"] == 1, out
+        with services.engine.connect() as conn:
+            al = batches.allowance(conn)
+        assert al["remaining"] == 3 and al["approved_total"] == 3 and al["approved_by"] == "test" and "429" in al["last_error"]
+        full["on"] = False
+        res = batches.poll(p)  # the provider accepts now: the approved request goes out
+        assert sum(x["items"] for x in res["submitted"]["batches"]) + res["submitted"]["built_directly"] == 1, res
+        with services.engine.connect() as conn:
+            assert batches.allowance(conn)["remaining"] == 2  # one used; no more hearings to send now
+        batches.submit_digests(p, limit=0)  # cancel what is left
+        with services.engine.connect() as conn:
+            assert batches.allowance(conn)["remaining"] == 0
+        assert sum(sent) <= 3
+        batches.poll(p)  # collect the open batch so later tests start clean
+    finally:
+        prov.create_batch = orig_create

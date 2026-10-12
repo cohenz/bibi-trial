@@ -206,7 +206,9 @@ def rerun_stages(job_id: str, body: StageRerunRequest, request: Request, st: App
 def submit_digest_batch(body: DigestBatchRequest, request: Request, st: AppState = Depends(get_state),
                         p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
     """Hearing digests through the provider's Batch API: half price, results within 24 hours (collected every 10
-    minutes by beat; GET /v2/admin/batches shows progress)."""
+    minutes by beat; GET /v2/admin/batches shows progress). ``limit`` is an approval: groups the provider refuses for
+    quota are split, and what it cannot take now is sent by the beat poll as batches finish, never more than approved.
+    ``limit: 0`` cancels what is left of an approval."""
     spec = body.model_dump(exclude_none=True)
     now = spec.pop("now", False)
     with st.services.engine.begin() as conn:
@@ -216,9 +218,10 @@ def submit_digest_batch(body: DigestBatchRequest, request: Request, st: AppState
         from ntk_common import batches
         from ntk_common.orchestrator import Pipeline
 
-        out = batches.submit_digests(Pipeline(st.services), hearing_ids=spec.get("hearing_ids"), limit=spec.get("limit", 200))
+        out = batches.submit_digests(Pipeline(st.services), hearing_ids=spec.get("hearing_ids"), limit=spec.get("limit", 200),
+                                     approved_by=p.label)
         return _json(out, cache="no-store", status=200)
-    tid = st.queue.enqueue(TASK_SUBMIT_DIGEST_BATCH, json.dumps(spec))
+    tid = st.queue.enqueue(TASK_SUBMIT_DIGEST_BATCH, json.dumps({**spec, "approved_by": p.label}))
     return _json({"queued": TASK_SUBMIT_DIGEST_BATCH, "task_id": tid, **spec}, cache="no-store", status=202)
 
 
@@ -228,7 +231,7 @@ def list_batches(st: AppState = Depends(get_state), limit: int = Query(50, le=50
     from ntk_common import batches
 
     with st.services.engine.connect() as conn:
-        return _json({"items": batches.listing(conn, limit)}, cache="no-store")
+        return _json({"items": batches.listing(conn, limit), "allowance": batches.allowance(conn, "digest")}, cache="no-store")
 
 
 @router.post("/batches/poll", status_code=202)

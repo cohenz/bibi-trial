@@ -95,6 +95,12 @@ class TK_Admin_Settings {
 						<a href="<?php echo esc_url( admin_url( 'admin.php?page=trial-knowledge-store' ) ); ?>"><?php esc_html_e( 'למסך העותק המקומי', 'trial-knowledge' ); ?></a></p></td></tr>
 					<tr><th scope="row"><label for="tk_slug"><?php esc_html_e( 'נתיב העמודים הציבוריים', 'trial-knowledge' ); ?></label></th>
 						<td><input type="text" id="tk_slug" name="public_slug" dir="ltr" value="<?php echo esc_attr( $cfg['public_slug'] ); ?>"></td></tr>
+					<tr><th scope="row"><?php esc_html_e( 'קובצי PDF מקוריים', 'trial-knowledge' ); ?></th>
+						<td><label><input type="checkbox" name="show_pdf" value="1" <?php checked( ! empty( $cfg['show_pdf'] ) ); ?>> <?php esc_html_e( 'להציג קישור ל־PDF המקורי בעמודי הדיונים והמסמכים', 'trial-knowledge' ); ?></label>
+						<p class="description"><?php esc_html_e( 'כשהאפשרות כבויה מוצג רק הטקסט שחולץ מהמסמך, בלי קישור או הורדה של הקובץ המקורי. השינוי חל מיד על כל העמודים.', 'trial-knowledge' ); ?></p></td></tr>
+					<tr><th scope="row"><label for="tk_ocr_disclaimer"><?php esc_html_e( 'הערה על הטקסט שחולץ', 'trial-knowledge' ); ?></label></th>
+						<td><textarea id="tk_ocr_disclaimer" name="ocr_disclaimer" rows="2" class="large-text"><?php echo esc_textarea( $cfg['ocr_disclaimer'] ); ?></textarea>
+						<p class="description"><?php esc_html_e( 'מוצגת כשמעבירים את העכבר על הסימן ⓘ ליד הפרוטוקול המלא ונוסח המסמך. השאירו ריק כדי לא להציג את הסימן.', 'trial-knowledge' ); ?></p></td></tr>
 					<tr><th scope="row"><label for="tk_disclosure"><?php esc_html_e( 'הצהרת עדשה (מוצגת בכל כרטיס טענה)', 'trial-knowledge' ); ?></label></th>
 						<td><textarea id="tk_disclosure" name="disclosure" rows="3" class="large-text"><?php echo esc_textarea( $cfg['disclosure'] ); ?></textarea></td></tr>
 				</table>
@@ -125,6 +131,8 @@ class TK_Admin_Settings {
 				'webhook_secret' => isset( $_POST['webhook_secret'] ) ? trim( (string) wp_unslash( $_POST['webhook_secret'] ) ) : '', // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 				'public_slug'    => isset( $_POST['public_slug'] ) ? sanitize_title( wp_unslash( $_POST['public_slug'] ) ) : 'trial',
 				'disclosure'     => isset( $_POST['disclosure'] ) ? sanitize_textarea_field( wp_unslash( $_POST['disclosure'] ) ) : '',
+				'show_pdf'       => empty( $_POST['show_pdf'] ) ? 0 : 1,
+				'ocr_disclaimer' => isset( $_POST['ocr_disclaimer'] ) ? sanitize_textarea_field( wp_unslash( $_POST['ocr_disclaimer'] ) ) : '',
 			)
 		);
 		if ( untrailingslashit( $base ) !== (string) $old['api_base'] ) {

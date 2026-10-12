@@ -11,6 +11,7 @@
  *   /{slug}/timeline/         dual zoomable timeline   (templates/single-timeline.php)
  *   /{slug}/witnesses/        all witnesses            (templates/single-witnesses.php)
  *   /{slug}/glossary/         glossary                 (templates/single-glossary.php)
+ *   /{slug}/315/              Project 315 bridge (2.6) (templates/single-315.php)
  *
  * @package TrialKnowledge
  */
@@ -46,7 +47,7 @@ class TK_Public_Pages {
 		add_rewrite_rule( '^' . $s . '/document/(sv_[0-9a-f]{26})/?$', 'index.php?tk_type=document&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/case/(1000|2000|4000)/?$', 'index.php?tk_type=case&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/witness/(w_[0-9a-f]{10})/?$', 'index.php?tk_type=witness&tk_id=$matches[1]', 'top' );
-		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
+		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary|315)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
 	}
 
 	/** Section pages without an id: /{slug}/timeline/, /{slug}/witnesses/, /{slug}/glossary/. */
@@ -117,7 +118,7 @@ class TK_Public_Pages {
 		if ( ! $type || ! $id ) {
 			return null;
 		}
-		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary' );
+		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary', '315' );
 		if ( in_array( $type, $guides, true ) ) {
 			try {
 				$data          = self::load_guide( $type, $id );
@@ -191,6 +192,8 @@ class TK_Public_Pages {
 				return TK_Guides::home();
 			case 'glossary':
 				return TK_Guides::glossary();
+			case '315':
+				return TK_P315::data()['items'] ? TK_P315::data() : null; // static data shipped with the plugin
 		}
 		return null;
 	}
@@ -241,6 +244,8 @@ class TK_Public_Pages {
 				return 'העדים במשפט | ' . get_bloginfo( 'name' );
 			case 'glossary':
 				return 'מילון מונחים | ' . get_bloginfo( 'name' );
+			case '315':
+				return '315 האירועים בכתב האישום | ' . get_bloginfo( 'name' );
 		}
 		return $title;
 	}

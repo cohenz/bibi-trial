@@ -56,6 +56,14 @@ class TK_Render {
 		'other'      => 'מסמך',
 	);
 
+	/**
+	 * "1–8" kept in reading order inside Hebrew text: between two numbers the dash takes the paragraph's RTL
+	 * direction and "1–8" would show as "8–1". Wrapped in a left-to-right isolate (LRI … PDI).
+	 */
+	public static function nrange( $a, $b ) {
+		return "\u{2066}" . $a . '–' . $b . "\u{2069}";
+	}
+
 	public static function type_label( $type ) {
 		return self::TYPES[ $type ] ?? self::TYPES['other'];
 	}
@@ -74,10 +82,78 @@ class TK_Render {
 
 	/** Compact citation for running text (digests): "עמ׳ 118", details in the tooltip. */
 	public static function citation_chip( array $c ) {
-		$title = sprintf( __( 'עמ׳ %1$d, שורות %2$d–%3$d', 'trial-knowledge' ), (int) $c['page'], (int) $c['line_start'], (int) $c['line_end'] ) .
+		$title = sprintf( __( 'עמ׳ %1$d, שורות %2$s', 'trial-knowledge' ), (int) $c['page'], self::nrange( (int) $c['line_start'], (int) $c['line_end'] ) ) .
 			( ! empty( $c['speaker'] ) ? ' · ' . $c['speaker'] : '' );
 		return '<a class="tk-chip" href="' . esc_url( self::citation_url( $c['source_unit_id'] ) ) . '" title="' . esc_attr( $title ) . '">' .
 			esc_html( sprintf( __( 'עמ׳ %d', 'trial-knowledge' ), (int) $c['page'] ) ) . '</a>';
+	}
+
+	/** "עמ׳ 10, ש׳ 6–7 · עו"ד בן צור" — one row of a sources list. */
+	public static function citation_row_label( array $c ) {
+		$ls    = (int) ( $c['line_start'] ?? 0 );
+		$le    = (int) ( $c['line_end'] ?? $ls );
+		$lines = $ls ? ( $ls === $le || ! $le ? sprintf( __( 'ש׳ %d', 'trial-knowledge' ), $ls ) : sprintf( __( 'ש׳ %s', 'trial-knowledge' ), self::nrange( $ls, $le ) ) ) : '';
+		$label = sprintf( __( 'עמ׳ %d', 'trial-knowledge' ), (int) ( $c['page'] ?? 0 ) ) . ( $lines ? ', ' . $lines : '' );
+		return array( $label, (string) ( $c['speaker'] ?? '' ) );
+	}
+
+	/**
+	 * Sources of one sentence as a single small pill at its end (2.6). One source: the pill links to it.
+	 * Several: "מקורות · N" opens a list on hover, keyboard focus or tap; each row links to its source.
+	 *
+	 * @param array $items Each: array( 'id' => source_unit_id, 'c' => citation array|null ).
+	 */
+	public static function sources_pill( array $items ) {
+		if ( ! $items ) {
+			return '';
+		}
+		self::enqueue_reading();
+		usort(
+			$items,
+			static function ( $a, $b ) {
+				$pa = isset( $a['c']['page'] ) ? (int) $a['c']['page'] * 1000 + (int) ( $a['c']['line_start'] ?? 0 ) : PHP_INT_MAX;
+				$pb = isset( $b['c']['page'] ) ? (int) $b['c']['page'] * 1000 + (int) ( $b['c']['line_start'] ?? 0 ) : PHP_INT_MAX;
+				return $pa <=> $pb;
+			}
+		);
+		$rows = array();
+		foreach ( $items as $it ) {
+			if ( is_array( $it['c'] ) && isset( $it['c']['page'] ) ) {
+				list( $label, $who ) = self::citation_row_label( $it['c'] );
+			} else {
+				list( $label, $who ) = array( __( 'המקור בתיק', 'trial-knowledge' ), '' );
+			}
+			$rows[] = array( self::citation_url( $it['id'] ), $label, $who );
+		}
+		if ( 1 === count( $rows ) ) {
+			$r = $rows[0];
+			return ' <a class="tk-srcs tk-srcs--one" href="' . esc_url( $r[0] ) . '" title="' . esc_attr( $r[1] . ( $r[2] ? ' · ' . $r[2] : '' ) ) . '">' . esc_html__( 'מקור', 'trial-knowledge' ) . '</a>';
+		}
+		$id  = 'tk-srcs-' . substr( md5( wp_json_encode( $rows ) . wp_rand() ), 0, 10 );
+		$out = ' <span class="tk-srcs" data-tk-srcs><button type="button" class="tk-srcs__btn" aria-expanded="false" aria-controls="' . esc_attr( $id ) . '">' .
+			esc_html__( 'מקורות', 'trial-knowledge' ) . ' <span class="tk-srcs__n">' . count( $rows ) . '</span></button>' .
+			'<span class="tk-srcs__pop" id="' . esc_attr( $id ) . '" role="list">';
+		foreach ( $rows as $r ) {
+			$out .= '<a role="listitem" class="tk-srcs__row" href="' . esc_url( $r[0] ) . '"><span class="tk-srcs__loc">' . esc_html( $r[1] ) . '</span>' .
+				( $r[2] ? '<span class="tk-srcs__who">' . esc_html( $r[2] ) . '</span>' : '' ) . '</a>';
+		}
+		return $out . '</span></span>';
+	}
+
+	/** Small script for the sources pills and the collapsible transcript pages (footer; printed once). */
+	public static function enqueue_reading() {
+		if ( function_exists( 'wp_enqueue_script' ) ) {
+			wp_enqueue_script( 'trial-knowledge-reading' );
+		}
+	}
+
+	/** ⓘ with a short note shown on hover, focus or tap (2.6). */
+	public static function info_tip( $text ) {
+		$text = trim( (string) $text );
+		if ( '' === $text ) {
+			return '';
+		}
+		return '<span class="tk-info" tabindex="0" role="note" aria-label="' . esc_attr( $text ) . '" data-tip="' . esc_attr( $text ) . '">i</span>';
 	}
 
 	/** Short form of a verified Q/A label: "אישר" / "הכחיש", the full wording in the tooltip. */
@@ -91,10 +167,9 @@ class TK_Render {
 	public static function citation_link( array $c ) {
 		$label = sprintf(
 			/* translators: 1: page 2: line start 3: line end */
-			__( 'עמ׳ %1$d, שורות %2$d–%3$d', 'trial-knowledge' ),
+			(int) $c['line_start'] === (int) $c['line_end'] ? __( 'עמ׳ %1$d, שורה %2$s', 'trial-knowledge' ) : __( 'עמ׳ %1$d, שורות %2$s', 'trial-knowledge' ),
 			(int) $c['page'],
-			(int) $c['line_start'],
-			(int) $c['line_end']
+			(int) $c['line_start'] === (int) $c['line_end'] ? (string) (int) $c['line_start'] : self::nrange( (int) $c['line_start'], (int) $c['line_end'] )
 		);
 		$speaker = ! empty( $c['speaker'] ) ? ' · ' . $c['speaker'] : '';
 		return '<a class="tk-cite" href="' . esc_url( self::citation_url( $c['source_unit_id'] ) ) . '">' .
@@ -181,11 +256,11 @@ class TK_Render {
 		$out .= '<p class="tk-source__text">' . nl2br( esc_html( $c['text'] ) ) . '</p>';
 		foreach ( (array) $c['turn_continuations'] as $part ) {
 			$out .= '<p class="tk-source__text tk-source__cont">' . nl2br( esc_html( $part['raw_text'] ) ) . ' <span class="tk-muted">' .
-				esc_html( sprintf( __( '(המשך בעמ׳ %1$d, שורות %2$d–%3$d)', 'trial-knowledge' ), $part['page_no'], $part['line_start'], $part['line_end'] ) ) . '</span></p>';
+				esc_html( sprintf( __( '(המשך בעמ׳ %1$d, שורות %2$s)', 'trial-knowledge' ), $part['page_no'], self::nrange( (int) $part['line_start'], (int) $part['line_end'] ) ) ) . '</span></p>';
 		}
 		$out .= '</blockquote><figcaption>';
 		$out .= '<p><strong>' . esc_html( $doc['title'] ) . '</strong></p>';
-		$out .= '<p>' . esc_html( sprintf( __( 'עמוד %1$d, שורות %2$d–%3$d', 'trial-knowledge' ), $cit['page'], $cit['line_start'], $cit['line_end'] ) ) . '</p>';
+		$out .= '<p>' . esc_html( sprintf( __( 'עמוד %1$d, שורות %2$s', 'trial-knowledge' ), $cit['page'], self::nrange( (int) $cit['line_start'], (int) $cit['line_end'] ) ) ) . '</p>';
 		if ( ! empty( $c['synthetic_lines'] ) ) {
 			$out .= '<p class="tk-muted">' . esc_html__( 'במסמך זה אין מספור שורות מודפס; מספרי השורות חושבו בקליטה.', 'trial-knowledge' ) . '</p>';
 		}
@@ -236,11 +311,11 @@ class TK_Render {
 		if ( ! empty( $t['prev_page_from'] ) ) {
 			$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['prev_page_from'], $base_url ) . $frag ) . '">' . esc_html__( '→ עמודים קודמים', 'trial-knowledge' ) . '</a> ';
 		}
-		$out .= '<span class="tk-pager__where">' . esc_html( sprintf( __( 'עמודים %1$d–%2$d מתוך %3$d', 'trial-knowledge' ), $t['page_from'], $t['page_to'], $t['page_count'] ) ) . '</span>';
+		$out .= '<span class="tk-pager__where">' . esc_html( sprintf( __( 'עמודים %1$s מתוך %2$d', 'trial-knowledge' ), self::nrange( (int) $t['page_from'], (int) $t['page_to'] ), $t['page_count'] ) ) . '</span>';
 		if ( ! empty( $t['next_page_from'] ) ) {
 			$out .= ' <a class="tk-button" href="' . esc_url( add_query_arg( 'tk_p', (int) $t['next_page_from'], $base_url ) . $frag ) . '">' . esc_html__( 'עמודים הבאים ←', 'trial-knowledge' ) . '</a>';
 		}
-		if ( ! empty( $t['pdf_url'] ) ) {
+		if ( ! empty( $t['pdf_url'] ) && TK_Settings_Store::show_pdf() ) {
 			$out .= ' <a class="tk-button tk-button--pdf" href="' . esc_url( $t['pdf_url'] ) . '" rel="nofollow">' . esc_html__( 'PDF המקורי', 'trial-knowledge' ) . '</a>';
 		}
 		return $out . '</nav>';
@@ -254,31 +329,64 @@ class TK_Render {
 	 * @param string $fragment Anchor appended to pager links (keeps the hearing tab open).
 	 */
 	public static function transcript( array $t, $base_url, $fragment = '' ) {
-		$out  = '<section class="tk-transcript" dir="rtl" lang="he">' . self::pager( $t, $base_url, $fragment );
-		$page = null;
+		$pages = array();
 		foreach ( (array) $t['units'] as $u ) {
-			if ( $u['page'] !== $page ) {
-				$out .= ( null === $page ? '' : '</ol>' ) . '<h3 class="tk-transcript__page" id="page-' . (int) $u['page'] . '">' .
-					esc_html( sprintf( __( 'עמוד %d', 'trial-knowledge' ), $u['page'] ) ) . '</h3><ol class="tk-transcript__units">';
-				$page = $u['page'];
-			}
-			$type  = preg_replace( '/[^a-z_]/', '', (string) $u['unit_type'] );
-			$out  .= '<li id="' . esc_attr( $u['id'] ) . '" class="tk-u tk-u--' . esc_attr( $type ) . '">';
-			$out  .= '<a class="tk-u__lines" href="' . esc_url( self::citation_url( $u['id'] ) ) . '" title="' . esc_attr__( 'קישור קבוע לקטע', 'trial-knowledge' ) . '">' .
-				esc_html( $u['line_start'] === $u['line_end'] ? (string) $u['line_start'] : $u['line_start'] . '–' . $u['line_end'] ) . '</a>';
-			// many protocols print the speaker at the start of the turn; do not show it twice
-			if ( ! empty( $u['speaker'] ) && 'caption' !== $type && 0 !== strpos( ltrim( (string) $u['text'] ), (string) $u['speaker'] ) ) {
-				$out .= '<span class="tk-u__speaker">' . esc_html( $u['speaker'] ) . '</span>';
-			}
-			$out .= '<span class="tk-u__text">' . nl2br( esc_html( $u['text'] ) ) . '</span>';
-			if ( ! empty( $u['exchange_label'] ) ) {
-				$out .= ' ' . self::qa_badge( $u['exchange_label'] );
-			}
-			$out .= '</li>';
+			$pages[ (int) $u['page'] ][] = $u;
 		}
-		if ( null !== $page ) {
-			$out .= '</ol>';
-		} else {
+		// Short texts stay open; longer ones start collapsed, one page opened at a time by the reader (2.6).
+		$collapse = count( $pages ) > 3;
+		self::enqueue_reading();
+		$out      = '<section class="tk-transcript' . ( $collapse ? ' tk-transcript--collapsible' : '' ) . '" dir="rtl" lang="he" data-tk-transcript>' . self::pager( $t, $base_url, $fragment );
+		$tip      = self::info_tip( TK_Settings_Store::ocr_disclaimer() );
+		if ( $collapse || $tip ) {
+			$out .= '<div class="tk-transcript__bar">';
+			if ( $tip ) {
+				$out .= '<span class="tk-transcript__note">' . esc_html__( 'טקסט שחולץ מהמסמך', 'trial-knowledge' ) . ' ' . $tip . '</span>';
+			}
+			if ( $collapse ) {
+				$out .= '<span class="tk-transcript__tools" hidden><button type="button" class="tk-linkbtn" data-tk-pages="open">' . esc_html__( 'פתיחת כל העמודים', 'trial-knowledge' ) . '</button>' .
+					'<button type="button" class="tk-linkbtn" data-tk-pages="close">' . esc_html__( 'סגירת כל העמודים', 'trial-knowledge' ) . '</button></span>';
+			}
+			$out .= '</div>';
+		}
+		foreach ( $pages as $no => $units ) {
+			$who = array();
+			foreach ( $units as $u ) {
+				$sp = trim( (string) ( $u['speaker'] ?? '' ) );
+				if ( '' !== $sp && ! in_array( $sp, $who, true ) ) {
+					$who[] = $sp;
+				}
+			}
+			$head = '<span class="tk-tpage__no">' . esc_html( sprintf( __( 'עמוד %d', 'trial-knowledge' ), $no ) ) . '</span>';
+			if ( $who ) {
+				$more  = count( $who ) > 3 ? ' ' . sprintf( __( 'ועוד %d', 'trial-knowledge' ), count( $who ) - 3 ) : '';
+				$head .= '<span class="tk-tpage__who">' . esc_html( implode( ' · ', array_slice( $who, 0, 3 ) ) . $more ) . '</span>';
+			}
+			$list = '<ol class="tk-transcript__units">';
+			foreach ( $units as $u ) {
+				$type  = preg_replace( '/[^a-z_]/', '', (string) $u['unit_type'] );
+				$list .= '<li id="' . esc_attr( $u['id'] ) . '" class="tk-u tk-u--' . esc_attr( $type ) . '">';
+				$list .= '<a class="tk-u__lines" href="' . esc_url( self::citation_url( $u['id'] ) ) . '" title="' . esc_attr__( 'קישור קבוע לקטע', 'trial-knowledge' ) . '">' .
+					esc_html( $u['line_start'] === $u['line_end'] ? (string) $u['line_start'] : self::nrange( $u['line_start'], $u['line_end'] ) ) . '</a>';
+				// many protocols print the speaker at the start of the turn; do not show it twice
+				if ( ! empty( $u['speaker'] ) && 'caption' !== $type && 0 !== strpos( ltrim( (string) $u['text'] ), (string) $u['speaker'] ) ) {
+					$list .= '<span class="tk-u__speaker">' . esc_html( $u['speaker'] ) . '</span>';
+				}
+				$list .= '<span class="tk-u__text">' . nl2br( esc_html( $u['text'] ) ) . '</span>';
+				if ( ! empty( $u['exchange_label'] ) ) {
+					$list .= ' ' . self::qa_badge( $u['exchange_label'] );
+				}
+				$list .= '</li>';
+			}
+			$list .= '</ol>';
+			if ( $collapse ) {
+				$out .= '<details class="tk-tpage" id="page-' . (int) $no . '"><summary class="tk-tpage__head">' . $head .
+					'<button type="button" class="tk-linkbtn tk-tpage__only" data-tk-only hidden>' . esc_html__( 'רק עמוד זה', 'trial-knowledge' ) . '</button></summary>' . $list . '</details>';
+			} else {
+				$out .= '<h3 class="tk-transcript__page" id="page-' . (int) $no . '">' . esc_html( sprintf( __( 'עמוד %d', 'trial-knowledge' ), $no ) ) . '</h3>' . $list;
+			}
+		}
+		if ( ! $pages ) {
 			$out .= '<p class="tk-muted">' . esc_html__( 'אין טקסט בעמודים אלה.', 'trial-knowledge' ) . '</p>';
 		}
 		return $out . self::pager( $t, $base_url, $fragment ) . '</section>';

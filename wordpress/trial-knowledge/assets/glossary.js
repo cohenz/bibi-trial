@@ -26,7 +26,7 @@
 		return esc(f).replace(/"/g, '["״]').replace(/'/g, "['׳]").replace(/-/g, '[-־‐-–]').replace(/ /g, '\\s+');
 	}).join('|');
 	var RE = new RegExp('(^|[^' + LETTERS + '])(' + alt + ')(?=$|[^' + LETTERS + '])', 'g');
-	var SKIP = 'a, button, h1, h2, h3, h4, h5, h6, strong, .tk-chip, .tk-chips, .tk-badge, .tk-case-badge, .tk-gl, .tk-labelled__label, .tk-charges__who, .tk-people__name, .tk-qa__who, code, pre, script, style, label, textarea, input, select, time';
+	var SKIP = 'a, button, h1, h2, h3, h4, h5, h6, strong, .tk-chip, .tk-chips, .tk-srcs, .tk-info, .tk-badge, .tk-case-badge, .tk-gl, .tk-labelled__label, .tk-charges__who, .tk-people__name, .tk-qa__who, code, pre, script, style, label, textarea, input, select, time';
 
 	var seenByScope = typeof WeakMap === 'function' ? new WeakMap() : null;
 	var counter = 0;

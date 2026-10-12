@@ -14,7 +14,7 @@ $html = TK_Render::claim_card( $card );
 TK_T::ok( false === strpos( $html, '<script>' ) && false === strpos( $html, '<img' ) && false === strpos( $html, '<b>' ), 'claim card escapes untrusted text' );
 TK_T::ok( false !== strpos( $html, 'מה מחליש או סותר אותה' ) && false !== strpos( $html, 'לא נמצא חומר מחליש' ), 'four boxes present incl. empty weakness box' );
 TK_T::ok( false !== strpos( $html, 'שאלה או הערה של שופט — אינה החלטה' ), 'judicial level labelled as not a ruling' );
-TK_T::ok( false !== strpos( $html, 'עמ׳ 3, שורות 4–6' ), 'citation shows page and lines' );
+TK_T::ok( false !== strpos( $html, 'עמ׳ 3, שורות ⁦4–6⁩' ), 'citation shows page and lines' );
 TK_T::ok( false !== strpos( $html, 'dir="rtl"' ), 'RTL container' );
 $env  = array( 'answer_id' => '22222222-2222-5222-8222-222222222222', 'answer_status' => 'false_premise_corrected', 'answer_short' => 'לא <i>זוכה</i>', 'sections' => array(), 'citations' => array(), 'as_of' => '2026-10-10T00:00:00+00:00', 'corpus_version' => 'cv-000009', 'latest_permalink' => null );
 $a    = TK_Render::answer( $env );
@@ -33,7 +33,22 @@ $t  = array(
 $h = TK_Render::transcript( $t, 'https://site.test/trial/hearing/hr_x/' );
 TK_T::ok( false === strpos( $h, '<script>' ) && false === strpos( $h, '<b>' ), 'transcript escapes text and speakers' );
 TK_T::ok( false !== strpos( $h, 'id="' . $su . '"' ) && false !== strpos( $h, 'עמוד 1' ) && false !== strpos( $h, 'עמוד 2' ), 'units anchored and grouped by page' );
-TK_T::ok( false !== strpos( $h, 'tk_p=26' ) && false !== strpos( $h, 'עמודים 1–2 מתוך 60' ) && false !== strpos( $h, 'PDF המקורי' ), 'pager with next page and PDF link' );
+TK_T::ok( false !== strpos( $h, 'tk_p=26' ) && false !== strpos( $h, 'עמודים ⁦1–2⁩ מתוך 60' ) && false !== strpos( $h, 'PDF המקורי' ), 'pager with next page and PDF link' );
+// 2.6: short texts stay open; the (i) note on extracted text; the PDF toggle
+TK_T::ok( false === strpos( $h, '<details' ) && false !== strpos( $h, 'class="tk-info"' ) && false !== strpos( $h, 'קריאת מחשב' ), 'transcript (2.6): 2 pages stay open, (i) note shown' );
+$t5          = $t;
+$t5['units'] = array();
+for ( $pn = 1; $pn <= 5; $pn++ ) {
+	$t5['units'][] = array( 'id' => 'su_' . str_repeat( (string) $pn, 26 ), 'page' => $pn, 'line_start' => 1, 'line_end' => 2, 'speaker' => 'העד', 'unit_type' => 'answer', 'text' => 'כן.', 'exchange_label' => null );
+}
+$h5 = TK_Render::transcript( $t5, 'https://site.test/trial/hearing/hr_x/' );
+TK_T::eq( 5, substr_count( $h5, '<details class="tk-tpage" id="page-' ), 'transcript (2.6): longer texts collapse page by page' );
+TK_T::ok( false === strpos( $h5, '<details class="tk-tpage" id="page-1" open' ) && false !== strpos( $h5, 'data-tk-pages="open"' ) && false !== strpos( $h5, 'data-tk-only' ), 'transcript (2.6): collapsed, with open-all and only-this-page controls' );
+update_option( TK_OPTION, array( 'show_pdf' => 0, 'ocr_disclaimer' => '' ) );
+$hn = TK_Render::transcript( $t, 'https://site.test/trial/hearing/hr_x/' );
+TK_T::ok( false === strpos( $hn, 'PDF המקורי' ) && false === strpos( $hn, '/pdf' ), 'PDF toggle off (2.6): no link to the original PDF' );
+TK_T::ok( false === strpos( $hn, 'class="tk-info"' ), 'empty disclaimer (2.6): no (i)' );
+update_option( TK_OPTION, array() );
 TK_T::ok( false !== strpos( $h, 'tk-badge--deny' ) && false !== strpos( $h, 'title="העד הכחיש את הנטען"' ), 'verified Q/A label shown as a short badge' );
 $docs = TK_Render::documents( array( 'items' => array( array( 'source_version_id' => 'sv_' . str_repeat( 'e', 26 ), 'title' => 'החלטה <i>x</i>', 'source_type' => 'decision', 'document_date' => '2025-10-12', 'page_count' => 3 ) ) ) );
 TK_T::ok( false !== strpos( $docs, '/trial/document/sv_eeee' ) && false !== strpos( $docs, 'החלטה' ) && false === strpos( $docs, '<i>' ), 'documents list links document pages, escaped' );

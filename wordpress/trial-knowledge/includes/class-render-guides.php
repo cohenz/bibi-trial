@@ -105,7 +105,7 @@ class TK_Render_Guides {
 		if ( ! $from ) {
 			return '';
 		}
-		return ( ! $to || $to === $from ) ? self::fmt_date( $from ) : self::fmt_date( $from ) . '–' . self::fmt_date( $to );
+		return ( ! $to || $to === $from ) ? self::fmt_date( $from ) : TK_Render::nrange( self::fmt_date( $from ), self::fmt_date( $to ) );
 	}
 
 	/** @return array source_unit_id → citation */
@@ -122,30 +122,22 @@ class TK_Render_Guides {
 	}
 
 	/**
-	 * Citation chips for an item; repeated citations of the same page collapse into one chip.
+	 * Sources of an item as one pill at its end (2.6; replaced one chip per page).
 	 *
 	 * @param array $ids  source unit ids.
 	 * @param array $cits cit_map().
 	 */
 	public static function chips( $ids, array $cits ) {
-		$out  = array();
-		$seen = array();
+		$items = array();
+		$seen  = array();
 		foreach ( (array) $ids as $id ) {
-			if ( ! preg_match( '/^su_[0-9a-f]{26}$/', (string) $id ) ) {
+			if ( ! preg_match( '/^su_[0-9a-f]{26}$/', (string) $id ) || isset( $seen[ $id ] ) ) {
 				continue;
 			}
-			if ( isset( $cits[ $id ] ) && isset( $cits[ $id ]['page'] ) ) {
-				$key = ( $cits[ $id ]['source_version_id'] ?? '' ) . '#' . (int) $cits[ $id ]['page'];
-				if ( isset( $seen[ $key ] ) ) {
-					continue;
-				}
-				$seen[ $key ] = 1;
-				$out[]        = TK_Render::citation_chip( $cits[ $id ] );
-			} else {
-				$out[] = '<a class="tk-chip" href="' . esc_url( TK_Render::citation_url( $id ) ) . '" title="' . esc_attr__( 'המקור בתיק', 'trial-knowledge' ) . '">' . esc_html__( 'מקור', 'trial-knowledge' ) . '</a>';
-			}
+			$seen[ $id ] = 1;
+			$items[]     = array( 'id' => $id, 'c' => $cits[ $id ] ?? null );
 		}
-		return $out ? ' <span class="tk-chips">' . implode( '', $out ) . '</span>' : '';
+		return TK_Render::sources_pill( $items );
 	}
 
 	public static function case_badge( $key, $link = true ) {
@@ -417,6 +409,7 @@ class TK_Render_Guides {
 			array( $urls['timeline'], __( 'ציר הזמן', 'trial-knowledge' ), __( 'מה קרה ומתי: האירועים לפי כתב האישום, והדיונים וההחלטות במשפט.', 'trial-knowledge' ) ),
 			array( $urls['witnesses'], __( 'עדים', 'trial-knowledge' ), __( 'מי העיד, מתי, ומה עלה בעדות.', 'trial-knowledge' ) ),
 			array( $urls['glossary'], __( 'מילון מונחים', 'trial-knowledge' ), __( 'חקירה נגדית, מוצג, הפרת אמונים — במילים פשוטות.', 'trial-knowledge' ) ),
+			array( TK_Public_Pages::section_url( '315' ), __( '315 האירועים', 'trial-knowledge' ), __( 'אירועי הסיקור שבנספח לתיק 4000, ומה נשאר מהם לפי פרויקט 315.', 'trial-knowledge' ) ),
 			array( '#tk-ask', __( 'שאלו את המאגר', 'trial-knowledge' ), __( 'שאלה חופשית; התשובה מצטטת רק חומר שפורסם.', 'trial-knowledge' ) ),
 		);
 		$out = '<ul class="tk-entries">';
@@ -711,6 +704,9 @@ class TK_Render_Guides {
 			$secs['tk-c-events'] = array( self::BLOCKS['events'], '<p class="tk-sec__note">' . self::allegation_tag() . '</p>' . self::events( $ev, $cits ) .
 				'<p><a class="tk-button" href="' . esc_url( $tl ) . '">' . esc_html__( 'התיק בציר הזמן המלא', 'trial-knowledge' ) . '</a></p>' );
 		}
+		if ( '4000' === (string) $key && class_exists( 'TK_P315' ) && TK_P315::data()['items'] ) {
+			$secs['tk-c-315'] = array( __( '315 אירועי הסיקור', 'trial-knowledge' ), TK_P315::entry_card() );
+		}
 		if ( ! empty( $c['hearings'] ) ) {
 			$secs['tk-c-hearings'] = array( __( 'דיונים שבהם העידו מעורבים בתיק', 'trial-knowledge' ), self::hearing_list( $c['hearings'], $opts['slugs'] ?? array() ) );
 		}
@@ -882,7 +878,7 @@ class TK_Render_Guides {
 			$c           = $cits[ $id ];
 			$cmap[ $id ] = array(
 				'label' => sprintf( 'עמ׳ %d', (int) $c['page'] ),
-				'title' => sprintf( 'עמ׳ %1$d, שורות %2$d–%3$d', (int) $c['page'], (int) ( $c['line_start'] ?? 0 ), (int) ( $c['line_end'] ?? 0 ) ),
+				'title' => sprintf( 'עמ׳ %1$d, שורות %2$s', (int) $c['page'], TK_Render::nrange( (int) ( $c['line_start'] ?? 0 ), (int) ( $c['line_end'] ?? 0 ) ) ),
 				'url'   => TK_Render::citation_url( $id ),
 			);
 		}
@@ -1215,7 +1211,7 @@ class TK_Render_Guides {
 			$out .= '<div><dt>SHA-256</dt><dd><code>' . esc_html( substr( $doc['content_sha256'], 0, 16 ) ) . '…</code></dd></div>';
 		}
 		$out .= '</dl><p class="tk-actions-row">';
-		if ( ! empty( $t['pdf_url'] ) ) {
+		if ( ! empty( $t['pdf_url'] ) && TK_Settings_Store::show_pdf() ) {
 			$out .= '<a class="tk-button tk-button--pdf" href="' . esc_url( $t['pdf_url'] ) . '" rel="nofollow">' . esc_html__( 'PDF המקורי', 'trial-knowledge' ) . '</a> ';
 		}
 		if ( $sv && preg_match( '/^sv_[0-9a-f]{26}$/', $sv ) ) {

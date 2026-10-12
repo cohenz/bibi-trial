@@ -208,6 +208,8 @@ class TK_Blocks {
 		wp_register_script( 'trial-knowledge-glossary', TK_URL . 'assets/glossary.js', array(), TK_VERSION, true );
 		wp_register_script( 'trial-knowledge-timeline', TK_URL . 'assets/timeline.js', array(), TK_VERSION, true );
 		wp_register_script( 'trial-knowledge-tabs', TK_URL . 'assets/tabs.js', array(), TK_VERSION, true );
+		wp_register_script( 'trial-knowledge-reading', TK_URL . 'assets/reading.js', array(), TK_VERSION, true );
+		wp_register_script( 'trial-knowledge-p315', TK_URL . 'assets/p315.js', array(), TK_VERSION, true );
 	}
 
 	public static function assets() {

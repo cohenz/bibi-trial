@@ -23,6 +23,8 @@ class TK_Settings_Store {
 		'timeout'         => 15,
 		'public_slug'     => 'trial',
 		'disclosure'      => 'האתר בוחן טענות מקו ההגנה; חומר סותר מהותי מוצג בגוף העמוד. כל קביעה מלווה בציטוט למקור.',
+		'show_pdf'        => 1, // 2.6: links to the original PDFs (off → only the extracted text is shown)
+		'ocr_disclaimer'  => 'הטקסט חולץ מקובץ ה־PDF בקריאת מחשב, וייתכנו בו טעויות. הנוסח המחייב הוא הפרוטוקול הרשמי של בית המשפט.',
 	);
 
 	/**
@@ -52,6 +54,18 @@ class TK_Settings_Store {
 		return isset( $opt['webhook_enc'] ) ? self::decrypt( $opt['webhook_enc'] ) : '';
 	}
 
+	/** Whether links to the original PDFs are shown (admin toggle, 2.6). */
+	public static function show_pdf() {
+		$cfg = self::get();
+		return ! empty( $cfg['show_pdf'] );
+	}
+
+	/** Short note on machine-extracted text, shown behind an (i) next to full texts (2.6). */
+	public static function ocr_disclaimer() {
+		$cfg = self::get();
+		return trim( (string) $cfg['ocr_disclaimer'] );
+	}
+
 	public static function secret_from_constant() {
 		return defined( 'TK_API_SECRET' ) && TK_API_SECRET;
 	}
@@ -62,7 +76,7 @@ class TK_Settings_Store {
 	public static function save( array $values ) {
 		$opt = get_option( TK_OPTION, array() );
 		$opt = is_array( $opt ) ? $opt : array();
-		foreach ( array( 'api_base', 'key_id', 'cache_ttl', 'timeout', 'public_slug', 'disclosure' ) as $k ) {
+		foreach ( array( 'api_base', 'key_id', 'cache_ttl', 'timeout', 'public_slug', 'disclosure', 'show_pdf', 'ocr_disclaimer' ) as $k ) {
 			if ( array_key_exists( $k, $values ) ) {
 				$opt[ $k ] = $values[ $k ];
 			}

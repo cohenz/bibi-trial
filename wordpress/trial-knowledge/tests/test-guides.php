@@ -16,7 +16,7 @@ $witnesses = array(
 TK_T::eq( '12.3.2015', TK_Render_Guides::fmt_date( '2015-03-12', 'day' ), 'day precision → d.m.yyyy' );
 TK_T::eq( 'מרץ 2015', TK_Render_Guides::fmt_date( '2015-03-01', 'month' ), 'month precision → Hebrew month + year' );
 TK_T::eq( '2015', TK_Render_Guides::fmt_date( '2015-01-01', 'year' ), 'year precision → year' );
-TK_T::eq( '10.5.2021–14.6.2021', TK_Render_Guides::date_range( '2021-05-10', '2021-06-14' ), 'date range' );
+TK_T::eq( '⁦10.5.2021–14.6.2021⁩', TK_Render_Guides::date_range( '2021-05-10', '2021-06-14' ), 'date range' );
 TK_T::ok( false !== strpos( TK_Render_Guides::time_tag( '2015-03-01', 'month' ), 'datetime="2015-03"' ), 'time tag datetime follows precision' );
 
 // --- witness name helpers
@@ -39,7 +39,7 @@ TK_T::ok( strpos( $s0, 'תיק 4000' ) < strpos( $s0, 'תיק 2000' ) && strpos(
 TK_T::ok( false === strpos( $s0, '/trial/case/' ), 'start: no links to unpublished case pages' );
 TK_T::ok( false === strpos( $s0, 'כתב האישום בקצרה' ), 'start: indictment section hidden when null' );
 TK_T::ok( false !== strpos( $s0, TK_Render_Guides::NEUTRAL ) && false !== strpos( $s0, '/trial/glossary/#term-presumption-of-innocence' ), 'start: neutrality line links the glossary term' );
-TK_T::ok( false !== strpos( $s0, '/trial/hearing/' . $hr . '/' ) && false !== strpos( $s0, '25.5.2026' ) && false !== strpos( $s0, '>עמ׳ 7<' ), 'start: latest hearing with date and citation chip' );
+TK_T::ok( false !== strpos( $s0, '/trial/hearing/' . $hr . '/' ) && false !== strpos( $s0, '25.5.2026' ) && false !== strpos( $s0, 'עמ׳ 7' ) && false !== strpos( $s0, 'tk-srcs' ), 'start: latest hearing with date and sources pill' );
 TK_T::ok( false === strpos( $s0, '<b>' ), 'start: summary text escaped' );
 TK_T::ok( false !== strpos( $s0, '/trial/witness/w_72da315abb/' ) && false !== strpos( $s0, 'נאשם 1' ), 'start: witnesses link to witness pages, label shown' );
 TK_T::ok( false !== strpos( $s0, '>17<' ) && false !== strpos( $s0, 'https://site.test/decisions/' ), 'start: counts link to document pages' );
@@ -57,7 +57,7 @@ $g1['indictment'] = array(
 $s1 = TK_Render_Guides::start( $g1 );
 TK_T::ok( false !== strpos( $s1, '/trial/case/4000/' ) && 2 === substr_count( $s1, 'המדריך לתיק בהכנה' ), 'start: published case card links, others pending' );
 TK_T::ok( false === strpos( $s1, '<i>' ) && false !== strpos( $s1, 'פרשת &lt;i&gt;בזק' ), 'start: subtitle escaped' );
-TK_T::ok( false !== strpos( $s1, 'כתב האישום בקצרה' ) && false !== strpos( $s1, '/trial/document/' . $sv . '/' ) && false !== strpos( $s1, '>עמ׳ 6<' ), 'start: indictment overview cited, links the document' );
+TK_T::ok( false !== strpos( $s1, 'כתב האישום בקצרה' ) && false !== strpos( $s1, '/trial/document/' . $sv . '/' ) && false !== strpos( $s1, 'עמ׳ 6' ) && false !== strpos( $s1, 'tk-srcs' ), 'start: indictment overview cited, links the document' );
 TK_T::ok( false !== strpos( $s1, 'href="https://site.test/trial/source/' . $su2 . '/"' ), 'start: uncited-map chip falls back to the source page' );
 
 // --- case page
@@ -81,7 +81,11 @@ $case = array(
 $cp = TK_Render_Guides::case_page( $case, array( 'slugs' => $slugs ) );
 TK_T::ok( false !== strpos( $cp, 'מה שמופיע כאן הוא תיאור הטענות בכתב האישום, לא קביעות של בית המשפט' ), 'case: allegation banner' );
 TK_T::ok( false === strpos( $cp, '<script>' ), 'case: alleged text escaped' );
-TK_T::eq( 1, substr_count( TK_Render_Guides::chips( array( $su1, $su2 ), TK_Render_Guides::cit_map( $case['citations'] ) ), 'class="tk-chip"' ), 'chips: same-page citations collapse into one chip' );
+$tk_pill = TK_Render_Guides::chips( array( $su1, $su2, $su1 ), TK_Render_Guides::cit_map( $case['citations'] ) );
+TK_T::eq( 1, substr_count( $tk_pill, 'class="tk-srcs"' ), 'chips (2.6): one sources pill per item' );
+TK_T::eq( 2, substr_count( $tk_pill, 'class="tk-srcs__row"' ), 'chips (2.6): one row per distinct source, repeats dropped' );
+TK_T::ok( false !== strpos( $tk_pill, 'aria-expanded="false"' ) && false !== strpos( $tk_pill, 'מקורות' ), 'chips (2.6): pill is a button with the count' );
+TK_T::eq( 1, substr_count( TK_Render_Guides::chips( array( $su1 ), TK_Render_Guides::cit_map( $case['citations'] ) ), 'class="tk-srcs tk-srcs--one"' ), 'chips (2.6): a single source is a direct link' );
 TK_T::ok( false !== strpos( $cp, '<li>שוחד</li>' ) && false !== strpos( $cp, '<li>מרמה והפרת אמונים</li>' ), 'case: charges split into offenses per defendant' );
 TK_T::ok( false !== strpos( $cp, '/trial/witness/w_346fdfeda0/' ) && 1 === substr_count( $cp, 'העיד/ה במשפט' ), 'case: people link witness pages and mark who testified' );
 TK_T::ok( strpos( $cp, '>2014<' ) < strpos( $cp, '>12.3.2015<' ) && strpos( $cp, '>12.3.2015<' ) < strpos( $cp, '>יוני 2015<' ), 'case: events sorted and grouped by year with precision' );

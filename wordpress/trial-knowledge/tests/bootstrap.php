@@ -88,6 +88,7 @@ require TK_DIR . 'includes/class-public-pages.php';
 require TK_DIR . 'includes/class-render.php';
 require TK_DIR . 'includes/class-guides.php';
 require TK_DIR . 'includes/class-render-guides.php';
+require TK_DIR . 'includes/class-p315.php';
 require TK_DIR . 'includes/class-rest-proxy.php';
 require TK_DIR . 'includes/class-blocks.php';
 

@@ -55,7 +55,7 @@ $doc = array(
 $bh = TK_Render_Guides::document_brief( $doc, TK_Guides::slug_map( $bws ) );
 TK_T::ok( false !== strpos( $bh, '<h1 class="tk-brief__title">עדות אילנית פילבר &lt;u&gt;ביום&lt;/u&gt; 20.4.2026</h1>' ), 'doc page: brief title as H1, escaped' );
 TK_T::ok( false !== strpos( $bh, 'שם במסמך:' ) && false !== strpos( $bh, 'הודעה: בדבר עדים' ), 'doc page: archive title kept as a subtitle' );
-TK_T::ok( false !== strpos( $bh, 'בית המשפט הודיע על &lt;b&gt;העדה&lt;/b&gt;.' ) && false !== strpos( $bh, '>עמ׳ 2<' ), 'doc page: summary sentences with citation chips' );
+TK_T::ok( false !== strpos( $bh, 'בית המשפט הודיע על &lt;b&gt;העדה&lt;/b&gt;.' ) && false !== strpos( $bh, 'class="tk-srcs' ) && false !== strpos( $bh, 'עמ׳ 2' ), 'doc page: summary sentences with a sources pill' );
 TK_T::ok( false === strpos( $bh, 'מסמך פרוצדורלי' ), 'doc page: no significance note for substantive documents' );
 TK_T::ok( false !== strpos( $bh, 'class="tk-hday"' ) && false !== strpos( $bh, '20.4.2026' ) && false !== strpos( $bh, 'הדיון הבא' ) && false !== strpos( $bh, '26.4.2026' ), 'doc page: hearing day box with date and next hearing' );
 TK_T::ok( false !== strpos( $bh, 'href="https://site.test/trial/witness/w_aaaaaaaaaa/"' ) && false !== strpos( $bh, 'עד/ת הגנה' ) && false !== strpos( $bh, 'מנכ&quot;לית לשעבר' ), 'doc page: witness linked by slug, side and description' );

@@ -20,28 +20,113 @@ class TK_Admin_Review {
 		add_action( 'wp_ajax_tk_review_action', array( __CLASS__, 'ajax_review' ) );
 		add_action( 'wp_ajax_tk_publish_action', array( __CLASS__, 'ajax_publish' ) );
 		add_action( 'wp_ajax_tk_object_review', array( __CLASS__, 'ajax_object_review' ) );
+		add_action( 'wp_ajax_tk_review_card', array( __CLASS__, 'ajax_card' ) );
+		add_action( 'wp_ajax_tk_review_decide', array( __CLASS__, 'ajax_decide' ) );
 	}
 
+	/**
+	 * 2.6 quick review: one item at a time — what it is, why it waits for you (in plain words), the text with the
+	 * problem marked, and Yes / No. A decision moves straight to the next item; it is sent after a few seconds,
+	 * so "בטל" can still take it back. No confirmation dialogs.
+	 */
 	public static function page() {
 		if ( ! current_user_can( TK_Permissions::CAP_REVIEW ) ) {
 			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ) );
 		}
-		$can_publish = current_user_can( TK_Permissions::CAP_PUBLISH );
+		wp_enqueue_script( 'trial-knowledge-review', TK_URL . 'assets/review.js', array(), TK_VERSION, true );
+		wp_localize_script(
+			'trial-knowledge-review',
+			'TKReview',
+			array(
+				'ajax'       => admin_url( 'admin-ajax.php' ),
+				'nonce'      => wp_create_nonce( 'tk_review' ),
+				'canPublish' => current_user_can( TK_Permissions::CAP_PUBLISH ),
+			)
+		);
 		?>
-		<div class="wrap tk-admin" dir="rtl" data-can-publish="<?php echo $can_publish ? '1' : '0'; ?>">
+		<div class="wrap tk-admin tk-qr" dir="rtl">
 			<h1><?php esc_html_e( 'ביקורת ופרסום', 'trial-knowledge' ); ?></h1>
-			<p class="description"><?php esc_html_e( 'שום פריט אינו מתפרסם בלי אישור מפורש. פריטים שנכשלו בשערי הציטוט אינם ניתנים לאישור.', 'trial-knowledge' ); ?></p>
-			<div class="tk-review">
-				<div class="tk-review__queue tk-card">
-					<h2><?php esc_html_e( 'תור ביקורת', 'trial-knowledge' ); ?> <button type="button" class="button" id="tk-refresh-tasks"><?php esc_html_e( 'רענון', 'trial-knowledge' ); ?></button></h2>
-					<ul id="tk-tasks" class="tk-tasks" aria-live="polite"></ul>
+			<div class="tk-qr__bar">
+				<div class="tk-qr__filters" role="group" aria-label="<?php esc_attr_e( 'אילו פריטים להציג', 'trial-knowledge' ); ?>">
+					<button type="button" class="tk-qr__chip is-on" data-filter="all"><?php esc_html_e( 'הכול', 'trial-knowledge' ); ?> <span data-count="all">…</span></button>
+					<button type="button" class="tk-qr__chip" data-filter="issue"><?php esc_html_e( 'יש מה לבדוק', 'trial-knowledge' ); ?> <span data-count="issue">…</span></button>
+					<button type="button" class="tk-qr__chip" data-filter="clean"><?php esc_html_e( 'עברו את כל הבדיקות', 'trial-knowledge' ); ?> <span data-count="clean">…</span></button>
 				</div>
-				<div class="tk-review__detail tk-card" id="tk-artifact" tabindex="-1" aria-live="polite">
-					<p class="tk-muted"><?php esc_html_e( 'בחרו פריט מהתור.', 'trial-knowledge' ); ?></p>
-				</div>
+				<p class="tk-qr__progress" aria-live="polite"></p>
 			</div>
+			<div class="tk-qr__card" id="tk-qr-card" tabindex="-1" aria-live="polite"><p class="tk-muted"><?php esc_html_e( 'טוען…', 'trial-knowledge' ); ?></p></div>
+			<div class="tk-qr__toast" id="tk-qr-toast" role="status" hidden></div>
+			<p class="description tk-qr__keys"><?php esc_html_e( 'קיצורי מקלדת: Y (כן) · N (לא) · S או ← (דלג) · U (ביטול ההחלטה האחרונה).', 'trial-knowledge' ); ?></p>
 		</div>
 		<?php
+	}
+
+	/** Public page of the reviewed object (to see it in context). */
+	private static function object_url( $type, $id ) {
+		if ( 'document' === $type && preg_match( '/^sv_[0-9a-f]{26}$/', $id ) ) {
+			return TK_Public_Pages::url( 'document', $id );
+		}
+		if ( 'hearing' === $type && preg_match( '/^hr_[0-9a-f]{26}$/', $id ) ) {
+			return TK_Public_Pages::url( 'hearing', $id );
+		}
+		return '';
+	}
+
+	/** One review card: the artifact (writer output, gates, verifier, cited sources) plus display context. */
+	public static function ajax_card() {
+		TK_Permissions::require_ajax( TK_Permissions::CAP_REVIEW, 'tk_review' );
+		$id = self::uuid( 'artifact_id' );
+		try {
+			$d = tk_api()->get( '/v2/admin/artifacts/' . $id, true );
+		} catch ( TK_Api_Error $e ) {
+			self::fail( $e );
+		}
+		$a   = (array) ( $d['artifact'] ?? array() );
+		$ctx = array( 'url' => self::object_url( (string) ( $a['object_type'] ?? '' ), (string) ( $a['object_id'] ?? '' ) ) );
+		if ( 'hearing' === ( $a['object_type'] ?? '' ) ) {
+			try {
+				$h               = tk_api()->get( '/v2/hearings/' . rawurlencode( (string) $a['object_id'] ) );
+				$ctx['date']     = $h['hearing']['hearing_date'] ?? '';
+				$ctx['witnesses'] = $h['hearing']['witnesses'] ?? array();
+			} catch ( TK_Api_Error $e ) {
+				$ctx['date'] = '';
+			}
+		}
+		$d['context'] = $ctx;
+		wp_send_json_success( $d );
+	}
+
+	/**
+	 * Yes / No on one item. Yes = approve, then publish when approval alone did not (cited source passages are
+	 * published with it, so its citations work). No = reject. Review objects (Q/A, judicial statements) likewise.
+	 */
+	public static function ajax_decide() {
+		TK_Permissions::require_ajax( TK_Permissions::CAP_REVIEW, 'tk_review' );
+		$yes  = isset( $_POST['decision'] ) && 'yes' === sanitize_key( wp_unslash( $_POST['decision'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$kind = isset( $_POST['kind'] ) ? sanitize_key( wp_unslash( $_POST['kind'] ) ) : 'artifact'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		try {
+			if ( 'artifact' !== $kind ) {
+				$oid = isset( $_POST['object_id'] ) ? sanitize_text_field( wp_unslash( $_POST['object_id'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				if ( ! in_array( $kind, array( 'qa_exchange', 'judicial_statement' ), true ) || ! preg_match( '/^[A-Za-z0-9_-]{6,64}$/', $oid ) ) {
+					wp_send_json_error( array( 'message' => 'invalid request' ), 400 );
+				}
+				$res = tk_api()->post( '/v2/admin/objects/' . $kind . '/' . $oid . '/review', array( 'decision' => $yes ? 'approve' : 'reject' ), true );
+				wp_send_json_success( array( 'review_state' => $res['review_state'] ?? ( $yes ? 'approved' : 'rejected' ) ) );
+			}
+			$id  = self::uuid( 'artifact_id' );
+			$res = tk_api()->post( '/v2/admin/artifacts/' . $id . '/review', array( 'decision' => $yes ? 'approve' : 'reject', 'notes' => 'quick review' ), true );
+			$state = (string) ( $res['review_state'] ?? '' );
+			if ( $yes && 'published' !== $state && current_user_can( TK_Permissions::CAP_PUBLISH ) ) {
+				tk_api()->post( '/v2/admin/artifacts/' . $id . '/publish', array( 'include_sources' => true ), true );
+				$state = 'published';
+			}
+		} catch ( TK_Api_Error $e ) {
+			self::fail( $e );
+		}
+		if ( $yes ) {
+			TK_Cache::purge( array( 'lists', 'guide', 'timeline' ) );
+		}
+		wp_send_json_success( array( 'review_state' => $state ) );
 	}
 
 	private static function fail( TK_Api_Error $e ) {

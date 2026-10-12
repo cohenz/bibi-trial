@@ -175,6 +175,29 @@ def test_digest_batch_quota_allowance(services, fixture_path):
         prov.create_batch = orig_create
 
 
+def test_rejected_digest_does_not_spend_an_approval(services, fixture_path):
+    """A hearing whose digest was rejected is not picked by an approval (its stored answer would be rebuilt, rejected
+    again and counted against the approval); it can still be retried by id."""
+    import dataclasses
+
+    from ntk_common import batches
+    from ntk_common.orchestrator import Pipeline
+
+    from tests.conftest import make_job
+
+    p = Pipeline(dataclasses.replace(services, settings=dataclasses.replace(services.settings, hearing_digests="deferred")))
+    job = p.run_job(make_job(services, fixture_path, key="batch-rejected"))
+    hid = {s["stage"]: s for s in job["stages"]}["extract_a"]["output"]["hearing_id"]
+    p.rebuild_hearing_digest(hid)  # a digest artifact exists for the hearing
+    with services.engine.begin() as conn:
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'rejected' WHERE object_type = 'hearing' AND object_id = :h",
+                {"h": hid})
+        picked = [h["id"] for h in batches._hearings_without_digest(conn, None, 500)]
+        by_id = [h["id"] for h in batches._hearings_without_digest(conn, [hid], 10)]
+    assert hid not in picked
+    assert by_id == [hid]
+
+
 def test_cached_answer_with_unknown_citation_is_not_reused(services, fixture_path):
     """A stored digest answer (e.g. from a batch) citing a passage that does not exist is checked again at reuse:
     marked invalid and asked again, instead of failing on the citation insert (12.10.2026 incident)."""

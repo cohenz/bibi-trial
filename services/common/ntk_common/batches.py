@@ -34,14 +34,20 @@ def with_schema_text(user: str, schema: dict | None) -> str:
 
 
 def _hearings_without_digest(conn, hearing_ids: list[str] | None, limit: int) -> list[dict]:
+    """Hearings an approval may spend a request on. Without explicit ids, a hearing whose digest was already rejected is
+    skipped: its stored answer would be rebuilt (free) and rejected again, yet still count against the approval
+    (12.10.2026: 45 of an approved 182 were spent this way and 42 hearings were never sent). Retry those by id."""
+    states = ["machine_verified", "human_review_required", "approved", "published"]
+    if hearing_ids is None:
+        states.append("rejected")
     return rows(conn, """
         SELECT h.id, h.source_version_id FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
         WHERE (CAST(:ids AS text[]) IS NULL OR h.id = ANY(:ids))
           AND NOT EXISTS (SELECT 1 FROM ntk.generated_artifacts ga WHERE ga.object_type = 'hearing' AND ga.object_id = h.id
-                            AND ga.review_state IN ('machine_verified', 'human_review_required', 'approved', 'published'))
+                            AND ga.review_state::text = ANY(:states))
           AND NOT EXISTS (SELECT 1 FROM ntk.model_batches b, jsonb_array_elements(b.items) it
                           WHERE b.finished_at IS NULL AND it->>'hearing_id' = h.id)
-        ORDER BY h.hearing_date LIMIT :lim""", {"ids": hearing_ids, "lim": limit})
+        ORDER BY h.hearing_date LIMIT :lim""", {"ids": hearing_ids, "lim": limit, "states": states})
 
 
 MAX_BATCH_ITEMS = 10  # the provider caps tokens waiting in batches; ~10 long protocols fit (12.10.2026)

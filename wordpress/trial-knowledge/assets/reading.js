@@ -103,3 +103,27 @@
 		});
 	});
 }());
+
+/* 3. Glossary word filter (2.7.3): narrows the term cards as you type; topics with no match hide. */
+(function () {
+	'use strict';
+	var box = document.querySelector('.tk-gfilter');
+	if (!box) { return; }
+	var q = box.querySelector('.tk-gfilter__q'), none = box.querySelector('.tk-gfilter__none');
+	var norm = function (s) { return (s || '').replace(/[֑-ׇ"'״׳]/g, '').replace(/[ךםןףץ]/g, function (c) { return { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' }[c]; }).toLowerCase(); };
+	box.hidden = false;
+	q.addEventListener('input', function () {
+		var v = norm(q.value.trim()), any = false;
+		document.querySelectorAll('.tk-glossary__cat').forEach(function (cat) {
+			var shown = 0;
+			cat.querySelectorAll('.tk-term').forEach(function (t) {
+				var hit = !v || norm(t.getAttribute('data-find') + ' ' + t.textContent).indexOf(v) !== -1;
+				t.hidden = !hit;
+				if (hit) { shown++; }
+			});
+			cat.hidden = !shown;
+			if (shown) { any = true; }
+		});
+		none.hidden = any;
+	});
+}());

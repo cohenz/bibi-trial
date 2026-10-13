@@ -50,6 +50,23 @@ class TK_Render_Guides {
 		'documents' => 'מסמכים',
 	);
 
+	/** Glossary topics: a symbol and one line on what the topic covers (2.7.3). */
+	const GLOSSARY_ICONS = array(
+		'procedure' => '⚖',
+		'evidence'  => '🔍',
+		'offense'   => '§',
+		'people'    => '👥',
+		'documents' => '📄',
+	);
+
+	const GLOSSARY_INTROS = array(
+		'procedure' => 'איך מתנהל משפט פלילי: השלבים, הדיונים וההחלטות בדרך.',
+		'evidence'  => 'מה נחשב ראיה, איך נחקרים עדים, ומה המשקל של כל סוג עדות.',
+		'offense'   => 'העבירות שבכתב האישום, ומה צריך להוכיח בכל אחת מהן.',
+		'people'    => 'מי יושב באולם, ומה התפקיד של כל אחד.',
+		'documents' => 'המסמכים שמוגשים בתיק, ומה ההבדל ביניהם.',
+	);
+
 	const TABS = array(
 		'summary' => 'בקצרה',
 		'qa'      => 'שאלות ותשובות מרכזיות',
@@ -1344,6 +1361,7 @@ class TK_Render_Guides {
 			$byid[ $t['id'] ] = $t;
 			$cats[ isset( self::GLOSSARY_CATEGORIES[ $t['category'] ?? '' ] ) ? $t['category'] : 'procedure' ][] = $t;
 		}
+		TK_Render::enqueue_reading(); // the word filter (2.7.3)
 		$out  = '<div class="tk-glossary" dir="rtl" lang="he">';
 		$out .= '<section class="tk-sec tk-sec--steps" id="tk-steps"><h2 class="tk-sec__h">' . esc_html__( 'המשפט הפלילי בחמישה צעדים', 'trial-knowledge' ) . '</h2>' . TK_Render_Nav::five_steps() . '</section>';
 		if ( ! empty( $gl['note'] ) ) {
@@ -1352,37 +1370,53 @@ class TK_Render_Guides {
 		if ( ! $terms ) {
 			return $out . '<p class="tk-empty">' . esc_html__( 'המילון ריק כרגע.', 'trial-knowledge' ) . '</p></div>';
 		}
-		$out .= '<nav class="tk-toc" aria-label="' . esc_attr__( 'נושאים במילון', 'trial-knowledge' ) . '">';
+		// 2.7.3: topic chips with counts, a word filter (with JS), and each topic as a grid of term cards
+		$out .= '<div class="tk-glossary__bar">';
+		$out .= '<nav class="tk-gtoc" aria-label="' . esc_attr__( 'נושאים במילון', 'trial-knowledge' ) . '">';
 		foreach ( self::GLOSSARY_CATEGORIES as $k => $label ) {
 			if ( ! empty( $cats[ $k ] ) ) {
-				$out .= '<a href="#cat-' . esc_attr( $k ) . '">' . esc_html( $label ) . '</a> ';
+				$out .= '<a class="tk-gtoc__a tk-gcat--' . esc_attr( $k ) . '" href="#cat-' . esc_attr( $k ) . '"><span class="tk-gtoc__icon" aria-hidden="true">' . esc_html( self::GLOSSARY_ICONS[ $k ] ?? '•' ) . '</span>' . esc_html( $label ) . ' <span class="tk-gtoc__n">' . count( $cats[ $k ] ) . '</span></a>';
 			}
 		}
 		$out .= '</nav>';
+		$out .= '<p class="tk-gfilter" hidden><label for="tk-gfilter__q" class="tk-sr">' . esc_html__( 'חיפוש מונח', 'trial-knowledge' ) . '</label>' .
+			'<input type="search" id="tk-gfilter__q" class="tk-gfilter__q" placeholder="' . esc_attr__( 'חיפוש מונח, למשל "שוחד" או "עד מדינה"', 'trial-knowledge' ) . '" autocomplete="off">' .
+			'<span class="tk-gfilter__none tk-muted" hidden>' . esc_html__( 'לא נמצא מונח כזה.', 'trial-knowledge' ) . '</span></p>';
+		$out .= '</div>';
 		foreach ( self::GLOSSARY_CATEGORIES as $k => $label ) {
 			if ( empty( $cats[ $k ] ) ) {
 				continue;
 			}
-			$out .= '<section class="tk-sec tk-glossary__cat" id="cat-' . esc_attr( $k ) . '"><h2 class="tk-sec__h">' . esc_html( $label ) . '</h2><dl class="tk-terms">';
+			$out .= '<section class="tk-sec tk-glossary__cat tk-gcat--' . esc_attr( $k ) . '" id="cat-' . esc_attr( $k ) . '">';
+			$out .= '<h2 class="tk-sec__h tk-gcat__h"><span class="tk-gcat__icon" aria-hidden="true">' . esc_html( self::GLOSSARY_ICONS[ $k ] ?? '•' ) . '</span>' . esc_html( $label ) . '</h2>';
+			if ( ! empty( self::GLOSSARY_INTROS[ $k ] ) ) {
+				$out .= '<p class="tk-gcat__intro">' . esc_html( self::GLOSSARY_INTROS[ $k ] ) . '</p>';
+			}
+			$out .= '<dl class="tk-terms">';
 			foreach ( $cats[ $k ] as $t ) {
 				$tid  = preg_replace( '/[^A-Za-z0-9_-]/', '', (string) $t['id'] );
-				$out .= '<div class="tk-term" id="term-' . esc_attr( $tid ) . '"><dt class="tk-term__t">' . esc_html( $t['term'] ) . '</dt>';
+				$find = implode( ' ', array_merge( array( $t['term'] ), (array) ( $t['aliases'] ?? array() ) ) );
+				$out .= '<div class="tk-term" id="term-' . esc_attr( $tid ) . '" data-find="' . esc_attr( $find ) . '"><dt class="tk-term__t"><a class="tk-term__self" href="#term-' . esc_attr( $tid ) . '">' . esc_html( $t['term'] ) . '</a></dt>';
 				$out .= '<dd class="tk-term__short">' . esc_html( $t['short'] ?? '' ) . '</dd>';
 				if ( ! empty( $t['long'] ) ) {
 					$out .= '<dd class="tk-term__long">' . esc_html( $t['long'] ) . '</dd>';
 				}
 				$link = isset( $t['link'] ) && is_array( $t['link'] ) ? $t['link'] : null;
+				$foot = array();
 				if ( $link && 'case' === ( $link['type'] ?? '' ) && TK_Guides::valid_case( $link['key'] ?? '' ) ) {
-					$out .= '<dd><a href="' . esc_url( TK_Public_Pages::url( 'case', $link['key'] ) ) . '">' . esc_html__( 'לעמוד התיק', 'trial-knowledge' ) . '</a></dd>';
+					$foot[] = '<a class="tk-term__go" href="' . esc_url( TK_Public_Pages::url( 'case', $link['key'] ) ) . '">' . esc_html__( 'לעמוד התיק', 'trial-knowledge' ) . ' ←</a>';
 				}
 				$see = array();
 				foreach ( (array) ( $t['see_also'] ?? array() ) as $sid ) {
 					if ( isset( $byid[ $sid ] ) ) {
-						$see[] = '<a href="#term-' . esc_attr( preg_replace( '/[^A-Za-z0-9_-]/', '', $sid ) ) . '">' . esc_html( $byid[ $sid ]['term'] ) . '</a>';
+						$see[] = '<a class="tk-term__see-a" href="#term-' . esc_attr( preg_replace( '/[^A-Za-z0-9_-]/', '', $sid ) ) . '">' . esc_html( $byid[ $sid ]['term'] ) . '</a>';
 					}
 				}
 				if ( $see ) {
-					$out .= '<dd class="tk-term__see"><span class="tk-muted">' . esc_html__( 'ראו גם:', 'trial-knowledge' ) . '</span> ' . implode( ', ', $see ) . '</dd>';
+					$foot[] = '<span class="tk-term__see"><span class="tk-muted">' . esc_html__( 'ראו גם:', 'trial-knowledge' ) . '</span> ' . implode( ' ', $see ) . '</span>';
+				}
+				if ( $foot ) {
+					$out .= '<dd class="tk-term__foot">' . implode( ' ', $foot ) . '</dd>';
 				}
 				$out .= '</div>';
 			}

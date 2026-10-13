@@ -500,7 +500,17 @@ class TK_Render {
 	public static function ask_form( array $attrs = array() ) {
 		$id     = 'tk-ask-' . wp_rand( 1000, 999999 );
 		$prompt = isset( $attrs['placeholder'] ) ? $attrs['placeholder'] : __( 'שאלו שאלה על המשפט…', 'trial-knowledge' );
-		return '<div class="tk-ask" dir="rtl" lang="he" data-endpoint="' . esc_url( rest_url( 'trial-knowledge/v1/ask' ) ) . '">' .
+		// how much material an answer is drawn from, for the waiting panel (2.7.3); nothing if the guide is unavailable
+		$scope = '';
+		try {
+			$home   = TK_Guides::home();
+			$counts = (array) ( $home['counts'] ?? array() );
+			$scope  = ' data-hearings="' . (int) ( $counts['hearings'] ?? 0 ) . '" data-witnesses="' . count( (array) ( $home['witnesses'] ?? array() ) ) .
+				'" data-documents="' . (int) array_sum( array_map( 'intval', (array) ( $counts['documents'] ?? array() ) ) ) . '"';
+		} catch ( TK_Api_Error $e ) {
+			$scope = '';
+		}
+		return '<div class="tk-ask" dir="rtl" lang="he" data-endpoint="' . esc_url( rest_url( 'trial-knowledge/v1/ask' ) ) . '"' . $scope . '>' .
 			'<form class="tk-ask__form" novalidate><label for="' . esc_attr( $id ) . '" class="tk-ask__label">' . esc_html__( 'שאלו את המשפט', 'trial-knowledge' ) . '</label>' .
 			'<textarea id="' . esc_attr( $id ) . '" class="tk-ask__q" name="question" rows="2" maxlength="500" required placeholder="' . esc_attr( $prompt ) . '"></textarea>' .
 			'<button type="submit" class="tk-ask__btn">' . esc_html__( 'שאלו', 'trial-knowledge' ) . '</button></form>' .

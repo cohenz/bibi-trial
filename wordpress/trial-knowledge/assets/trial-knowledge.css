@@ -674,3 +674,86 @@ a.tk-case-badge:hover { text-decoration: underline; }
 .tk-srcs__btn, a.tk-srcs--one { background: transparent; border-color: transparent; color: #6b7a89; font-weight: 500; font-size: .7em; padding: .05em .4em; }
 .tk-srcs__btn::before, a.tk-srcs--one::before { content: "↗"; font-size: .9em; opacity: .7; }
 .tk-srcs__btn:hover, .tk-srcs__btn:focus-visible, a.tk-srcs--one:hover, a.tk-srcs--one:focus-visible, .tk-srcs.is-open .tk-srcs__btn { background: var(--tk-accent); border-color: var(--tk-accent); color: #fff; }
+
+/* ------------------------------------------------------------------ 2.7.3: holding our own against the theme
+   The site theme (Astra) styles every button (white text on grey, darker grey on hover/focus) and every link (grey).
+   A plugin button that does not set a colour got white text; on hover a light background of ours met the theme's
+   white text, or the theme's grey background met our grey text. These rules give every plugin button and link a
+   readable colour in every state; specific rules (two classes, or a class and a state) still win. */
+:root { --tk-accent-strong: #163a5c; --tk-hover-bg: #e6eef7; }
+button:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-ink); line-height: 1.4; font-weight: inherit; }
+button:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus, :active) { color: var(--tk-accent-strong); background-color: var(--tk-hover-bg); border-color: var(--tk-accent); }
+:where([class*="tk-"], [class*="tk315-"]) a, a:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-accent); }
+:where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), a:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus) { color: var(--tk-accent-strong); }
+/* buttons that are dark when on or primary stay dark (and readable) under the pointer */
+.tk-ask__btn { background: var(--tk-accent); color: #fff; border: 1px solid var(--tk-accent); border-radius: 8px; font-weight: 600; }
+.tk-ask__btn:is(:hover, :focus, :active) { background: var(--tk-accent-strong); border-color: var(--tk-accent-strong); color: #fff; }
+.tk-ask__btn[disabled] { opacity: .7; cursor: progress; }
+.tk-filter__b.is-on:is(:hover, :focus, :active) { background: var(--tk-accent-strong); border-color: var(--tk-accent-strong); color: #fff; }
+.tk-srcs__btn:is(:hover, :focus, :active), .tk-srcs.is-open .tk-srcs__btn, a.tk-srcs--one:is(:hover, :focus) { background: var(--tk-accent); border-color: var(--tk-accent); color: #fff; }
+.tk-srcs__btn, a.tk-srcs--one { color: #55636f; }
+.tk-tl__chip[aria-pressed="true"]:is(:hover, :focus) { background: #d6e3f2; color: var(--tk-accent-strong); }
+.tk-tl__chip.tk-case--4000[aria-pressed="true"]:is(:hover, :focus), .tk-tl__chip.tk-case--2000[aria-pressed="true"]:is(:hover, :focus), .tk-tl__chip.tk-case--1000[aria-pressed="true"]:is(:hover, :focus) { background: var(--tk-case-bg); color: var(--tk-case); filter: brightness(.96); }
+.tk-chip:is(:hover, :focus-visible) { color: var(--tk-accent-strong); }
+.tk-button:is(:hover, :focus) { background: var(--tk-hover-bg); color: var(--tk-accent-strong); }
+.tk-button--case:is(:hover, :focus) { color: var(--tk-case); background: var(--tk-case-bg); }
+.tk315-chip:is(:hover, :focus) span:last-child { color: var(--tk-accent-strong); }
+
+/* ------------------------------------------------------------------ 2.7.3: glossary as cards */
+.tk-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.tk-glossary { --tk-gc: var(--tk-accent); --tk-gc-bg: #eaf1f8; }
+.tk-gcat--procedure { --tk-gc: #1f4e79; --tk-gc-bg: #eaf1f8; }
+.tk-gcat--evidence { --tk-gc: #2f6b3a; --tk-gc-bg: #eaf4ec; }
+.tk-gcat--offense { --tk-gc: #8b2c2c; --tk-gc-bg: #f8eaea; }
+.tk-gcat--people { --tk-gc: #6a4a8c; --tk-gc-bg: #f1ecf7; }
+.tk-gcat--documents { --tk-gc: #7a5600; --tk-gc-bg: #fbf3df; }
+.tk-glossary__bar { position: sticky; top: 0; z-index: 5; background: var(--tk-card); padding-block: .6rem; margin-block: 1.25rem .5rem; border-block-end: 1px solid var(--tk-line); }
+.admin-bar .tk-glossary__bar { top: 32px; }
+.tk-gtoc { display: flex; flex-wrap: wrap; gap: .4rem; }
+.tk-gtoc__a { display: inline-flex; align-items: center; gap: .4em; min-height: 40px; padding: .25rem .85rem; border-radius: 999px; border: 1px solid var(--tk-gc); background: var(--tk-gc-bg); color: var(--tk-gc); font-weight: 600; text-decoration: none; }
+.tk-gtoc__a:is(:hover, :focus) { background: var(--tk-gc); color: #fff; }
+.tk-gtoc__n { font-size: .8em; font-weight: 700; min-width: 1.6em; padding: 0 .35em; border-radius: 999px; background: #fff; color: var(--tk-gc); text-align: center; }
+.tk-gtoc__icon, .tk-gcat__icon { font-size: 1.05em; line-height: 1; }
+.tk-gfilter { margin: .6rem 0 0; display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.tk-gfilter__q { font: inherit; width: min(100%, 26rem); min-height: 44px; padding: .4rem .8rem; border: 1px solid #b9c4cf; border-radius: 8px; background: #fff; color: var(--tk-ink); }
+.tk-gfilter__q:focus { outline: 3px solid var(--tk-accent); outline-offset: 1px; border-color: var(--tk-accent); }
+.tk-glossary__cat { scroll-margin-top: 7rem; }
+.tk-gcat__h { display: flex; align-items: center; gap: .5rem; color: var(--tk-gc); border-block-end: 2px solid var(--tk-gc); }
+.tk-gcat__icon { display: inline-grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--tk-gc-bg); }
+.tk-gcat__intro { color: var(--tk-muted); margin-block: -.25rem 1rem; }
+.tk-glossary .tk-terms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21rem), 1fr)); gap: .85rem; }
+.tk-glossary .tk-term { display: flex; flex-direction: column; gap: .35rem; padding: .9rem 1rem; border: 1px solid var(--tk-line); border-inline-start: 4px solid var(--tk-gc); border-radius: var(--tk-radius); background: var(--tk-card); box-shadow: 0 1px 2px rgba(16, 24, 40, .05); scroll-margin-top: 7rem; }
+.tk-glossary .tk-term:target { background: #fffaf0; outline: 2px solid #ecd39f; padding-inline: 1rem; }
+.tk-glossary .tk-term__t { font-size: 1.12em; font-weight: 700; }
+.tk-glossary .tk-term__t a { color: var(--tk-gc); text-decoration: none; }
+.tk-glossary .tk-term__t a:is(:hover, :focus) { color: var(--tk-gc); text-decoration: underline; }
+.tk-glossary .tk-term dd { margin: 0; max-width: none; }
+.tk-glossary .tk-term__short { font-weight: 500; color: var(--tk-ink); }
+.tk-glossary .tk-term__long { color: var(--tk-muted); font-size: .95em; }
+.tk-glossary .tk-term__foot { margin-block-start: auto; padding-block-start: .45rem; border-block-start: 1px dashed var(--tk-line); display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .75rem; font-size: .9em; }
+.tk-term__see { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.tk-term__see-a { display: inline-block; padding: .05rem .55rem; border-radius: 999px; background: var(--tk-soft); border: 1px solid var(--tk-line); text-decoration: none; }
+.tk-term__see-a:is(:hover, :focus) { background: var(--tk-hover-bg); border-color: var(--tk-accent); }
+.tk-term__go { font-weight: 600; text-decoration: none; }
+.tk-glossary .tk-term[hidden], .tk-glossary__cat[hidden] { display: none; }
+@media (max-width: 600px) { .tk-glossary__bar { position: static; } .tk-gtoc__a { min-height: 36px; padding-inline: .65rem; font-size: .92em; } }
+@media print { .tk-glossary__bar { position: static; } .tk-gfilter { display: none; } }
+
+/* ------------------------------------------------------------------ 2.7.3: Ask waiting panel */
+.tk-wait { margin-block: 1rem; padding: 1rem 1.1rem; border: 1px solid #c9d6e3; border-radius: var(--tk-radius); background: #f6f9fc; }
+.tk-wait__bar { height: 6px; border-radius: 999px; background: #dce6f0; overflow: hidden; margin-block-end: .85rem; }
+.tk-wait__bar span { display: block; height: 100%; width: 35%; border-radius: inherit; background: linear-gradient(90deg, transparent, var(--tk-accent), transparent); animation: tk-wait-scan 1.6s ease-in-out infinite; }
+@keyframes tk-wait-scan { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
+[dir="rtl"] .tk-wait__bar span { animation-name: tk-wait-scan-rtl; }
+@keyframes tk-wait-scan-rtl { from { transform: translateX(120%); } to { transform: translateX(-320%); } }
+.tk-wait__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .35rem; }
+.tk-wait__s { position: relative; padding-inline-start: 1.9rem; color: #8a96a3; transition: color .3s; }
+.tk-wait__s::before { content: ""; position: absolute; inset-inline-start: .2rem; top: .3em; width: 1.05em; height: 1.05em; border-radius: 50%; border: 2px solid #c3ced9; box-sizing: border-box; }
+.tk-wait__s.is-now { color: var(--tk-ink); font-weight: 600; }
+.tk-wait__s.is-now::before { border-color: var(--tk-accent); border-top-color: transparent; animation: tk-wait-spin .8s linear infinite; }
+.tk-wait__s.is-done { color: #2f6b3a; }
+.tk-wait__s.is-done::before { content: "✓"; border: 0; background: #2f6b3a; color: #fff; font-size: .7em; display: grid; place-items: center; width: 1.5em; height: 1.5em; top: .25em; }
+@keyframes tk-wait-spin { to { transform: rotate(360deg); } }
+.tk-wait__why { margin: .85rem 0 0; font-size: .92em; color: var(--tk-muted); max-width: 62ch; }
+.tk-wait__t { margin: .25rem 0 0; font-size: .85em; color: var(--tk-muted); font-variant-numeric: tabular-nums; min-height: 1.2em; }
+@media (prefers-reduced-motion: reduce) { .tk-wait__bar span, .tk-wait__s.is-now::before { animation: none; } .tk-wait__bar span { width: 100%; opacity: .5; } }

@@ -19,9 +19,8 @@
 			if (question.length < 2) { q.focus(); return; }
 			btn.disabled = true;
 			out.setAttribute('aria-busy', 'true');
-			out.textContent = 'מחפש בחומר שפורסם…';
-			// a new answer is written and then checked by a second model: say so while it takes its time
-			var slow = setTimeout(function () { out.textContent = 'מנסח תשובה ובודק אותה מול המקורות… זה לוקח עד חצי דקה.'; }, 6000);
+			// a new answer takes 20–40 seconds: show what is being done and why (2.7.3)
+			var wait = progress(root, out);
 			fetch(root.getAttribute('data-endpoint'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -37,8 +36,52 @@
 					}
 				})
 				.catch(function () { out.textContent = 'לא ניתן לענות כרגע.'; })
-				.then(function () { clearTimeout(slow); btn.disabled = false; out.setAttribute('aria-busy', 'false'); });
+				.then(function () { wait.stop(); btn.disabled = false; out.setAttribute('aria-busy', 'false'); });
 		});
+	}
+	/* The waiting panel: a moving bar, the steps the answer goes through (each ticks when its usual time has passed)
+	 * and one line on why it takes time. Text for screen readers is announced once, not at every step. */
+	function progress(root, out) {
+		var n = function (a) { var v = parseInt(root.getAttribute(a) || '', 10); return v > 0 ? v.toLocaleString('he-IL') : ''; };
+		var h = n('data-hearings'), w = n('data-witnesses'), d = n('data-documents');
+		var scope = h ? 'בפרוטוקולים של ' + h + ' ימי דיון' + (w ? ', בסקירות של ' + w + ' עדים' : '') + (d ? ' וב־' + d + ' מסמכים' : '')
+			: 'בפרוטוקולים, בסקירות העדים ובמסמכים שפורסמו';
+		var steps = [
+			[0, 'מחפש ' + scope],
+			[3, 'בוחר את הקטעים הרלוונטיים ביותר לשאלה'],
+			[7, 'מנסח תשובה מתוך הקטעים האלה בלבד'],
+			[18, 'מודל נפרד בודק כל משפט מול המקור'],
+			[32, 'מסיים את הבדיקה…']
+		];
+		out.textContent = '';
+		var box = document.createElement('div');
+		box.className = 'tk-wait';
+		box.innerHTML = '<div class="tk-wait__bar" aria-hidden="true"><span></span></div><ol class="tk-wait__steps"></ol>' +
+			'<p class="tk-wait__why">תשובה מקיפה לוקחת בדרך כלל 20–40 שניות: עוברים על כל החומר שפורסם, ומודל שני מאמת כל משפט מול הפרוטוקול, כך שלכל טענה בתשובה יש מקור.</p>' +
+			'<p class="tk-wait__t" aria-hidden="true"></p>';
+		out.appendChild(box);
+		var sr = document.createElement('p');
+		sr.className = 'tk-sr';
+		sr.textContent = 'מחפש ומנסח תשובה. זה לוקח בדרך כלל 20 עד 40 שניות.';
+		out.appendChild(sr);
+		var list = box.querySelector('.tk-wait__steps'), clock = box.querySelector('.tk-wait__t'), t0 = Date.now();
+		steps.forEach(function (s) {
+			var li = document.createElement('li');
+			li.className = 'tk-wait__s';
+			li.textContent = s[1];
+			list.appendChild(li);
+		});
+		function tick() {
+			var sec = Math.floor((Date.now() - t0) / 1000), items = list.children, cur = 0;
+			steps.forEach(function (s, i) { if (sec >= s[0]) { cur = i; } });
+			for (var i = 0; i < items.length; i++) {
+				items[i].className = 'tk-wait__s' + (i < cur ? ' is-done' : i === cur ? ' is-now' : '');
+			}
+			clock.textContent = sec >= 5 ? sec + ' שניות' : '';
+		}
+		tick();
+		var timer = setInterval(tick, 1000);
+		return { stop: function () { clearInterval(timer); } };
 	}
 	document.querySelectorAll('.tk-ask').forEach(init);
 }());

@@ -311,3 +311,52 @@ def test_inline_passage_ids_leave_the_text_and_join_the_citations():
     assert text == "בבזק. ההגנה טוענת כי X, וציינה." and ids_ == [a, b]  # c is not in the context: dropped, not cited
     stored = {"answer_short": f"קצר ({a})", "sections": [{"text": f"נקודה [{b}]", "citation_ids": [b]}]}
     assert polish(stored) == {"answer_short": "קצר", "sections": [{"text": "נקודה", "citation_ids": [b]}]}
+
+
+def test_named_witness_is_answered_from_their_own_examination():
+    """13.10.2026: 'מה התברר בחקירה הנגדית של הדס קליין?' found only places where counsel mentions Klein in other
+    examinations; her own answers do not contain her name. The defense layer now searches inside her examination."""
+    from ntk_common.ask import ADMISSION_PROBES, AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, role, text):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=role or "קליין", speaker_role=role, unit_type=utype, text=text, published=True)
+
+    units = {u.id: u for u in [uv(1, "question", "defense", "נכון שאמרת במשטרה אחרת?"), uv(2, "answer", "witness", "נכון."),
+                               uv(3, "question", "defense", "כפי שאמרה הדס קליין בעדותה…"), uv(4, "answer", "witness", "לא זוכר.")]}
+    k_q, k_a, other_q, other_a = list(units)
+    seen = []
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def published_witness_guides(self):
+            return [{"object_id": "w_k", "payload": {"title": "הדס קליין", "source_version_ids": ["a"] * 9, "blocks": []}}]
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+        def exchange_partners(self, ids):
+            m = {k_q: k_a, k_a: k_q, other_q: other_a, other_a: other_q}
+            return {i: m[i] for i in ids if i in m}
+
+    class Search:
+        def search(self, req):
+            seen.append((req.query, req.filters.witness, req.filters.phase))
+            if req.filters.witness == "הדס קליין" and req.filters.phase == "cross":
+                return SearchResponse(req.query, [SearchHit(k_a, 0.1, {"vector": 3}, unit_type="answer")], {}, {}, "fake")
+            if req.filters.phase == "cross":
+                return SearchResponse(req.query, [SearchHit(other_q, 0.9, {"terms": 1}, unit_type="question")], {}, {}, "fake")
+            return SearchResponse(req.query, [], {}, {}, "fake")
+
+    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c"))._retrieve(
+        "מה התברר בחקירה הנגדית של הדס קליין?")
+    assert [c.unit.id for c in ctx][:2] == [k_q, k_a]  # her own exchange first, though its search score was lower
+    probes = {q for q, w, _ in seen if w == "הדס קליין"}
+    assert probes == set(ADMISSION_PROBES)  # no topic in the question: what admissions sound like

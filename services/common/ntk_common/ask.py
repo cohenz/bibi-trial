@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.7"
+ASK_ENGINE_VERSION = "ask-engine-1.8"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -705,6 +705,25 @@ class AskEngine:
         A broad question ('the champagne and cigars') otherwise draws mostly the prosecution's direct examination,
         where the allegation is phrased in the question's own words."""
         hits = []
+        # a question that names a witness ("מה התברר בחקירה הנגדית של הדס קליין?") is answered from that witness's own
+        # examination: their answers do not contain their name, so a plain search finds only places where counsel
+        # mentions them in other examinations (13.10.2026). Witness-filtered searches come first, on the question's
+        # topic and, when it has none, on what admissions sound like.
+        guides_fn = getattr(self.store, "published_witness_guides", None)
+        named = named_witnesses(q, guides_fn() if guides_fn else []) if guides_fn else []
+        for g in named[:2]:
+            name = re.sub(r"\([^)]*\)", " ", g["payload"].get("title") or "").strip()
+            if not name:
+                continue
+            topic = topic_query(q, name)
+            probes = [topic] if topic else []
+            probes += [] if len(query_terms(topic or "")) >= 2 else list(ADMISSION_PROBES)
+            for phase in ("cross", "direct"):
+                for pq in probes:
+                    r = self.search.search(SearchRequest(pq, SearchFilters(published_only=True, phase=phase, witness=name),
+                                                         limit=self.cfg.defense_context))
+                    # a witness-filtered hit is relevant by construction; the boost keeps it ahead of the topic search
+                    hits += [_boosted(h, 10.0) for h in r.hits]
         for phase in ("cross", "direct"):
             r = self.search.search(SearchRequest(q, SearchFilters(published_only=True, phase=phase),
                                                  limit=self.cfg.defense_context * 2))
@@ -783,6 +802,30 @@ def named_witnesses(q: str, guides_: list[dict]) -> list[dict]:
 
 
 MAX_CONTEXT_WITH_PAIRS = 32
+
+# what admissions sound like in a cross-examination, for a question that names a witness and no topic
+ADMISSION_PROBES = ("נכון שאמרת", "אישרת", "לא זוכרת", "בהודעה שלך במשטרה", "סותר את מה שאמרת")
+# words that ask about an examination rather than name its topic
+META_WORDS = frozenset({"התברר", "התבררו", "עלה", "עלו", "העיד", "העידה", "העידו", "חקירה", "בחקירה", "החקירה",
+                        "נגדית", "הנגדית", "ראשית", "הראשית", "עדות", "עדותו", "עדותה", "בעדותו", "בעדותה", "אמר",
+                        "אמרה", "סיפר", "סיפרה", "נאמר", "קרה", "מה", "על"})
+
+
+def topic_query(q: str, name: str) -> str:
+    """The question without the witness's name and the words that only ask about the examination."""
+    t = hebrew.normalize(q).replace("'", "").replace("׳", "")
+    for part in re.split(r"[\s-]+", hebrew.normalize(name).replace("'", "")):
+        if len(part) > 1:
+            t = re.sub(rf"(?<![א-ת])[ובלמשה]?{re.escape(part)}(?![א-ת])", " ", t)
+    words = [w for w in re.findall(r"[א-ת0-9\"]+", t) if w not in META_WORDS and w.lstrip("ו") not in META_WORDS]
+    rest = " ".join(words)
+    return rest if query_terms(rest) else ""
+
+
+def _boosted(hit, by: float):
+    import dataclasses
+
+    return dataclasses.replace(hit, score=hit.score + by)
 
 
 def move_inline_ids(text: str, citation_ids: list[str], allowed: set[str]) -> tuple[str, list[str]]:

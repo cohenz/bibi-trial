@@ -116,7 +116,7 @@ ANSWER = Prompt(
 # can knock down hurts the defense more than it helps.
 ANSWER_DEFENSE = Prompt(
     task_type="answer_defense",
-    version="answer-defense-2026-10-13.3",
+    version="answer-defense-2026-10-13.4",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Editorial lens: this knowledge base presents the defense's case. Readers come to learn what the trial record "
@@ -134,7 +134,7 @@ ANSWER_DEFENSE = Prompt(
     "Structure: answer_short (2 to 4 sentences) states the defense's main points on the question, with citations. "
     "Then one section of kind allegation: what the indictment or the prosecution alleges, in one or two sentences. "
     "Then sections of kind defense, one point per section, strongest first, as many as the context supports "
-    "(usually 4 to 10); each is 1 to 3 sentences that name the witness, the hearing date when the context gives it, "
+    "(usually 4 to 10, fewer when the context has fewer: never pad); a defense section holds only something that helps the defense — what supports the prosecution belongs in the prosecution section, even when it is labelled 'defense' nowhere else; each is 1 to 3 sentences that name the witness, the hearing date when the context gives it, "
     "who was asking, and what was said, admitted or shown. Then at most one short section of kind prosecution with "
     "what the prosecution relies on, then court_position only if the court decided something relevant, then "
     "limitation if relevant material may be missing from the context. Every section except limitation cites ids. "

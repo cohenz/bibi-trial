@@ -405,6 +405,19 @@ class MockProvider:
         verdict = "pass" if out and all(x["supported"] != "no" and not x["judicial_overstatement"] for x in out) else "fail"
         return {"schema_version": "2.0", "assertions": out, "omitted_counterevidence": [], "verdict": verdict}
 
+    def _task_verify_answer_defense(self, p: dict) -> dict:
+        return self._task_verify(p)
+
+    def _task_answer_defense(self, p: dict) -> dict:
+        out = self._task_answer(p)
+        if out["answer_status"] == "answered":
+            for s in out["sections"]:
+                if s["kind"] in {"why", "weakens"}:
+                    s["kind"] = "defense"
+                elif s["kind"] == "supports":
+                    s["kind"] = "prosecution"
+        return out
+
     def _task_answer(self, p: dict) -> dict:
         ctx = p.get("context", [])
         if not ctx:

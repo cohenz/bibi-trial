@@ -229,7 +229,7 @@ defs["AnswerEnvelope"] = obj(
             obj(
                 ["kind", "text", "citation_ids"],
                 {
-                    "kind": {"enum": ["why", "supports", "weakens", "court_position", "status", "limitation"]},
+                    "kind": {"enum": ["why", "supports", "weakens", "court_position", "status", "limitation", "allegation", "defense", "prosecution"]},
                     "text": STR,
                     "citation_ids": arr(STR),
                 },
@@ -711,7 +711,7 @@ defs["ModelAnswerDraft"] = obj(
             obj(
                 ["kind", "text", "citation_ids"],
                 {
-                    "kind": {"enum": ["why", "supports", "weakens", "court_position", "status", "limitation"]},
+                    "kind": {"enum": ["why", "supports", "weakens", "court_position", "status", "limitation", "allegation", "defense", "prosecution"]},
                     "text": STR,
                     "citation_ids": arr({"type": "string", "pattern": SU_ID}),
                 },

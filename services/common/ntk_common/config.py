@@ -91,6 +91,7 @@ class Settings:
     ask_visitor_daily_limit: int = 20
     ask_thinking: str = "low"
     ask_verify_thinking: str = ""
+    ask_lens: str = "defense"  # "defense" (the site presents the defense's case) or "neutral"
     price_input_per_m: float = 0.75
     price_output_per_m: float = 3.75
     rate_limit_search_per_minute: int = 30
@@ -218,6 +219,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         ask_visitor_daily_limit=_int(g("NTK_ASK_VISITOR_DAILY_LIMIT"), 20),
         ask_thinking=(g("NTK_ASK_THINKING", "low") or "").strip(),
         ask_verify_thinking=(g("NTK_ASK_VERIFY_THINKING", "") or "").strip(),
+        ask_lens=(g("NTK_ASK_LENS", "defense") or "defense").strip().lower(),
         price_input_per_m=float(g("NTK_PRICE_INPUT_PER_M", "0.75") or 0.75),
         price_output_per_m=float(g("NTK_PRICE_OUTPUT_PER_M", "3.75") or 3.75),
         rate_limit_search_per_minute=_int(g("NTK_RATE_LIMIT_SEARCH_PER_MINUTE"), 30),

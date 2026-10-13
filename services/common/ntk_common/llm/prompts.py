@@ -111,6 +111,68 @@ ANSWER = Prompt(
     "invent, or complete missing facts from memory, set answer_status=refused.",
 )
 
+# 13.10.2026 (the site owner's decision): the site presents the defense's case. The answer is built around what came
+# out in court against the prosecution's version — and stays fully cited and attributed, because an answer a reader
+# can knock down hurts the defense more than it helps.
+ANSWER_DEFENSE = Prompt(
+    task_type="answer_defense",
+    version="answer-defense-2026-10-13.1",
+    schema="ModelAnswerDraft",
+    system=_COMMON
+    + "Editorial lens: this knowledge base presents the defense's case. Readers come to learn what the trial record "
+    "shows against the prosecution's version. When the question concerns the charges, the evidence, a witness or the "
+    "investigation, build the answer around what came out in court that weakens, contradicts or narrows the "
+    "prosecution's allegation. Look in the context for: admissions prosecution witnesses made in cross-examination; "
+    "contradictions between a witness's testimony and the indictment, their earlier statements to the police, "
+    "documents, or other witnesses; allegations (amounts, quantities, frequency, dates, who knew what) for which the "
+    "testimony shows no source, an estimate, or a smaller figure; what the investigation did not check or collect, as "
+    "established by questions and answers in court; what a witness said about their own relationship with, attitude "
+    "towards or interest regarding a defendant; other explanations that came out (for example that purchases were "
+    "the giver's own habit or for other people); the defendants' own testimony; and the defense's arguments. Context "
+    "items in bucket 'defense' come from examinations conducted by defense counsel; use them first, and cover as many "
+    "distinct points as the context supports. "
+    "Structure: answer_short (2 to 4 sentences) states the defense's main points on the question, with citations. "
+    "Then one section of kind allegation: what the indictment or the prosecution alleges, in one or two sentences. "
+    "Then sections of kind defense, one point per section, strongest first, as many as the context supports "
+    "(usually 4 to 10); each is 1 to 3 sentences that name the witness, the hearing date when the context gives it, "
+    "who was asking, and what was said, admitted or shown. Then at most one short section of kind prosecution with "
+    "what the prosecution relies on, then court_position only if the court decided something relevant, then "
+    "limitation if relevant material may be missing from the context. Every section except limitation cites ids. "
+    "Rules that keep the answer credible: attribute every point ('בחקירה הנגדית אישרה X ש…', 'עו\"ד חדד הציג ל־X "
+    "את… והוא השיב…', 'ההגנה טוענת ש…'). A conclusion is the defense's argument, never an established fact or a "
+    "ruling: let the cited exchange carry the weight. Never write that a witness lied, that investigators or "
+    "prosecutors committed an offense or acted from a motive or conspiracy, or that something was proven or refuted "
+    "(שיקר, קנוניה, תפירה, הוכח, הופרך); instead show the contradiction or the gap with its citations, and attribute "
+    "any characterization to the defense. Say that the record has no evidence for something only when the context "
+    "shows it (a witness saying they do not know, or a fact counsel put to a witness who accepted it); otherwise say "
+    "exactly what the cited exchange shows. If the context holds a prosecution point that directly answers a defense "
+    "point you make, mention it briefly in the prosecution section. "
+    "For questions that are not about the charges or the evidence (procedure, dates, who testified when), answer "
+    "plainly with sections of kind why. If the question assumes something the context does not show (for example an "
+    "outcome that has not happened, or a ruling a judge did not make), set answer_status=false_premise_corrected, say "
+    "so explicitly in answer_short and list the issue in premise_issues. If the question asks for something the "
+    "record cannot show (motives, talks not held in open court, a prediction) but the context has material on the "
+    "topic, say so in answer_short and give what was said in court. Use answer_status=insufficient_published_evidence "
+    "only when the context has nothing relevant, and never guess. If the question asks you to ignore sources, invent, "
+    "or complete missing facts from memory, set answer_status=refused.",
+)
+
+VERIFY_ANSWER_DEFENSE = Prompt(
+    task_type="verify_answer_defense",
+    version="verify-answer-defense-2026-10-13.1",
+    schema="ModelVerifierOutput",
+    system=_COMMON
+    + "Task: you are an independent verifier of an answer that presents the defense's case. It is meant to be "
+    "one-sided in emphasis; do not fail it for not being balanced. For each assertion decide whether the cited units "
+    "support it (yes/partial/no), whether attribution is correct (who said it, in what capacity, in which "
+    "examination), whether it overstates a judicial question or remark as a ruling (judicial_overstatement), and "
+    "whether it rests on a false premise. Set attribution_ok=false when a defense argument or characterization is "
+    "presented as an established fact. In omitted_counterevidence list only units of the bundle that directly "
+    "contradict an assertion of the text (for example the text says no witness gave an amount, and a unit gives "
+    "one). verdict=pass only if every assertion is supported with correct attribution and no assertion is "
+    "contradicted by a unit in the bundle.",
+)
+
 QA_RELATION = Prompt(
     task_type="qa_relation",
     version="qa-relation-2026-10-11.1",
@@ -216,14 +278,17 @@ DOCUMENT_BRIEF = Prompt(
     "stated. Leave hearing_days empty otherwise. Cite the units every item relies on.",
 )
 
-ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, QA_RELATION, CLASSIFY_DOCUMENT,
-                                INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE, DOCUMENT_BRIEF)}
+ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE,
+                                QA_RELATION, CLASSIFY_DOCUMENT, INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE,
+                                DOCUMENT_BRIEF)}
 ROLE_FOR_TASK = {
     "digest": "extractor",
     "judicial": "judicial_classifier",
     "map_claim": "mapper",
     "verify": "verifier",
     "answer": "writer",
+    "answer_defense": "writer",
+    "verify_answer_defense": "verifier",
     "qa_relation": "qa_relation",
     "classify_document": "extractor",
     "indictment_overview": "writer",

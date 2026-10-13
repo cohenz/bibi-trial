@@ -154,3 +154,71 @@ def test_retrieval_uses_named_witness_guides_and_long_question_digests():
     # a defendant's family name alone does not pull in his guide; the full name does
     assert named_witnesses("מה אמר נתניהו על הסיקור?", Store().published_witness_guides()) == []
     assert [g["object_id"] for g in named_witnesses("מה אמר בנימין נתניהו?", Store().published_witness_guides())] == ["w_2"]
+
+
+def test_defense_lens_brings_examinations_by_defense_counsel_first():
+    """13.10.2026: a broad question ('the champagne and cigars') drew mostly the prosecution's direct examination.
+    Under the defense lens, exchanges asked by defense counsel (cross-examination of prosecution witnesses, direct
+    examination of defense witnesses) enter first, whole, in bucket 'defense'; an exchange the prosecution asked
+    does not enter that layer. The neutral lens has no such layer."""
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, role, text):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=role or "העדה", speaker_role=role, unit_type=utype, text=text, published=True)
+
+    units = {u.id: u for u in [
+        uv(1, "question", "defense", "את לא יודעת כמה שמפניות הגיעו בפועל לבית?"), uv(2, "answer", "witness", "לא."),
+        uv(3, "question", "prosecution", "כמה שמפניות קניתם בחודש?"), uv(4, "answer", "witness", "הרבה."),
+        uv(5, "speech_turn", "defense", "אין בחומר החקירה בדיקה של הטלפונים"), uv(6, "answer", "witness", "שמפניות"),
+    ]}
+    d_q, d_a, p_q, p_a, d_speech, general = list(units)
+    seen_phases = []
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+        def exchange_partners(self, ids):
+            m = {d_q: d_a, d_a: d_q, p_q: p_a, p_a: p_q}
+            return {i: m[i] for i in ids if i in m}
+
+    class Search:
+        def search(self, req):
+            seen_phases.append(req.filters.phase)
+            if req.filters.phase == "cross":
+                hits = [SearchHit(d_a, 0.9, {"terms": 1}, unit_type="answer"), SearchHit(d_speech, 0.5, {"terms": 1})]
+            elif req.filters.phase == "direct":
+                hits = [SearchHit(p_q, 0.95, {"terms": 1}, unit_type="question")]
+            else:
+                hits = [SearchHit(general, 1.0, {"terms": 1}, unit_type="answer"), SearchHit(p_q, 0.8, {"terms": 1})]
+            return SearchResponse(req.query, hits, {}, {}, "fake")
+
+    cfg = AskConfig(answer_base="https://x/a/", citation_base="https://x/c/")
+    ctx, origins = AskEngine(Store(), Search(), None, cfg)._retrieve("מה עלה על השמפניות")
+    assert [(c.unit.id, c.bucket) for c in ctx][:3] == [(d_q, "defense"), (d_a, "defense"), (d_speech, "defense")]
+    assert {c.unit.id: c.bucket for c in ctx}[p_q] == "context"  # the prosecution's question comes only from search
+    assert origins["defense"] == 3 and {"cross", "direct"} <= set(seen_phases)
+
+    seen_phases.clear()
+    neutral = AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", lens="neutral")
+    ctx, origins = AskEngine(Store(), Search(), None, neutral)._retrieve("מה עלה על השמפניות")
+    assert all(c.bucket != "defense" for c in ctx) and seen_phases == [None] and origins["defense"] == 0
+
+
+def test_defense_lens_uses_its_own_prompts():
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.llm.prompts import ALL, ROLE_FOR_TASK
+
+    eng = AskEngine(None, None, None, AskConfig(answer_base="a", citation_base="c"))
+    assert eng._prompt.task_type == "answer_defense" and ROLE_FOR_TASK["answer_defense"] == "writer"
+    assert ROLE_FOR_TASK["verify_answer_defense"] == "verifier" and "verify_answer_defense" in ALL
+    assert AskEngine(None, None, None, AskConfig(answer_base="a", citation_base="c", lens="neutral"))._prompt.task_type == "answer"

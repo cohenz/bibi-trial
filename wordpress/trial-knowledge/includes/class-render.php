@@ -534,16 +534,34 @@ class TK_Render {
 			'court_position' => 'מה אמר בית המשפט?',
 			'status'         => 'סטטוס',
 			'limitation'     => 'הסתייגות',
+			'allegation'     => 'מה טוען כתב האישום?',
+			'defense'        => 'מה עלה בבית המשפט לטובת ההגנה',
+			'prosecution'    => 'על מה נשענת התביעה',
 		);
 		$out = '<article class="tk-answer tk-answer--' . esc_attr( $env['answer_status'] ) . '" dir="rtl" lang="he"><p class="tk-answer__short">' . esc_html( $env['answer_short'] ) . '</p>';
+		// consecutive sections of one kind (the defense's points) form one section with a numbered list (2.7.5)
+		$groups = array();
 		foreach ( $env['sections'] as $s ) {
-			$links = array();
-			foreach ( $s['citation_ids'] as $cid ) {
-				if ( isset( $cits[ $cid ] ) ) {
-					$links[] = self::citation_link( $cits[ $cid ] );
-				}
+			$last = count( $groups ) - 1;
+			if ( 'defense' === $s['kind'] && $last >= 0 && 'defense' === $groups[ $last ]['kind'] ) {
+				$groups[ $last ]['items'][] = $s;
+			} else {
+				$groups[] = array( 'kind' => $s['kind'], 'items' => array( $s ) );
 			}
-			$out .= '<section class="tk-answer__sec"><h3>' . esc_html( $labels[ $s['kind'] ] ?? $s['kind'] ) . '</h3><p>' . esc_html( $s['text'] ) . '</p>' . ( $links ? '<p class="tk-point__meta">' . implode( ' ', $links ) . '</p>' : '' ) . '</section>';
+		}
+		foreach ( $groups as $g ) {
+			$paras = array();
+			foreach ( $g['items'] as $s ) {
+				$links = array();
+				foreach ( $s['citation_ids'] as $cid ) {
+					if ( isset( $cits[ $cid ] ) ) {
+						$links[] = self::citation_link( $cits[ $cid ] );
+					}
+				}
+				$paras[] = '<p>' . esc_html( $s['text'] ) . '</p>' . ( $links ? '<p class="tk-point__meta">' . implode( ' ', $links ) . '</p>' : '' );
+			}
+			$body = count( $paras ) > 1 ? '<ol class="tk-answer__points"><li>' . implode( '</li><li>', $paras ) . '</li></ol>' : $paras[0];
+			$out .= '<section class="tk-answer__sec tk-answer__sec--' . esc_attr( $g['kind'] ) . '"><h3>' . esc_html( $labels[ $g['kind'] ] ?? $g['kind'] ) . '</h3>' . $body . '</section>';
 		}
 		if ( empty( $env['sections'] ) || 'requires_human_review' === $env['answer_status'] ) {
 			if ( $cits ) {

@@ -762,3 +762,10 @@ html :where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), html a:wher
 .tk-wait__why { margin: .85rem 0 0; font-size: .92em; color: var(--tk-muted); max-width: 62ch; }
 .tk-wait__t { margin: .25rem 0 0; font-size: .85em; color: var(--tk-muted); font-variant-numeric: tabular-nums; min-height: 1.2em; }
 @media (prefers-reduced-motion: reduce) { .tk-wait__bar span, .tk-wait__s.is-now::before { animation: none; } .tk-wait__bar span { width: 100%; opacity: .5; } }
+
+/* ------------------------------------------------------------------ 2.7.5: Ask answers built on the defense's case */
+.tk-answer__points { margin: .25rem 0 0; padding-inline-start: 1.4rem; }
+.tk-answer__points > li { margin-block: 0 .75rem; }
+.tk-answer__points > li > p { margin-block: 0 .2rem; }
+.tk-answer__sec--defense { border-inline-start: 4px solid var(--tk-accent); padding-inline-start: .85rem; }
+.tk-answer__sec--allegation h3, .tk-answer__sec--prosecution h3 { color: var(--tk-muted); }

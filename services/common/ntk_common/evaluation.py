@@ -121,7 +121,7 @@ def run_suite(path: Path, *, settings, engine: Engine, services, as_of: str | No
     as_of_dt = dt.datetime.fromisoformat((as_of or suite.get("as_of") or dt.datetime.now(dt.UTC).isoformat()).replace("Z", "+00:00"))
     engine_ask = AskEngine(PgAskStore(engine, case_id=settings.case_id), services.search_backend(), services.runner,
                            AskConfig(answer_base=settings.answer_base, citation_base=settings.citation_base, env=settings.env,
-                                     independent_verifier=not services.registry.single_family))
+                                     independent_verifier=not services.registry.single_family, lens=settings.ask_lens))
     locator = CitationLocator(engine, services.storage)
     results = []
     cit_total = cit_ok = 0

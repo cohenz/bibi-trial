@@ -19,6 +19,17 @@ TK_T::ok( false !== strpos( $html, 'dir="rtl"' ), 'RTL container' );
 $env  = array( 'answer_id' => '22222222-2222-5222-8222-222222222222', 'answer_status' => 'false_premise_corrected', 'answer_short' => 'לא <i>זוכה</i>', 'sections' => array(), 'citations' => array(), 'as_of' => '2026-10-10T00:00:00+00:00', 'corpus_version' => 'cv-000009', 'latest_permalink' => null );
 $a    = TK_Render::answer( $env );
 TK_T::ok( false === strpos( $a, '<i>' ) && false !== strpos( $a, 'cv-000009' ) && false !== strpos( $a, '/trial/answer/22222222' ), 'answer escaped, shows corpus version and permalink' );
+// 2.7.5: an answer built on the defense's case — the defense's points form one section with a numbered list
+$sid  = $cit['source_unit_id'];
+$envd = array_merge( $env, array( 'answer_status' => 'answered', 'citations' => array( $cit ), 'sections' => array(
+	array( 'kind' => 'allegation', 'text' => 'לפי כתב האישום…', 'citation_ids' => array( $sid ) ),
+	array( 'kind' => 'defense', 'text' => 'נקודה ראשונה <b>x</b>', 'citation_ids' => array( $sid ) ),
+	array( 'kind' => 'defense', 'text' => 'נקודה שנייה', 'citation_ids' => array( $sid ) ),
+	array( 'kind' => 'prosecution', 'text' => 'התביעה נשענת על…', 'citation_ids' => array( $sid ) ),
+) ) );
+$ad = TK_Render::answer( $envd );
+TK_T::ok( 1 === substr_count( $ad, 'מה עלה בבית המשפט לטובת ההגנה' ) && 2 === substr_count( $ad, '<li>' ) && false !== strpos( $ad, 'tk-answer__points' ), 'answer (2.7.5): defense points grouped in one numbered list' );
+TK_T::ok( false !== strpos( $ad, 'מה טוען כתב האישום?' ) && false !== strpos( $ad, 'על מה נשענת התביעה' ) && false === strpos( $ad, '<b>' ), 'answer (2.7.5): allegation and prosecution labelled, text escaped' );
 
 // 2.2: full transcript and documents
 $su = 'su_' . str_repeat( 'c', 26 );

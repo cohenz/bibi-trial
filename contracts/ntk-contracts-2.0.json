@@ -622,7 +622,10 @@
                   "weakens",
                   "court_position",
                   "status",
-                  "limitation"
+                  "limitation",
+                  "allegation",
+                  "defense",
+                  "prosecution"
                 ]
               },
               "text": {
@@ -2833,7 +2836,10 @@
                   "weakens",
                   "court_position",
                   "status",
-                  "limitation"
+                  "limitation",
+                  "allegation",
+                  "defense",
+                  "prosecution"
                 ]
               },
               "text": {

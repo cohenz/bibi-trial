@@ -27,11 +27,11 @@ from typing import Any, Protocol
 
 from . import contracts, gates, hebrew, ids
 from .layers import UnitView, citation_for
-from .llm.prompts import ANSWER
+from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.4"
+ASK_ENGINE_VERSION = "ask-engine-1.5"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -194,9 +194,9 @@ def normalize_question(question: str) -> str:
 @dataclass
 class ContextItem:
     unit: UnitView
-    bucket: str  # supports | weakens | court | context
+    bucket: str  # supports | weakens | court | context | defense
     attribution: str | None = None
-    origin: str = "search"  # claim_card | digest | search
+    origin: str = "search"  # claim_card | witness_guide | digest | defense | search
 
 
 class AskStore(Protocol):
@@ -227,6 +227,11 @@ class AskConfig:
     # cost control (13.10.2026): how much the writer / verifier may think (a level or a token budget; "" = model default)
     thinking: str = "low"
     verify_thinking: str = ""
+    # editorial lens (13.10.2026, the site owner's decision): "defense" builds the answer around what came out in
+    # court against the prosecution's version, from examinations conducted by defense counsel; "neutral" is the
+    # earlier balanced answer
+    lens: str = "defense"
+    defense_context: int = 16  # passages from examinations by defense counsel (each Q/A exchange kept whole)
 
 
 class AskLimited(Exception):
@@ -254,6 +259,14 @@ class AskEngine:
         self.cfg = config
 
     # -- helpers ---------------------------------------------------------------
+    @property
+    def _defense(self) -> bool:
+        return self.cfg.lens == "defense"
+
+    @property
+    def _prompt(self):
+        return ANSWER_DEFENSE if self._defense else ANSWER
+
     def _model_version(self) -> str:
         if self.runner is None:
             return "none"
@@ -263,7 +276,7 @@ class AskEngine:
     def _envelope(self, *, question: str, normalized: str, as_of: dt.datetime, cv: str, status: str, short: str,
                   sections: list[dict], cited: list[UnitView], warnings: list[str], locale: str,
                   review_state: str = "machine_verified", flags: list[str] | None = None) -> dict:
-        aid = str(ids.derived_uuid("answer", normalized, as_of.date().isoformat(), cv, ANSWER.version, ASK_ENGINE_VERSION,
+        aid = str(ids.derived_uuid("answer", normalized, as_of.date().isoformat(), cv, self._prompt.version, ASK_ENGINE_VERSION,
                                    self._model_version(), locale))
         env = {
             "schema_version": "2.0",
@@ -299,7 +312,7 @@ class AskEngine:
         cv = self.store.corpus_version()
         # the engine version is part of the key: a changed detector must not serve answers cached under the old logic
         key = {"normalized_question": normalized, "as_of_date": as_of.date().isoformat(), "corpus_version": cv,
-               "prompt_version": f"{ANSWER.version}+{ASK_ENGINE_VERSION}", "model_version": self._model_version(), "locale": locale}
+               "prompt_version": f"{self._prompt.version}+{ASK_ENGINE_VERSION}", "model_version": self._model_version(), "locale": locale}
         cached = self.store.find_answer(key)
         if cached:
             return AskResult(cached["envelope"], True, cached.get("gate_report", {}), cached.get("retrieval_ids", []))
@@ -396,12 +409,12 @@ class AskEngine:
                 return AskResult(prev["envelope"], True, prev.get("gate_report", {}), prev.get("retrieval_ids", []))
         # the budget counts only calls that cost: a stored model answer for this exact input is free
         if before_model is not None:
-            stored = self.runner.store.get_run(self.runner.request_for("answer", payload)["run_id"])
+            stored = self.runner.store.get_run(self.runner.request_for(self._prompt.task_type, payload)["run_id"])
             if stored is None or not stored.ok:
                 before_model()
 
         # 5. generation
-        run = self.runner.run("answer", payload, input_source_ids=sorted(allowed), corpus_version=cv,
+        run = self.runner.run(self._prompt.task_type, payload, input_source_ids=sorted(allowed), corpus_version=cv,
                               semantic_check=unknown_ids_check(allowed, "sections[].citation_ids[]", "answer_short_citation_ids[]"),
                               thinking=self.cfg.thinking or None)
         if not run.ok:
@@ -418,10 +431,12 @@ class AskEngine:
 
         units = {c.unit.id: c.unit for c in context}
         sections = [dict(s) for s in draft["sections"]]
-        # contradiction completeness: weakening context must be represented
+        # contradiction completeness: weakening context must be represented (a claim card's weakness is material
+        # against the defense's claim, so under the defense lens it is the prosecution's side)
+        weak_kind = "prosecution" if self._defense else "weakens"
         weak_ctx = [c for c in context if c.bucket == "weakens"]
-        if weak_ctx and not any(s["kind"] == "weakens" for s in sections):
-            sections.append({"kind": "weakens", "text": "חומר שמחליש או מסייג: " + " | ".join(
+        if weak_ctx and not any(s["kind"] == weak_kind for s in sections):
+            sections.append({"kind": weak_kind, "text": "חומר שמחליש או מסייג: " + " | ".join(
                 f"{c.unit.speaker_label or 'מקור'}: \"{_clip(c.unit.text, 25)}\"" for c in weak_ctx[:3]),
                 "citation_ids": [c.unit.id for c in weak_ctx[:3]]})
         assertions = [gates.Assertion("answer_short", draft["answer_short"], draft.get("answer_short_citation_ids", []),
@@ -435,7 +450,7 @@ class AskEngine:
         verdict = None
         vrun_id = None
         if self.cfg.verify_answers:
-            vrun = self.runner.run("verify", {
+            vrun = self.runner.run(VERIFY_ANSWER_DEFENSE.task_type if self._defense else "verify", {
                 "assertions": [{"path": a.path, "text": a.text, "citation_ids": a.citation_ids} for a in assertions
                                if a.kind not in gates.NON_FACTUAL_SECTION_KINDS],
                 "sources": [{"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role, "text": u.text[:1500],
@@ -573,7 +588,7 @@ class AskEngine:
         terms = set(query_terms(q))
         items: list[ContextItem] = []
         seen: set[str] = set()
-        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "search": 0}
+        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "defense": 0, "search": 0}
 
         def add(uid_list: list[str], bucket: str, origin: str, attribution: str | None = None, cap: int | None = None) -> int:
             units = self.store.public_units([u for u in uid_list if u not in seen])
@@ -624,6 +639,8 @@ class AskEngine:
                 origins["digests"].append(hid)
                 for sent in p.get("summary_sentences", []):
                     room -= add(sent["citation_ids"][:1], "context", "digest", cap=min(room, 1))
+        if self._defense and self.cfg.defense_context > 0:
+            origins["defense"] = self._defense_layer(q, add)
         resp = self.search.search(SearchRequest(q, SearchFilters(published_only=True), limit=self.cfg.max_context))
         origins["search"] = len(resp.hits)
         # relevance floor: a hit needs a lexical/identifier/graph signal or agreement of two signals;
@@ -642,7 +659,48 @@ class AskEngine:
             ordered.extend(x for x in pair if x not in ordered)
         origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
         add(ordered, "context", "search")
-        return items[:MAX_CONTEXT_WITH_PAIRS], origins
+        return items[:MAX_CONTEXT_DEFENSE if self._defense else MAX_CONTEXT_WITH_PAIRS], origins
+
+    def _defense_layer(self, q: str, add) -> int:
+        """Passages from examinations conducted by defense counsel — the cross-examination of prosecution witnesses and
+        the direct examination of the defense's witnesses — on the question's topic, each Q/A exchange kept whole.
+        A broad question ('the champagne and cigars') otherwise draws mostly the prosecution's direct examination,
+        where the allegation is phrased in the question's own words."""
+        hits = []
+        for phase in ("cross", "direct"):
+            r = self.search.search(SearchRequest(q, SearchFilters(published_only=True, phase=phase),
+                                                 limit=self.cfg.defense_context * 2))
+            hits += [h for h in r.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+        cand: list[str] = []
+        for h in sorted(hits, key=lambda h: -h.score):
+            if h.source_unit_id not in cand:
+                cand.append(h.source_unit_id)
+        partners_fn = getattr(self.store, "exchange_partners", None)
+        partners = partners_fn(cand) if partners_fn else {}
+        views = self.store.public_units(list(dict.fromkeys([*cand, *partners.values()])))
+
+        def asked_by_defense(uid: str) -> bool:
+            u = views.get(uid)
+            if u is None:
+                return False
+            if u.speaker_role in DEFENSE_ROLES:
+                return True
+            p = views.get(partners.get(uid) or "")
+            return p is not None and p.unit_type == "question" and p.speaker_role in DEFENSE_ROLES
+
+        ordered: list[str] = []
+        exchanges = 0
+        for uid in cand:
+            if exchanges >= self.cfg.defense_context:
+                break
+            if not asked_by_defense(uid) or uid in ordered:
+                continue
+            p = partners.get(uid)
+            u = views[uid]
+            pair = ([uid, p] if u.unit_type == "question" else [p, uid]) if p and p in views else [uid]
+            ordered.extend(x for x in pair if x not in ordered)
+            exchanges += 1
+        return add(ordered, "defense", "defense", attribution="defense_examination")
 
 
 # witnesses who are also defendants are named in almost every question: their guide enters only by full name
@@ -687,6 +745,8 @@ def named_witnesses(q: str, guides_: list[dict]) -> list[dict]:
 
 
 MAX_CONTEXT_WITH_PAIRS = 32
+MAX_CONTEXT_DEFENSE = 52  # the defense layer adds up to 2 × defense_context units ahead of the general search
+DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 
 def relevant_type(hits: list, uid: str) -> str | None:

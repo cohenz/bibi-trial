@@ -53,16 +53,30 @@ class AskBudget:
             _MEM[k] += 1
             return _MEM[k]
 
+    def _decr(self, k: str) -> None:
+        if self.redis is not None:
+            try:
+                self.redis.decr(k)
+                return
+            except Exception:  # noqa: BLE001
+                pass
+        with _LOCK:
+            _MEM[k] -= 1
+
     def reserve(self, visitor: str | None) -> None:
         """Called right before a new answer's first model call; raises AskLimited when a cap is reached."""
         day = _today()
-        if self.daily_limit > 0 and self._get(f"ntk:ask:{day}:model") >= self.daily_limit:
-            raise AskLimited("daily_limit")
-        if visitor and self.visitor_limit > 0 and self._get(f"ntk:ask:{day}:v:{visitor}") >= self.visitor_limit:
+        # increment first, then compare: simultaneous requests cannot slip past the cap together
+        if visitor and self.visitor_limit > 0 and self._incr(f"ntk:ask:{day}:v:{visitor}") > self.visitor_limit:
+            self._decr(f"ntk:ask:{day}:v:{visitor}")
             raise AskLimited("visitor_daily_limit")
-        self._incr(f"ntk:ask:{day}:model")
-        if visitor:
-            self._incr(f"ntk:ask:{day}:v:{visitor}")
+        if self.daily_limit > 0 and self._incr(f"ntk:ask:{day}:model") > self.daily_limit:
+            self._decr(f"ntk:ask:{day}:model")
+            if visitor and self.visitor_limit > 0:
+                self._decr(f"ntk:ask:{day}:v:{visitor}")
+            raise AskLimited("daily_limit")
+        if self.daily_limit <= 0:
+            self._incr(f"ntk:ask:{day}:model")
 
     def count(self, what: str) -> None:
         self._incr(f"ntk:ask:{_today()}:{what}")

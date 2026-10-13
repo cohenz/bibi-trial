@@ -79,17 +79,54 @@ class TK_Rest_Proxy {
 		return new WP_REST_Response( array( 'html' => TK_Render::answer( $env ), 'envelope' => $env ), 200 );
 	}
 
-	/** The visitor's address: behind Cloudflare REMOTE_ADDR is a Cloudflare edge, so its header comes first. */
-	public static function visitor_ip() {
-		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'REMOTE_ADDR' ) as $k ) {
-			if ( ! empty( $_SERVER[ $k ] ) && is_string( $_SERVER[ $k ] ) ) {
-				$ip = trim( sanitize_text_field( wp_unslash( $_SERVER[ $k ] ) ) );
-				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
-					return $ip;
-				}
+	/** Cloudflare's published edge ranges (https://www.cloudflare.com/ips/). */
+	const CLOUDFLARE = array(
+		'173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
+		'190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+		'104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+		'2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+	);
+
+	/**
+	 * The visitor's address. Behind Cloudflare REMOTE_ADDR is a Cloudflare edge, and the visitor is in
+	 * CF-Connecting-IP — trusted only when the request really came from a Cloudflare edge (anyone can send the header).
+	 *
+	 * @param array|null $server $_SERVER (tests pass their own).
+	 */
+	public static function visitor_ip( $server = null ) {
+		$server = null === $server ? $_SERVER : $server;
+		$remote = isset( $server['REMOTE_ADDR'] ) && is_string( $server['REMOTE_ADDR'] ) ? trim( $server['REMOTE_ADDR'] ) : '';
+		$remote = filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '';
+		$cf     = isset( $server['HTTP_CF_CONNECTING_IP'] ) && is_string( $server['HTTP_CF_CONNECTING_IP'] ) ? trim( $server['HTTP_CF_CONNECTING_IP'] ) : '';
+		if ( $remote && $cf && filter_var( $cf, FILTER_VALIDATE_IP ) && self::in_ranges( $remote, self::CLOUDFLARE ) ) {
+			return $cf;
+		}
+		return $remote;
+	}
+
+	/** Is $ip inside one of the CIDR ranges (IPv4 or IPv6)? */
+	public static function in_ranges( $ip, array $ranges ) {
+		$bin = @inet_pton( $ip ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- invalid input returns false
+		if ( false === $bin ) {
+			return false;
+		}
+		foreach ( $ranges as $r ) {
+			list( $net, $bits ) = explode( '/', $r );
+			$nb                 = @inet_pton( $net ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			if ( false === $nb || strlen( $nb ) !== strlen( $bin ) ) {
+				continue;
+			}
+			$bits  = (int) $bits;
+			$bytes = intdiv( $bits, 8 );
+			if ( substr( $bin, 0, $bytes ) !== substr( $nb, 0, $bytes ) ) {
+				continue;
+			}
+			$rest = $bits % 8;
+			if ( 0 === $rest || ( ( ord( $bin[ $bytes ] ) ^ ord( $nb[ $bytes ] ) ) & ( 0xFF << ( 8 - $rest ) ) & 0xFF ) === 0 ) {
+				return true;
 			}
 		}
-		return '';
+		return false;
 	}
 
 	/**

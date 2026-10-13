@@ -760,14 +760,16 @@ def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=
     budget = AskBudget(st.redis, daily_limit=s.ask_daily_limit, visitor_limit=s.ask_visitor_daily_limit)
     with st.services.engine.connect() as conn:
         rs = rows(conn, """
-            WITH runs AS (
-                SELECT a.created_at::date AS d, a.id, m.usage FROM ntk.answers a JOIN ntk.model_runs m ON m.id = a.model_run_id
-                WHERE a.created_at >= now() - make_interval(days => :n)
+            WITH refs AS (  -- each paid model run once, on the UTC day of the first answer that used it
+                SELECT model_run_id AS run_id, created_at FROM ntk.answers WHERE model_run_id IS NOT NULL
                 UNION ALL
-                SELECT a.created_at::date, a.id, m.usage FROM ntk.answers a
-                JOIN ntk.model_runs m ON m.id::text = a.gate_report->>'verifier_run_id'
-                WHERE a.created_at >= now() - make_interval(days => :n))
-            SELECT d::text AS day, count(DISTINCT id) AS answers,
+                SELECT CAST(gate_report->>'verifier_run_id' AS uuid), created_at FROM ntk.answers
+                WHERE gate_report->>'verifier_run_id' ~ '^[0-9a-f-]{36}$'),
+            firsts AS (SELECT run_id, min(created_at) AS at FROM refs GROUP BY run_id),
+            runs AS (
+                SELECT (f.at AT TIME ZONE 'UTC')::date AS d, m.id, m.task_type, m.usage FROM firsts f
+                JOIN ntk.model_runs m ON m.id = f.run_id WHERE f.at >= now() - make_interval(days => :n))
+            SELECT d::text AS day, count(DISTINCT id) FILTER (WHERE task_type = 'answer') AS answers,
                    coalesce(sum((usage->>'promptTokenCount')::bigint), 0) AS input_tokens,
                    coalesce(sum((usage->>'candidatesTokenCount')::bigint), 0) AS output_tokens,
                    coalesce(sum((usage->>'thoughtsTokenCount')::bigint), 0) AS thinking_tokens

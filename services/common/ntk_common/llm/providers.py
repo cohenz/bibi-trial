@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import re
 import time
@@ -100,6 +101,8 @@ class GeminiProvider:
             except ProviderError as exc:
                 if not (thinking and exc.status == 400 and "thinking" in str(exc).lower()):
                     raise
+                logging.getLogger("ntk.llm").warning("model %s refused thinking=%r; asked again without it: %s",
+                                                     model_id, thinking, str(exc)[:200])
                 gen.pop("thinkingConfig", None)
                 data = self._post(f"models/{model_id}:generateContent", body)
         except ProviderError as exc:

@@ -90,3 +90,9 @@ $cu = TK_Admin_Costs::render( array(
 	'thinking' => array( 'writer' => 'low', 'verifier' => 'default' ), 'prices_per_million' => array( 'input' => 0.75, 'output_and_thinking' => 3.75 ),
 ) );
 TK_T::ok( false !== strpos( $cu, '13.10.2026' ) && false !== strpos( $cu, '0.041' ) && false !== strpos( $cu, '15,000' ) && false !== strpos( $cu, '200 תשובות חדשות' ), 'costs: day row, cost, tokens and limits' );
+
+// --- visitor address behind Cloudflare (2.7.1)
+TK_T::eq( '9.9.9.9', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '172.70.1.2', 'HTTP_CF_CONNECTING_IP' => '9.9.9.9' ) ), 'visitor ip: from a Cloudflare edge, the header is used' );
+TK_T::eq( '5.6.7.8', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '5.6.7.8', 'HTTP_CF_CONNECTING_IP' => '9.9.9.9' ) ), 'visitor ip: a forged header from elsewhere is ignored' );
+TK_T::eq( '2a01::1', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '2606:4700::6810:1', 'HTTP_CF_CONNECTING_IP' => '2a01::1' ) ), 'visitor ip: IPv6 Cloudflare edge' );
+TK_T::ok( ! TK_Rest_Proxy::in_ranges( '104.32.0.1', array( '104.16.0.0/13' ) ) && TK_Rest_Proxy::in_ranges( '104.23.255.1', array( '104.16.0.0/13' ) ), 'cidr: boundaries' );

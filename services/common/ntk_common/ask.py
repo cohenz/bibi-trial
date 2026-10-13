@@ -376,22 +376,28 @@ class AskEngine:
         if self.runner is None:
             return self._citations_only(base, context, ["no_writer_model"], flags_q, origins)
 
-        # 4b. the same question over the same published evidence was answered before (another day, or before an
-        # unrelated publication changed the corpus version): reuse it — the answer could only change with the evidence
-        by_evidence = getattr(self.store, "find_answer_by_evidence", None)
-        if key is not None and by_evidence is not None:
-            prev = by_evidence(key, retrieval_ids)
-            if prev:
-                return AskResult(prev["envelope"], True, prev.get("gate_report", {}), prev.get("retrieval_ids", []))
-        if before_model is not None:
-            before_model()
-
-        # 5. generation
         payload = {"question": q, "as_of": as_of.date().isoformat(), "context": [
             {"id": c.unit.id, "bucket": c.bucket, "attribution": c.attribution, "speaker": c.unit.speaker_label,
              "speaker_role": c.unit.speaker_role, "unit_type": c.unit.unit_type, "text": c.unit.text[:1500],
              "judicial_level": c.unit.judicial_level} for c in context]}
         allowed = {c.unit.id for c in context}
+        # everything the model would see about the evidence: passages, their roles, speakers, rulings and text
+        context_hash = ids.sha256_json(payload["context"])
+
+        # 4b. the same question over exactly the same evidence was answered before (another day, or before an
+        # unrelated publication changed the corpus version): reuse it — the answer could only change with the evidence
+        by_evidence = getattr(self.store, "find_answer_by_evidence", None)
+        if key is not None and by_evidence is not None:
+            prev = by_evidence(key, context_hash)
+            if prev:
+                return AskResult(prev["envelope"], True, prev.get("gate_report", {}), prev.get("retrieval_ids", []))
+        # the budget counts only calls that cost: a stored model answer for this exact input is free
+        if before_model is not None:
+            stored = self.runner.store.get_run(self.runner.request_for("answer", payload)["run_id"])
+            if stored is None or not stored.ok:
+                before_model()
+
+        # 5. generation
         run = self.runner.run("answer", payload, input_source_ids=sorted(allowed), corpus_version=cv,
                               semantic_check=unknown_ids_check(allowed, "sections[].citation_ids[]", "answer_short_citation_ids[]"),
                               thinking=self.cfg.thinking or None)
@@ -444,7 +450,7 @@ class AskEngine:
         if self.cfg.verify_answers:
             results.append(gates.verifier_gate(verdict, independent_family=self.cfg.independent_verifier, sensitive=bool(flags)))
         decision = gates.decide(results, flags=flags)
-        report = {**decision.report(), "retrieval": origins, "verifier_run_id": vrun_id}
+        report = {**decision.report(), "retrieval": origins, "verifier_run_id": vrun_id, "context_hash": context_hash}
         if decision.state != "machine_verified":
             return self._citations_only(base, context, ["requires_human_review"], sorted(flags), origins, run.id, report)
         cited = [units[c] for s in sections for c in s["citation_ids"] if c in units]

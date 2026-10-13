@@ -274,10 +274,11 @@ class PgAskStore:
                 ORDER BY created_at DESC LIMIT 1
             """, key)
 
-    def find_answer_by_evidence(self, key: dict, retrieval_ids: list[str]) -> dict | None:
-        """The latest answer to the same question (same prompt, model and locale) built from exactly the same retrieved
-        passages, whatever the day or corpus version. Only answers that passed the gates are reused."""
-        if not retrieval_ids:
+    def find_answer_by_evidence(self, key: dict, context_hash: str) -> dict | None:
+        """The latest answer to the same question (same prompt, model and locale) built from exactly the same model
+        context (passages, roles, speakers, rulings, text — ``context_hash``), whatever the day or corpus version.
+        Only answers that passed the gates are reused."""
+        if not context_hash:
             return None
         with self.engine.connect() as conn:
             return row(conn, """
@@ -285,9 +286,9 @@ class PgAskStore:
                 WHERE normalized_question = :normalized_question AND prompt_version = :prompt_version
                   AND model_version = :model_version AND locale = :locale
                   AND answer_status IN ('answered', 'false_premise_corrected')
-                  AND (SELECT array_agg(x ORDER BY x) FROM unnest(retrieval_ids) x) = CAST(:r AS text[])
+                  AND gate_report->>'context_hash' = :h
                 ORDER BY created_at DESC LIMIT 1
-            """, {**key, "r": sorted(set(retrieval_ids))})
+            """, {**key, "h": context_hash})
 
     def save_answer(self, record: dict) -> None:
         with self.engine.begin() as conn:

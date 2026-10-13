@@ -850,11 +850,12 @@ def set_ask_limits(body: AskLimitsIn, st: AppState = Depends(get_state),
 
 @router.get("/answers")
 def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1, le=500), status: str | None = None,
-                 since: str | None = None, envelope: bool = False,
+                 since: str | None = None, envelope: bool = False, visitors: bool = False,
                  p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
     """Ask answers, newest first: question, status, prompt and how the gates decided. ``status`` takes a comma list;
     ``since`` (ISO time) returns only answers stored after it; ``envelope=true`` adds the public answer — WordPress
-    syncs the visitors' questions with it (13.10.2026)."""
+    syncs the visitors' questions with it (13.10.2026). ``visitors=true`` leaves out the evaluation suites' answers
+    (asked without a client request id); every question from the site carries one."""
     statuses = [x.strip() for x in (status or "").split(",") if x.strip()] or None
     since_dt = None
     if since:
@@ -865,12 +866,15 @@ def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1,
     with st.services.engine.connect() as conn:
         rs = rows(conn, f"""
             SELECT id::text AS answer_id, question, normalized_question, answer_status, prompt_version, created_at,
-                   gate_report->>'state' AS gate_state, gate_report->'risk_flags' AS risk_flags
+                   gate_report->>'state' AS gate_state, gate_report->'risk_flags' AS risk_flags,
+                   CASE WHEN client_request_id IS NULL THEN 'evaluation'
+                        WHEN client_request_id LIKE 'wp-%' THEN 'website' ELSE 'api' END AS origin
                    {", envelope" if envelope else ""}
             FROM ntk.answers
             WHERE (CAST(:s AS text[]) IS NULL OR answer_status = ANY(CAST(:s AS text[])))
               AND (CAST(:since AS timestamptz) IS NULL OR created_at > CAST(:since AS timestamptz))
-            ORDER BY created_at DESC LIMIT :n""", {"s": statuses, "since": since_dt, "n": limit})
+              AND (NOT :v OR client_request_id IS NOT NULL)
+            ORDER BY created_at DESC LIMIT :n""", {"s": statuses, "since": since_dt, "n": limit, "v": visitors})
     if envelope:
         from ntk_common import editorial
         for r in rs:

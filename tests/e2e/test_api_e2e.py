@@ -166,6 +166,8 @@ def test_full_flow(client, fixture_pdf, services):
     assert body["gate_report"]["state"] and body["retrieval_ids"] and body["writer"]["task_type"] == "answer_defense"
     assert "defense" in body["gate_report"]["retrieval"]
     assert signed(client, "GET", "/v2/admin/answers/00000000-0000-0000-0000-000000000000").status_code == 404
+    vis = signed(client, "GET", "/v2/admin/answers?visitors=true&limit=100").json()["items"]
+    assert vis and all(x["origin"] in {"website", "api"} for x in vis)  # e2e-1 was asked with a request id
     sync = signed(client, "GET", "/v2/admin/answers?status=answered,false_premise_corrected&envelope=true&since=2020-01-01T00:00:00Z")
     assert sync.status_code == 200 and all(x["answer_status"] in {"answered", "false_premise_corrected"} and x["envelope"]["answer_id"]
                                            for x in sync.json()["items"]), sync.text

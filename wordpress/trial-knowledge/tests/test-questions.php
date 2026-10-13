@@ -59,3 +59,12 @@ TK_T::eq( array( 'per_visitor_daily' => 5, 'daily' => null ), TK_Admin_Costs::pa
 $lf = TK_Admin_Costs::limits_form( array( 'per_visitor_daily' => 5, 'daily' => 200, 'per_minute' => 6, 'railway' => array( 'per_visitor_daily' => 20, 'daily' => 200, 'per_minute' => 6 ), 'source' => array( 'per_visitor_daily' => 'admin', 'daily' => 'railway', 'per_minute' => 'railway' ) ) );
 TK_T::ok( false !== strpos( $lf, 'name="per_visitor_daily" min="0" max="10000" value="5" placeholder="20"' ) && false !== strpos( $lf, 'name="daily" min="0" max="100000" value=""' ), 'limits: overrides filled, defaults as placeholders' );
 tk_test_reset_store();
+// 2.7.9: upgrading from table version 1 drops the rows nobody acted on (evaluation questions) and restarts the sync
+tk_test_reset_store();
+update_option( TK_Questions::OPT_DB, '1' );
+update_option( TK_Questions::OPT_SINCE, '2026-10-13T19:00:00+00:00' );
+TK_Questions::put( array_merge( $row, array( 'qkey' => str_repeat( 'd', 64 ) ) ) );
+TK_Questions::put( array_merge( $row, array( 'qkey' => str_repeat( 'e', 64 ), 'state' => 'shown' ) ) );
+TK_Questions::maybe_upgrade();
+TK_T::ok( null === TK_Questions::get( str_repeat( 'd', 64 ) ) && null !== TK_Questions::get( str_repeat( 'e', 64 ) ) && false === get_option( TK_Questions::OPT_SINCE ), 'upgrade 2: untouched pending rows dropped, approved kept, sync restarts' );
+tk_test_reset_store();

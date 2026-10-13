@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class TK_Questions {
 
-	const DB_VERSION = '1';
+	const DB_VERSION = '2';
 	const OPT_DB     = 'tk_questions_db_version';
 	const OPT_SINCE  = 'tk_questions_since';
 	const OPT_LAST   = 'tk_questions_last_sync';
@@ -83,9 +83,24 @@ class TK_Questions {
 	}
 
 	public static function maybe_upgrade() {
-		if ( get_option( self::OPT_DB ) !== self::DB_VERSION ) {
+		$was = get_option( self::OPT_DB );
+		if ( $was !== self::DB_VERSION ) {
 			self::install();
+			if ( '1' === $was ) {
+				self::drop_untouched();
+			}
 		}
+	}
+
+	/**
+	 * 2.7.9: the first sync also brought the evaluation suites' questions (asked by the system, not by visitors).
+	 * Rows nobody has acted on are dropped and the sync starts over, now for visitors' questions only.
+	 */
+	public static function drop_untouched() {
+		global $wpdb;
+		$t = self::table();
+		$wpdb->query( "DELETE FROM {$t} WHERE state = 'pending' AND opens = 0 AND display_question = ''" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery
+		delete_option( self::OPT_SINCE );
 	}
 
 	public static function maybe_schedule() {
@@ -269,7 +284,7 @@ class TK_Questions {
 	public static function sync( $limit = 200 ) {
 		self::maybe_upgrade();
 		$since = (string) get_option( self::OPT_SINCE, '' );
-		$path  = '/v2/admin/answers?status=answered,false_premise_corrected&envelope=true&limit=' . (int) $limit .
+		$path  = '/v2/admin/answers?status=answered,false_premise_corrected&envelope=true&visitors=true&limit=' . (int) $limit .
 			( '' !== $since ? '&since=' . rawurlencode( $since ) : '' );
 		$res   = tk_api()->get( $path, true );
 		$items = array_reverse( (array) ( $res['items'] ?? array() ) ); // oldest first: the newest answer wins
@@ -277,6 +292,13 @@ class TK_Questions {
 		$out   = array( 'new' => 0, 'updated' => 0 );
 		$max   = $since;
 		foreach ( $items as $it ) {
+			if ( ! isset( $it['origin'] ) ) {
+				// an API older than the visitors filter: it would bring the evaluation questions back, so wait
+				return array( 'new' => 0, 'updated' => 0 );
+			}
+			if ( 'evaluation' === $it['origin'] ) {
+				continue;
+			}
 			$q   = (string) ( $it['normalized_question'] ?? '' );
 			$old = '' !== $q ? self::get( self::qkey( $q ) ) : null;
 			$row = self::merge( $old, (array) $it, $now );

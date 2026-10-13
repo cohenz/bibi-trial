@@ -96,3 +96,20 @@ TK_T::eq( '9.9.9.9', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '172.70.
 TK_T::eq( '5.6.7.8', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '5.6.7.8', 'HTTP_CF_CONNECTING_IP' => '9.9.9.9' ) ), 'visitor ip: a forged header from elsewhere is ignored' );
 TK_T::eq( '2a01::1', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '2606:4700::6810:1', 'HTTP_CF_CONNECTING_IP' => '2a01::1' ) ), 'visitor ip: IPv6 Cloudflare edge' );
 TK_T::ok( ! TK_Rest_Proxy::in_ranges( '104.32.0.1', array( '104.16.0.0/13' ) ) && TK_Rest_Proxy::in_ranges( '104.23.255.1', array( '104.16.0.0/13' ) ), 'cidr: boundaries' );
+
+// --- ask: a slow answer is not reported as a failure (2.7.3)
+if ( ! class_exists( 'WP_REST_Response' ) ) {
+	class WP_REST_Response { public $data; public $status; public function __construct( $d, $s = 200 ) { $this->data = $d; $this->status = $s; } } // phpcs:ignore
+}
+if ( ! function_exists( 'wp_generate_password' ) ) {
+	function wp_generate_password( $n = 12 ) { return str_repeat( 'a', $n ); } // phpcs:ignore
+}
+class TK_Test_Req { public function get_param( $k ) { return 'מה אמר פילבר?'; } } // phpcs:ignore
+$GLOBALS['tk_fake_api']->post_error = new TK_Api_Error( 'Knowledge API unreachable: cURL error 28: Operation timed out', 'timeout', 0 );
+$r = TK_Rest_Proxy::ask( new TK_Test_Req() );
+TK_T::eq( 503, $r->status, 'ask timeout: 503' );
+TK_T::ok( false !== strpos( $r->data['error'], 'עדיין בהכנה' ), 'ask timeout: says the answer is still being prepared' );
+TK_T::eq( TK_Rest_Proxy::ASK_TIMEOUT, $GLOBALS['tk_fake_api']->last_timeout, 'ask: the long timeout is passed to the API client' );
+$GLOBALS['tk_fake_api']->post_error = new TK_Api_Error( 'boom', 'internal_error', 500 );
+TK_T::ok( false !== strpos( TK_Rest_Proxy::ask( new TK_Test_Req() )->data['error'], 'לא ניתן לענות כרגע' ), 'ask: other failures keep the generic message' );
+$GLOBALS['tk_fake_api']->post_error = null;

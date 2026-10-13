@@ -96,7 +96,7 @@ class TK_Api_Client {
 	 * @return array Decoded JSON.
 	 * @throws TK_Api_Error On transport or API errors.
 	 */
-	public function request( $method, $path, $body = null, $admin = false, $extra_headers = array() ) {
+	public function request( $method, $path, $body = null, $admin = false, $extra_headers = array(), $timeout = null ) {
 		if ( ! $this->configured() ) {
 			throw new TK_Api_Error( 'API base URL is not configured', 'not_configured' );
 		}
@@ -125,12 +125,13 @@ class TK_Api_Client {
 				'method'      => $method,
 				'headers'     => $headers,
 				'body'        => null === $body ? null : $raw,
-				'timeout'     => (int) ( $this->cfg['timeout'] ?? 15 ),
+				'timeout'     => null !== $timeout ? (int) $timeout : (int) ( $this->cfg['timeout'] ?? 15 ),
 				'redirection' => 0,
 			)
 		);
 		if ( is_wp_error( $resp ) ) {
-			throw new TK_Api_Error( 'Knowledge API unreachable: ' . $resp->get_error_message(), 'unreachable' );
+			$timed_out = false !== stripos( $resp->get_error_message(), 'timed out' );
+			throw new TK_Api_Error( 'Knowledge API unreachable: ' . $resp->get_error_message(), $timed_out ? 'timeout' : 'unreachable' );
 		}
 		$status = (int) wp_remote_retrieve_response_code( $resp );
 		$data   = json_decode( (string) wp_remote_retrieve_body( $resp ), true );

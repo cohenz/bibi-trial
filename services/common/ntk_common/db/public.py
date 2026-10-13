@@ -220,6 +220,11 @@ class PgAskStore:
             return rows(conn, """SELECT ga.object_id, ga.payload FROM ntk.public_artifacts ga
                                  WHERE ga.artifact_type = 'summary' AND ga.object_type = 'hearing'""")
 
+    def published_witness_guides(self) -> list[dict]:
+        with self.engine.connect() as conn:
+            return rows(conn, """SELECT ga.object_id, ga.payload FROM ntk.public_artifacts ga
+                                 WHERE ga.artifact_type = 'guide' AND ga.object_type = 'witness'""")
+
     def public_units(self, unit_ids: list[str]) -> dict[str, UnitView]:
         with self.engine.connect() as conn:
             return units_by_ids(conn, unit_ids, published_only=True)

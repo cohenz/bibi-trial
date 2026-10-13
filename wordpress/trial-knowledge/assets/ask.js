@@ -20,6 +20,8 @@
 			btn.disabled = true;
 			out.setAttribute('aria-busy', 'true');
 			out.textContent = 'מחפש בחומר שפורסם…';
+			// a new answer is written and then checked by a second model: say so while it takes its time
+			var slow = setTimeout(function () { out.textContent = 'מנסח תשובה ובודק אותה מול המקורות… זה לוקח עד חצי דקה.'; }, 6000);
 			fetch(root.getAttribute('data-endpoint'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -35,7 +37,7 @@
 					}
 				})
 				.catch(function () { out.textContent = 'לא ניתן לענות כרגע.'; })
-				.then(function () { btn.disabled = false; out.setAttribute('aria-busy', 'false'); });
+				.then(function () { clearTimeout(slow); btn.disabled = false; out.setAttribute('aria-busy', 'false'); });
 		});
 	}
 	document.querySelectorAll('.tk-ask').forEach(init);

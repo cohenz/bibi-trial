@@ -205,6 +205,7 @@ class AskStore(Protocol):
     def process_events(self, as_of: dt.datetime) -> list[dict]: ...
     def published_claim_cards(self) -> list[dict]: ...
     def published_digests(self) -> list[dict]: ...
+    # optional: def published_witness_guides(self) -> list[dict]
     def public_units(self, unit_ids: list[str]) -> dict[str, UnitView]: ...
     def approved_rulings(self) -> list[dict]: ...
     def judicial_statements_for_terms(self, terms: list[str]) -> list[dict]: ...
@@ -220,7 +221,9 @@ class AskConfig:
     env: str = "development"
     verify_answers: bool = True
     independent_verifier: bool = False
-    max_context: int = 12
+    max_context: int = 14  # search hits (each Q/A exchange is kept whole, so up to twice as many units)
+    guide_context: int = 6  # passages behind the guides of witnesses the question names
+    digest_context: int = 6  # passages behind the best-matching hearing digests
     # cost control (13.10.2026): how much the writer / verifier may think (a level or a token budget; "" = model default)
     thinking: str = "low"
     verify_thinking: str = ""
@@ -564,17 +567,25 @@ class AskEngine:
         return AskResult(env, False, {"false_premise": ["speaker_attribution"]})
 
     def _retrieve(self, q: str) -> tuple[list[ContextItem], dict]:
+        """Claim cards, then the published guides of the witnesses the question names, then the hearing digests that
+        share the most words with it, then search — each layer with its own share, so search always has room
+        (13.10.2026: a long question shared too few words with any digest, and a named witness's guide was never used)."""
         terms = set(query_terms(q))
         items: list[ContextItem] = []
         seen: set[str] = set()
-        origins: dict[str, Any] = {"claim_cards": [], "digests": [], "search": 0}
+        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "search": 0}
 
-        def add(uid_list: list[str], bucket: str, origin: str, attribution: str | None = None) -> None:
+        def add(uid_list: list[str], bucket: str, origin: str, attribution: str | None = None, cap: int | None = None) -> int:
             units = self.store.public_units([u for u in uid_list if u not in seen])
+            n = 0
             for uid in uid_list:
+                if cap is not None and n >= cap:
+                    break
                 if uid in units and uid not in seen:
                     seen.add(uid)
                     items.append(ContextItem(units[uid], bucket, attribution, origin))
+                    n += 1
+            return n
 
         if terms:
             for card in self.store.published_claim_cards():
@@ -588,36 +599,94 @@ class AskEngine:
                         add(ev["citation_ids"], "weakens", "claim_card")
                     if p.get("court_position"):
                         add(p["court_position"]["citation_ids"], "court", "claim_card")
+            guides_fn = getattr(self.store, "published_witness_guides", None)
+            room = self.cfg.guide_context
+            for g in named_witnesses(q, guides_fn() if guides_fn else []):
+                if room <= 0:
+                    break
+                origins["witness_guides"].append(g["object_id"])
+                cids = [c for b in g["payload"].get("blocks", []) if b.get("block") == "testimony"
+                        for it in b.get("items", []) for c in it.get("citation_ids", [])[:1]]
+                room -= add(cids, "context", "witness_guide", cap=room)
+            # a digest enters when it shares half the question's words — or, for a long question, at least three
+            need = max(2, min(-(-len(terms) // 2), 3))
+            scored = []
             for dg in self.store.published_digests():
                 p = dg["payload"]
                 d_terms = set(hebrew.search_terms(" ".join(p.get("topics", [])) + " " + p.get("summary", "")))
-                if len(terms & d_terms) / max(1, len(terms)) >= 0.5:
-                    origins["digests"].append(p["hearing_id"])
-                    for s in p.get("summary_sentences", []):
-                        add(s["citation_ids"], "context", "digest")
-        if len(items) < self.cfg.max_context:
-            resp = self.search.search(SearchRequest(q, SearchFilters(published_only=True), limit=self.cfg.max_context))
-            origins["search"] = len(resp.hits)
-            # relevance floor: a hit needs a lexical/identifier/graph signal or agreement of two signals;
-            # fuzzy-only matches (one n-gram or vector signal) are not enough to answer from
-            relevant = [h for h in resp.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
-            origins["search_relevant"] = len(relevant)
-            hit_ids = [h.source_unit_id for h in relevant]
-            # a question is phrased like the user's question and ranks high; the witness's answer ("נכון", "לא זוכר")
-            # does not. Keep every Q/A exchange whole: question first, then its answer.
-            partners_fn = getattr(self.store, "exchange_partners", None)
-            partners = partners_fn(hit_ids) if partners_fn else {}
-            ordered: list[str] = []
-            for uid in hit_ids:
-                p = partners.get(uid)
-                pair = [uid, p] if p and relevant_type(relevant, uid) == "question" else ([p, uid] if p else [uid])
-                ordered.extend(x for x in pair if x not in ordered)
-            origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
-            add(ordered, "context", "search")
-        return items[: self.cfg.max_context + origins.get("exchange_partners_added", 0)][:MAX_CONTEXT_WITH_PAIRS], origins
+                shared = len(terms & d_terms)
+                if shared >= need:
+                    scored.append((shared, p.get("hearing_id") or dg.get("object_id"), p))
+            room = self.cfg.digest_context
+            for _shared, hid, p in sorted(scored, key=lambda x: (-x[0], str(x[1])))[:3]:
+                if room <= 0:
+                    break
+                origins["digests"].append(hid)
+                for sent in p.get("summary_sentences", []):
+                    room -= add(sent["citation_ids"][:1], "context", "digest", cap=min(room, 1))
+        resp = self.search.search(SearchRequest(q, SearchFilters(published_only=True), limit=self.cfg.max_context))
+        origins["search"] = len(resp.hits)
+        # relevance floor: a hit needs a lexical/identifier/graph signal or agreement of two signals;
+        # fuzzy-only matches (one n-gram or vector signal) are not enough to answer from
+        relevant = [h for h in resp.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+        origins["search_relevant"] = len(relevant)
+        hit_ids = [h.source_unit_id for h in relevant]
+        # a question is phrased like the user's question and ranks high; the witness's answer ("נכון", "לא זוכר")
+        # does not. Keep every Q/A exchange whole: question first, then its answer.
+        partners_fn = getattr(self.store, "exchange_partners", None)
+        partners = partners_fn(hit_ids) if partners_fn else {}
+        ordered: list[str] = []
+        for uid in hit_ids:
+            p = partners.get(uid)
+            pair = [uid, p] if p and relevant_type(relevant, uid) == "question" else ([p, uid] if p else [uid])
+            ordered.extend(x for x in pair if x not in ordered)
+        origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
+        add(ordered, "context", "search")
+        return items[:MAX_CONTEXT_WITH_PAIRS], origins
 
 
-MAX_CONTEXT_WITH_PAIRS = 24
+# witnesses who are also defendants are named in almost every question: their guide enters only by full name
+DEFENDANT_FAMILY_NAMES = frozenset({"נתניהו", "אלוביץ", "מוזס"})
+
+
+def named_witnesses(q: str, guides_: list[dict]) -> list[dict]:
+    """Published witness guides whose person the question names: the full name, or a family name that points to one
+    witness (never a defendant's family name alone)."""
+    from .guides import name_matches
+
+    t = " " + hebrew.normalize(q).replace("'", "").replace("׳", "") + " "
+
+    def parts(name: str) -> list[str]:
+        clean = re.sub(r"\([^)]*\)", " ", hebrew.normalize(name)).replace("'", "").replace("׳", "")
+        return [x for x in re.split(r"[\s-]+", clean) if len(x) > 1]
+
+    def days(g: dict) -> int:
+        return len(g["payload"].get("source_version_ids") or [])
+
+    family: dict[str, list[dict]] = {}
+    for g in guides_:
+        ps = parts(g["payload"].get("title") or "")
+        if ps:
+            family.setdefault(ps[-1], []).append(g)
+
+    def by_family(g: dict, fam: str) -> bool:
+        """The family name alone points to this witness: the only one, or one who testified at least twice as long."""
+        others = sorted((days(x) for x in family.get(fam, []) if x is not g), reverse=True)
+        return not others or days(g) >= 2 * max(1, others[0])
+    out = []
+    for g in guides_:
+        name = g["payload"].get("title") or ""
+        ps = parts(name)
+        if not ps or not name_matches(name, q):
+            continue
+        full = all(re.search(rf"(?<![א-ת]){re.escape(x)}(?![א-ת])", t) for x in ps)
+        unique = by_family(g, ps[-1]) and not any(ps[-1].startswith(hebrew.normalize(d)) for d in DEFENDANT_FAMILY_NAMES)
+        if full or unique:
+            out.append(g)
+    return out[:3]
+
+
+MAX_CONTEXT_WITH_PAIRS = 32
 
 
 def relevant_type(hits: list, uid: str) -> str | None:

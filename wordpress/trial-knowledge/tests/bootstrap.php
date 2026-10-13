@@ -119,7 +119,13 @@ final class TK_Fake_Api {
 		}
 		return array( 'path' => $path, 'n' => count( $this->calls ) );
 	}
-	public function request( $method, $path, $body = null, $admin = false, $h = array() ) {
+	public $post_error = null;
+	public $last_timeout = null;
+	public function request( $method, $path, $body = null, $admin = false, $h = array(), $timeout = null ) {
+		$this->last_timeout = $timeout;
+		if ( 'POST' === $method && $this->post_error ) {
+			throw $this->post_error;
+		}
 		if ( 'GET' !== $method ) {
 			throw new TK_Api_Error( 'not in tests', 'internal_error', 500 );
 		}

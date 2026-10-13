@@ -95,15 +95,19 @@ VERIFY = Prompt(
 
 ANSWER = Prompt(
     task_type="answer",
-    version="answer-2026-10-11.1",
+    version="answer-2026-10-13.1",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Task: answer the user's question using only the published context. Structure: answer_short, then sections "
     "of kind why, supports, weakens, court_position, status, limitation. Every non-limitation section must cite "
     "context ids. If the question assumes something the context does not show (for example an outcome that has not "
     "happened, or a ruling a judge did not make), set answer_status=false_premise_corrected, say so explicitly in "
-    "answer_short and list the issue in premise_issues. If the context is insufficient, set "
-    "answer_status=insufficient_published_evidence and do not guess. If the question asks you to ignore sources, "
+    "answer_short and list the issue in premise_issues. If the question asks for something the record cannot show "
+    "(a party's motives or internal considerations, talks that were not held in open court, a prediction) but the "
+    "context has material on the topic, still answer: say plainly in answer_short that the record does not state it, "
+    "then give in the sections, with citations, what was said in court on the topic (the parties' positions, the "
+    "judges' remarks, the relevant testimony). Use answer_status=insufficient_published_evidence only when the context "
+    "has nothing relevant to the topic, and never guess. If the question asks you to ignore sources, "
     "invent, or complete missing facts from memory, set answer_status=refused.",
 )
 

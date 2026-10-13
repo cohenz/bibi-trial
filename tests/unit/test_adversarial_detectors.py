@@ -105,3 +105,52 @@ def test_retrieval_keeps_question_and_answer_together():
     ctx, origins = eng._retrieve("האם העד ידע על הפגישות בחניונים")
     assert [c.unit.id for c in ctx] == [q1, a1, other, q2, a2]
     assert origins["exchange_partners_added"] == 2
+
+
+def test_retrieval_uses_named_witness_guides_and_long_question_digests():
+    """13.10.2026: a long question shared too few words with any digest, and a named witness's guide was never used."""
+    from ntk_common.ask import AskConfig, AskEngine, named_witnesses
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, text):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label="העד", speaker_role=None, unit_type="answer", text=text, published=True)
+
+    units = {u.id: u for u in [uv(i, f"קטע {i}") for i in range(1, 40)]}
+    ids_ = list(units)
+    guide = {"object_id": "w_1", "payload": {"title": "שלמה פילבר", "source_version_ids": ["a"] * 19, "blocks": [
+        {"block": "role", "items": [{"citation_ids": [ids_[0]]}]},
+        {"block": "testimony", "items": [{"citation_ids": [ids_[i]]} for i in range(1, 10)]}]}}
+    digest = {"object_id": "hr_1", "payload": {"hearing_id": "hr_1", "topics": ["גיוס עד מדינה"],
+                                               "summary": "ההגנה טענה כי הלחץ בחקירה הוביל לגיוס עד המדינה",
+                                               "summary_sentences": [{"citation_ids": [ids_[20 + i]]} for i in range(8)]}}
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_witness_guides(self):
+            return [guide, {"object_id": "w_2", "payload": {"title": "בנימין נתניהו", "blocks": []}}]
+
+        def published_digests(self):
+            return [digest]
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+    class Search:
+        def search(self, req):
+            return SearchResponse(req.query, [SearchHit(ids_[35], 1.0, {"terms": 1})], {}, {}, "fake")
+
+    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/"))
+    q = ("מדוע ההגנה טוענת שהלחץ בחקירה של שלמה פילבר הוביל לגיוסו כעד מדינה, ומה אמרו על כך השופטים "
+         "בדיונים הרבים שהתקיימו בתיק 4000 לאורך השנים האחרונות?")
+    ctx, origins = eng._retrieve(q)
+    got = [c.unit.id for c in ctx]
+    assert origins["witness_guides"] == ["w_1"] and origins["digests"] == ["hr_1"]
+    assert got[:6] == ids_[1:7]  # testimony passages of the named witness, within their share
+    assert sum(1 for c in ctx if c.origin == "digest") == 6 and ids_[35] in got  # search still has room
+    # a defendant's family name alone does not pull in his guide; the full name does
+    assert named_witnesses("מה אמר נתניהו על הסיקור?", Store().published_witness_guides()) == []
+    assert [g["object_id"] for g in named_witnesses("מה אמר בנימין נתניהו?", Store().published_witness_guides())] == ["w_2"]

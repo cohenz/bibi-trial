@@ -51,7 +51,13 @@ class TK_Rest_Proxy {
 	/**
 	 * @param WP_REST_Request $req Request.
 	 */
+	/** A new answer (writer + verifier) takes 10–40 seconds; other API calls keep the short timeout (2.7.3). */
+	const ASK_TIMEOUT = 55;
+
 	public static function ask( $req ) {
+		if ( function_exists( 'set_time_limit' ) && ! ( defined( 'TK_TESTING' ) && TK_TESTING ) ) {
+			@set_time_limit( self::ASK_TIMEOUT + 15 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		}
 		$ip      = self::visitor_ip();
 		$session = substr( hash( 'sha256', $ip . '|' . ( isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '' ) ), 0, 32 );
 		try {
@@ -64,7 +70,8 @@ class TK_Rest_Proxy {
 					'client_request_id' => 'wp-' . wp_generate_password( 12, false, false ),
 				),
 				false,
-				self::client_headers( $ip, $session )
+				self::client_headers( $ip, $session ),
+				self::ASK_TIMEOUT
 			);
 		} catch ( TK_Api_Error $e ) {
 			$status = 429 === $e->status ? 429 : ( $e->status >= 400 && $e->status < 500 ? 400 : 503 );
@@ -73,6 +80,10 @@ class TK_Rest_Proxy {
 					? __( 'הגענו למכסת השאלות החדשות להיום. שאלות שכבר נשאלו עדיין נענות, ואפשר לחפש בעמודי העדים, הדיונים והמסמכים. נסו שוב מחר.', 'trial-knowledge' )
 					: __( 'שאלתם היום הרבה שאלות חדשות. שאלות שכבר נשאלו עדיין נענות; לשאלות חדשות נסו שוב מחר.', 'trial-knowledge' );
 				return new WP_REST_Response( array( 'error' => $msg ), 429 );
+			}
+			if ( 'timeout' === $e->api_code ) {
+				// the answer keeps being prepared and is stored: asking again in a minute returns it at once, free
+				return new WP_REST_Response( array( 'error' => __( 'התשובה עדיין בהכנה. נסו לשאול שוב בעוד דקה — היא תופיע מיד.', 'trial-knowledge' ) ), 503 );
 			}
 			return new WP_REST_Response( array( 'error' => 429 === $status ? __( 'נשאלו יותר מדי שאלות. נסו שוב בעוד דקה.', 'trial-knowledge' ) : __( 'לא ניתן לענות כרגע.', 'trial-knowledge' ) ), $status );
 		}

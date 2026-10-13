@@ -34,6 +34,7 @@ $tk_cur = TK_Public_Pages::$current;
 				'exchanges'  => TK_Guides::hearing_exchanges( $tk_h, $tk_slugs ),
 				'tab'        => TK_Public_Pages::tab_param(),
 				'base_url'   => TK_Public_Pages::url( 'hearing', $tk_h['id'] ),
+				'neighbors'  => TK_Guides::hearing_neighbors( $tk_h['id'] ),
 			)
 		);
 	} else {

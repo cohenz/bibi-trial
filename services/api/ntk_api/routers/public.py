@@ -262,7 +262,9 @@ def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -
         res = st.ask.answer(body.question, as_of=body.as_of, locale=body.locale, client_request_id=body.client_request_id)
     except ValueError as exc:
         raise ApiError(400, "invalid_request", str(exc)) from exc
-    return _json(res.envelope, cache="no-store")
+    from ntk_common import editorial
+
+    return _json(editorial.polish(res.envelope), cache="no-store")
 
 
 @router.get("/answers/{answer_id}", dependencies=[Depends(rate_limit("public"))])

@@ -20,11 +20,11 @@ class TK_Render_Guides {
 		'one_line'   => 'בשורה אחת',
 		'overview'   => 'סקירה',
 		'defendants' => 'הנאשמים',
-		'alleged'    => 'מה טוען כתב האישום',
-		'people'     => 'מי מעורב',
+		'alleged'    => 'מה טוען כתב האישום?',
+		'people'     => 'מי מעורב?',
 		'charges'    => 'האישומים',
 		'events'     => 'ציר הזמן של התיק',
-		'role'       => 'מי העד או העדה',
+		'role'       => 'מה הקשר לתיק?',
 		'testimony'  => 'עיקרי העדות',
 	);
 
@@ -46,7 +46,7 @@ class TK_Render_Guides {
 		'procedure' => 'ההליך בבית המשפט',
 		'evidence'  => 'ראיות ועדויות',
 		'offense'   => 'עבירות',
-		'people'    => 'מי ומי באולם',
+		'people'    => 'מי ומי באולם?',
 		'documents' => 'מסמכים',
 	);
 
@@ -59,11 +59,19 @@ class TK_Render_Guides {
 
 	const NEUTRAL = 'כתב אישום הוא טענות התביעה. נאשם בחזקת חפות כל עוד לא הוכרעה אשמתו.';
 
+	/** Witness groups on the witnesses page, in trial order (TK_Render_Nav::witness_stage()). */
+	const STAGE_GROUPS = array(
+		'prosecution' => 'עדי התביעה',
+		'defendant'   => 'הנאשם',
+		'defense'     => 'עדי ההגנה',
+		'other'       => 'עדים נוספים מאז תחילת עדות הנאשם',
+	);
+
 	/** Witness side as named in court notices (2.4). */
 	const SIDES = array(
-		'prosecution' => 'עד/ת תביעה',
-		'defense'     => 'עד/ת הגנה',
-		'court'       => 'עד/ת בית המשפט',
+		'prosecution' => 'מטעם התביעה',
+		'defense'     => 'מטעם ההגנה',
+		'court'       => 'מטעם בית המשפט',
 	);
 
 	const SIDES_SHORT = array(
@@ -233,15 +241,23 @@ class TK_Render_Guides {
 	 */
 	public static function start( array $g, array $opts = array() ) {
 		$urls = self::entry_urls( $opts );
+		$ws   = (array) ( $g['witnesses'] ?? array() );
 		$out  = '<div class="tk-guide tk-start" dir="rtl" lang="he">';
+		$out .= TK_Render_Nav::bar( 'home' );
 
-		// intro + neutrality line
+		// intro + neutrality line + a door for newcomers
 		$out .= '<header class="tk-intro">';
 		$out .= '<p class="tk-intro__lead tk-glossable">' . esc_html__( 'מדריך נגיש למשפט הפלילי של בנימין נתניהו (ת״פ 67104-01-20, בית המשפט המחוזי בירושלים). כל מה שכתוב כאן נשען על תיק בית המשפט: ליד כל משפט יש קישור לעמוד ולשורות במקור — בפרוטוקולים, בכתב האישום ובהחלטות.', 'trial-knowledge' ) . '</p>';
 		$out .= '<p class="tk-neutral" role="note"><strong>' . esc_html( self::NEUTRAL ) . '</strong> <a href="' . esc_url( $urls['glossary'] . '#term-presumption-of-innocence' ) . '">' . esc_html__( 'מהי חזקת החפות?', 'trial-knowledge' ) . '</a></p>';
+		$out .= '<p class="tk-newcomer"><a href="' . esc_url( $urls['glossary'] . '#tk-steps' ) . '">' . esc_html__( 'חדשים כאן? המשפט הפלילי בחמישה צעדים', 'trial-knowledge' ) . ' <span aria-hidden="true">←</span></a></p>';
 		$out .= '</header>';
 
-		// three cases
+		// where the trial stands: stages, then the latest hearing and the counts
+		$lh    = $g['latest_hearing'] ?? null;
+		$stand = TK_Render_Nav::stages_html( $ws, $lh['hearing_date'] ?? '' ) . self::status( $g, $urls, $opts['latest_day'] ?? null );
+		$out  .= self::section( 'tk-status', __( 'איפה המשפט עומד?', 'trial-knowledge' ), $stand );
+
+		// three cases; the indictment overview folded under them
 		$by_key = array();
 		foreach ( (array) ( $g['cases'] ?? array() ) as $c ) {
 			$by_key[ (string) $c['key'] ] = $c;
@@ -250,29 +266,56 @@ class TK_Render_Guides {
 		foreach ( TK_Guides::CASE_KEYS as $key ) {
 			$cards .= self::case_card( $key, $by_key[ $key ] ?? null, self::cit_map( $g['indictment']['citations'] ?? array() ) );
 		}
-		$out .= self::section( 'tk-cases', __( 'שלושת התיקים', 'trial-knowledge' ), $cards . '</div>' );
-
-		// indictment overview
+		$cards .= '</div>';
 		if ( ! empty( $g['indictment'] ) ) {
-			$out .= self::section( 'tk-indictment', __( 'כתב האישום בקצרה', 'trial-knowledge' ), self::indictment( $g['indictment'] ) );
+			$cards .= '<details class="tk-fold" id="tk-indictment"><summary class="tk-fold__s">' . esc_html__( 'כתב האישום בקצרה: מי הנאשמים ומה מיוחס להם?', 'trial-knowledge' ) . '</summary>' . self::indictment( $g['indictment'] ) . '</details>';
 		}
+		$out .= self::section( 'tk-cases', __( 'שלושת התיקים', 'trial-knowledge' ), $cards );
 
-		// where the trial stands
-		$out .= self::section( 'tk-status', __( 'איפה המשפט עומד', 'trial-knowledge' ), self::status( $g, $urls, $opts['latest_day'] ?? null ) );
-
-		// witnesses
-		$ws = (array) ( $g['witnesses'] ?? array() );
+		// key witnesses, not all of them
 		if ( $ws ) {
-			$out .= self::section( 'tk-witnesses', __( 'עדים', 'trial-knowledge' ), self::witnesses_list( $ws, array( 'compact' => true ) ) . '<p><a class="tk-more" href="' . esc_url( $urls['witnesses'] ) . '">' . esc_html__( 'לכל העדים', 'trial-knowledge' ) . '</a></p>' );
+			$out .= self::section( 'tk-witnesses', __( 'עדים מרכזיים', 'trial-knowledge' ), self::key_witnesses( $ws, 8 ) .
+				'<p><a class="tk-more" href="' . esc_url( $urls['witnesses'] ) . '">' . esc_html( sprintf( __( 'לכל %d העדים, לפי שלבי המשפט', 'trial-knowledge' ), count( $ws ) ) ) . ' <span aria-hidden="true">←</span></a></p>' );
 		}
 
 		// entry links
-		$out .= self::section( 'tk-entries', __( 'לאן ממשיכים', 'trial-knowledge' ), self::entries( $g, $urls, (array) ( $opts['latest_docs'] ?? array() ) ) );
+		$out .= self::section( 'tk-entries', __( 'לאן ממשיכים?', 'trial-knowledge' ), self::entries( $g, $urls, (array) ( $opts['latest_docs'] ?? array() ) ) );
 
 		if ( ! empty( $opts['ask_html'] ) ) {
 			$out .= '<section class="tk-sec tk-sec--ask" id="tk-ask" aria-labelledby="tk-ask-h"><h2 class="tk-sec__h" id="tk-ask-h">' . esc_html__( 'שאלו את המאגר', 'trial-knowledge' ) . '</h2>' . $opts['ask_html'] . '</section>';
 		}
 		return $out . '</div>';
+	}
+
+	/**
+	 * The witnesses with the most published testimony days, each with the stage of the trial they belong to.
+	 *
+	 * @param array $ws /v2/guide witnesses.
+	 * @param int   $n  how many.
+	 */
+	public static function key_witnesses( array $ws, $n = 8 ) {
+		$top = $ws;
+		usort(
+			$top,
+			static function ( $a, $b ) {
+				return ( (int) ( $b['hearing_count'] ?? 0 ) <=> (int) ( $a['hearing_count'] ?? 0 ) ) ?: strcmp( (string) ( $a['first_date'] ?? '' ), (string) ( $b['first_date'] ?? '' ) );
+			}
+		);
+		$top    = array_slice( $top, 0, $n );
+		$labels = self::STAGE_GROUPS;
+		$out    = '<ul class="tk-keyw">';
+		foreach ( $top as $w ) {
+			$stage = TK_Render_Nav::witness_stage( $w, $ws );
+			$out  .= '<li class="tk-keyw__item"><a class="tk-keyw__name" href="' . esc_url( TK_Public_Pages::url( 'witness', $w['slug'] ) ) . '">' . esc_html( $w['name'] ) . '</a>' .
+				'<span class="tk-keyw__meta">' . esc_html( $labels[ $stage ] ?? '' ) . ' · ' . esc_html( self::days_label( (int) ( $w['hearing_count'] ?? 0 ) ) ) . '</span>' .
+				( ! empty( $w['cases'] ) ? '<span class="tk-keyw__cases">' . self::case_badges( $w['cases'], false ) . '</span>' : '' ) . '</li>';
+		}
+		return $out . '</ul>';
+	}
+
+	/** "יום עדות אחד" / "28 ימי עדות". */
+	public static function days_label( $n ) {
+		return 1 === (int) $n ? __( 'יום עדות אחד', 'trial-knowledge' ) : sprintf( __( '%d ימי עדות', 'trial-knowledge' ), (int) $n );
 	}
 
 	/** Default URLs of the entry points (virtual routes and the WP document pages). */
@@ -457,7 +500,7 @@ class TK_Render_Guides {
 		foreach ( $ws as $w ) {
 			$n      = (int) ( $w['hearing_count'] ?? 0 );
 			$is_cur = $cur && $cur === $w['slug'];
-			$out   .= '<li class="tk-wlist__item' . ( $is_cur ? ' tk-wlist__item--current' : '' ) . '">';
+			$out   .= '<li class="tk-wlist__item' . ( $is_cur ? ' tk-wlist__item--current' : '' ) . '" data-cases="' . esc_attr( implode( ' ', (array) ( $w['cases'] ?? array() ) ) ) . '">';
 			$out   .= '<a class="tk-wlist__name" href="' . esc_url( TK_Public_Pages::url( 'witness', $w['slug'] ) ) . '"' . ( $is_cur ? ' aria-current="page"' : '' ) . '>' . esc_html( $w['name'] ) . '</a>';
 			if ( ! empty( $w['label'] ) ) {
 				$out .= ' <span class="tk-badge tk-badge--label">' . esc_html( $w['label'] ) . '</span>';
@@ -481,6 +524,62 @@ class TK_Render_Guides {
 	}
 
 	/**
+	 * All witnesses by stage of the trial (prosecution, the defendant, defence), the most heard first; witnesses heard
+	 * on one day are folded. Case filter buttons (assets/reading.js) hide the others; without JS everything shows.
+	 *
+	 * @param array $ws /v2/guide witnesses.
+	 */
+	public static function witnesses_grouped( array $ws ) {
+		if ( ! $ws ) {
+			return '<p class="tk-empty">' . esc_html__( 'עדיין אין עדים בחומר שפורסם.', 'trial-knowledge' ) . '</p>';
+		}
+		$groups = array();
+		foreach ( $ws as $w ) {
+			$groups[ TK_Render_Nav::witness_stage( $w, $ws ) ][] = $w;
+		}
+		$out  = '<div class="tk-wgroups" data-tk-filter dir="rtl" lang="he">';
+		$out .= '<div class="tk-filter" role="group" aria-label="' . esc_attr__( 'סינון לפי תיק', 'trial-knowledge' ) . '"><span class="tk-muted">' . esc_html__( 'תיק:', 'trial-knowledge' ) . '</span> ' .
+			'<button type="button" class="tk-filter__b is-on" data-case="" aria-pressed="true">' . esc_html__( 'הכול', 'trial-knowledge' ) . '</button>';
+		foreach ( TK_Guides::CASE_KEYS as $k ) {
+			$out .= ' <button type="button" class="tk-filter__b tk-case--' . esc_attr( $k ) . '" data-case="' . esc_attr( $k ) . '" aria-pressed="false">' . esc_html( $k ) . '</button>';
+		}
+		$out .= '</div>';
+		foreach ( self::STAGE_GROUPS as $key => $label ) {
+			if ( empty( $groups[ $key ] ) ) {
+				continue;
+			}
+			$list = $groups[ $key ];
+			usort(
+				$list,
+				static function ( $a, $b ) {
+					$na = (int) ( $a['hearing_count'] ?? 0 ) + (int) ( $a['appearance_count'] ?? 0 );
+					$nb = (int) ( $b['hearing_count'] ?? 0 ) + (int) ( $b['appearance_count'] ?? 0 );
+					return ( $nb <=> $na ) ?: strcmp( (string) ( $a['first_date'] ?? '' ), (string) ( $b['first_date'] ?? '' ) );
+				}
+			);
+			$main = $once = array();
+			foreach ( $list as $w ) {
+				if ( (int) ( $w['hearing_count'] ?? 0 ) + (int) ( $w['appearance_count'] ?? 0 ) > 1 || 'defendant' === $key ) {
+					$main[] = $w;
+				} else {
+					$once[] = $w;
+				}
+			}
+			$out .= '<section class="tk-sec tk-wgroup" id="tk-wg-' . esc_attr( $key ) . '"><h2 class="tk-sec__h">' . esc_html( $label ) .
+				' <span class="tk-sec__count">' . count( $list ) . '</span></h2>';
+			if ( $main ) {
+				$out .= self::witnesses_list( $main );
+			}
+			if ( $once ) {
+				$out .= '<details class="tk-fold"><summary class="tk-fold__s">' . esc_html( sprintf( __( 'עוד %d עדים שהעידו יום אחד', 'trial-knowledge' ), count( $once ) ) ) . '</summary>' .
+					self::witnesses_list( $once, array( 'compact' => true ) ) . '</details>';
+			}
+			$out .= '</section>';
+		}
+		return $out . '</div>';
+	}
+
+	/**
 	 * "3 דיונים מתומללים · 2 ימי עדות נוספים" — transcribed hearings and days known only from court notices.
 	 *
 	 * @param int $hearings    hearing_count.
@@ -489,16 +588,15 @@ class TK_Render_Guides {
 	public static function witness_counts( $hearings, $appearances ) {
 		$parts = array();
 		if ( $hearings ) {
-			$parts[] = 1 === $hearings ? __( 'דיון מתומלל אחד', 'trial-knowledge' ) : sprintf( __( '%d דיונים מתומללים', 'trial-knowledge' ), $hearings );
+			$parts[] = self::days_label( $hearings );
 		}
 		if ( $appearances ) {
-			if ( $hearings ) {
-				$parts[] = 1 === $appearances ? __( 'יום עדות נוסף אחד', 'trial-knowledge' ) : sprintf( __( '%d ימי עדות נוספים', 'trial-knowledge' ), $appearances );
-			} else {
-				$parts[] = 1 === $appearances ? __( 'יום עדות אחד לפי הודעת בית המשפט', 'trial-knowledge' ) : sprintf( __( '%d ימי עדות לפי הודעות בית המשפט', 'trial-knowledge' ), $appearances );
+			$parts[] = 1 === $appearances ? __( 'עוד יום אחד לפי הודעת בית המשפט', 'trial-knowledge' ) : sprintf( __( 'עוד %d ימים לפי הודעות בית המשפט', 'trial-knowledge' ), $appearances );
+			if ( ! $hearings ) {
+				$parts = array( 1 === $appearances ? __( 'יום עדות אחד לפי הודעת בית המשפט', 'trial-knowledge' ) : sprintf( __( '%d ימי עדות לפי הודעות בית המשפט', 'trial-knowledge' ), $appearances ) );
 			}
 		}
-		return $parts ? implode( ' · ', $parts ) : __( 'אין עדיין דיונים מתומללים', 'trial-knowledge' );
+		return $parts ? implode( ' · ', $parts ) : __( 'אין עדיין פרוטוקול של העדות', 'trial-knowledge' );
 	}
 
 	/**
@@ -510,7 +608,8 @@ class TK_Render_Guides {
 	public static function witness_page( array $w, array $all = array() ) {
 		$cits = self::cit_map( $w['citations'] ?? array() );
 		$out  = '<article class="tk-guide tk-witness" dir="rtl" lang="he">';
-		$out .= '<header class="tk-head"><p class="tk-kicker">' . esc_html__( 'עדים במשפט', 'trial-knowledge' ) . '</p>';
+		$out .= TK_Render_Nav::bar( 'witnesses', array( array( __( 'עדים', 'trial-knowledge' ), TK_Public_Pages::section_url( 'witnesses' ) ), array( $w['name'], '' ) ) );
+		$out .= '<header class="tk-head"><p class="tk-kicker">' . esc_html( self::STAGE_GROUPS[ TK_Render_Nav::witness_stage( self::summary_of( $w, $all ), $all ) ] ?? __( 'עדים במשפט', 'trial-knowledge' ) ) . '</p>';
 		$out .= '<h1 class="tk-head__title">' . esc_html( $w['name'] ) . '</h1>';
 		$meta = array();
 		if ( ! empty( $w['label'] ) ) {
@@ -523,59 +622,149 @@ class TK_Render_Guides {
 		if ( isset( self::SIDES[ $side ] ) ) {
 			$meta[] = '<span class="tk-badge tk-badge--side tk-badge--' . esc_attr( $side ) . '">' . esc_html( self::SIDES[ $side ] ) . '</span>';
 		}
-		$n    = count( (array) ( $w['hearings'] ?? array() ) );
-		$apps = (array) ( $w['appearances'] ?? array() );
-		$only = 0;
-		foreach ( $apps as $a ) {
-			$only += empty( $a['has_transcript'] ) ? 1 : 0;
-		}
-		if ( $n ) {
-			$meta[] = '<span class="tk-muted">' . esc_html( 1 === $n ? __( 'העיד/ה בדיון אחד שפורסם', 'trial-knowledge' ) : sprintf( __( 'העיד/ה ב־%d דיונים שפורסמו', 'trial-knowledge' ), $n ) ) . '</span>';
-		}
-		if ( $only ) {
-			$meta[] = '<span class="tk-muted">' . esc_html( $n ? ( 1 === $only ? __( 'ועוד יום עדות אחד לפי הודעת בית המשפט', 'trial-knowledge' ) : sprintf( __( 'ועוד %d ימי עדות לפי הודעות בית המשפט', 'trial-knowledge' ), $only ) ) : ( 1 === $only ? __( 'יום עדות אחד לפי הודעת בית המשפט', 'trial-knowledge' ) : sprintf( __( '%d ימי עדות לפי הודעות בית המשפט', 'trial-knowledge' ), $only ) ) ) . '</span>';
-		}
-		if ( ! $n && ! $only ) {
-			$meta[] = '<span class="tk-muted">' . esc_html__( 'טרם פורסם דיון שבו העיד/ה', 'trial-knowledge' ) . '</span>';
-		}
-		$out .= '<p class="tk-head__meta">' . implode( ' ', $meta ) . '</p></header>';
+		$hearings = (array) ( $w['hearings'] ?? array() );
+		$apps     = (array) ( $w['appearances'] ?? array() );
+		$n        = count( $hearings );
+		$only     = array_values( array_filter( $apps, static function ( $a ) { return empty( $a['has_transcript'] ); } ) );
+		$dates    = array_merge( array_column( $hearings, 'hearing_date' ), array_column( $only, 'date' ) );
+		sort( $dates );
+		$meta[] = '<span class="tk-muted">' . esc_html( self::witness_counts( $n, count( $only ) ) ) . ( $dates ? ' · ' . esc_html( self::date_range( $dates[0], end( $dates ) ) ) : '' ) . '</span>';
+		$out   .= '<p class="tk-head__meta">' . implode( ' ', $meta ) . '</p></header>';
 
+		// layer 1: who, and the gist of the testimony (first points; the rest folded)
 		$role = self::block( $w, 'role' );
 		$test = self::block( $w, 'testimony' );
 		if ( $role ) {
 			$out .= self::section( 'tk-w-role', self::BLOCKS['role'], self::prose( $role, $cits ) );
 		}
 		if ( $test ) {
-			$out .= self::section( 'tk-w-testimony', self::BLOCKS['testimony'], self::prose( $test, $cits ) );
+			$body = self::prose( array_slice( $test, 0, 3 ), $cits );
+			if ( count( $test ) > 3 ) {
+				$body .= '<details class="tk-fold"><summary class="tk-fold__s">' . esc_html( sprintf( __( 'עוד %d נקודות מהעדות', 'trial-knowledge' ), count( $test ) - 3 ) ) . '</summary>' . self::prose( array_slice( $test, 3 ), $cits ) . '</details>';
+			}
+			$out .= self::section( 'tk-w-testimony', self::BLOCKS['testimony'], $body );
 		}
 		if ( ! $role && ! $test ) {
 			if ( $n ) {
-				$out .= '<p class="tk-notice tk-notice--soft">' . esc_html__( 'סקירה של העדות בהכנה. בינתיים מוצגים כאן עיקרי הדיונים שבהם העיד/ה, מתוך תקצירי הדיונים שפורסמו.', 'trial-knowledge' ) . '</p>';
+				$out .= '<p class="tk-notice tk-notice--soft">' . esc_html__( 'סקירה של העדות בהכנה. בינתיים מוצגים כאן עיקרי ימי העדות, מתוך תקצירי הדיונים שפורסמו.', 'trial-knowledge' ) . '</p>';
 			} elseif ( $apps ) {
-				$out .= '<p class="tk-notice tk-notice--soft">' . esc_html__( 'עדיין לא פורסם תמלול של העדות. ימי העדות שלהלן ידועים מהודעות בית המשפט; סקירה של העדות תתפרסם אחרי שהפרוטוקולים יפורסמו.', 'trial-knowledge' ) . '</p>';
+				$out .= '<p class="tk-notice tk-notice--soft">' . esc_html__( 'עדיין לא פורסם פרוטוקול של העדות. ימי העדות שלהלן ידועים מהודעות בית המשפט.', 'trial-knowledge' ) . '</p>';
 			}
 		}
-		if ( $apps ) {
-			$out .= self::section( 'tk-w-appearances', __( 'ימי עדות לפי הודעות בית המשפט', 'trial-knowledge' ), self::appearances( $apps ) );
+
+		// layer 2: notable questions and answers
+		$xs = (array) ( $w['notable_exchanges'] ?? array() );
+		if ( $xs ) {
+			$body = self::exchanges( array_slice( $xs, 0, 3 ), $cits, true );
+			if ( count( $xs ) > 3 ) {
+				$body .= '<details class="tk-fold"><summary class="tk-fold__s">' . esc_html( sprintf( __( 'עוד %d שאלות ותשובות', 'trial-knowledge' ), count( $xs ) - 3 ) ) . '</summary>' . self::exchanges( array_slice( $xs, 3 ), $cits, true ) . '</details>';
+			}
+			$out .= self::section( 'tk-w-qa', __( 'שאלות ותשובות מרכזיות', 'trial-knowledge' ), $body );
 		}
 
-		$hl = '';
-		foreach ( (array) ( $w['hearings'] ?? array() ) as $h ) {
-			$url = TK_Public_Pages::url( 'hearing', $h['id'] );
-			$hl .= '<li class="tk-hlist__item"><h3 class="tk-hlist__h"><a href="' . esc_url( $url ) . '">' . esc_html( sprintf( __( 'דיון מיום %s', 'trial-knowledge' ), self::fmt_date( $h['hearing_date'] ) ) ) . '</a></h3>';
-			$hl .= ! empty( $h['digest_sentences'] ) ? self::sentences( $h['digest_sentences'], $cits ) : '<p class="tk-muted">' . esc_html__( 'טרם פורסם תקציר לדיון זה.', 'trial-knowledge' ) . '</p>';
-			$hl .= '</li>';
+		// layer 3: every day of testimony, transcribed or known from a notice, by month (folded after the first)
+		$days = array();
+		foreach ( $hearings as $h ) {
+			$days[] = array( 'date' => $h['hearing_date'], 'h' => $h );
 		}
-		if ( $hl ) {
-			$out .= self::section( 'tk-w-hearings', __( 'הדיונים שבהם העיד/ה', 'trial-knowledge' ), '<ol class="tk-hlist">' . $hl . '</ol>' );
+		foreach ( $only as $a ) {
+			$days[] = array( 'date' => $a['date'], 'a' => $a );
 		}
-		if ( ! empty( $w['notable_exchanges'] ) ) {
-			$out .= self::section( 'tk-w-qa', __( 'שאלות ותשובות מרכזיות', 'trial-knowledge' ), self::exchanges( $w['notable_exchanges'], $cits, true ) );
+		usort(
+			$days,
+			static function ( $a, $b ) {
+				return strcmp( (string) $a['date'], (string) $b['date'] );
+			}
+		);
+		if ( $days ) {
+			$months = array();
+			foreach ( $days as $d ) {
+				$months[ substr( (string) $d['date'], 0, 7 ) ][] = $d;
+			}
+			$body = count( $days ) > 1 ? '<p class="tk-sec__note">' . esc_html__( 'לכל יום: מה עלה בו לפי תקציר הדיון, וקישור לדף הדיון ולפרוטוקול המלא.', 'trial-knowledge' ) . '</p>' : '';
+			$i    = 0;
+			foreach ( $months as $ym => $list ) {
+				$items = '';
+				foreach ( $list as $d ) {
+					$items .= self::testimony_day( $d, $cits );
+				}
+				$label = self::fmt_date( $ym . '-01', 'month' ) . ' · ' . self::days_label( count( $list ) );
+				$body .= count( $months ) > 1
+					? '<details class="tk-fold tk-month"' . ( 0 === $i ? ' open' : '' ) . '><summary class="tk-fold__s">' . esc_html( $label ) . '</summary><ol class="tk-hlist">' . $items . '</ol></details>'
+					: '<ol class="tk-hlist">' . $items . '</ol>';
+				++$i;
+			}
+			$out .= self::section( 'tk-w-hearings', __( 'ימי העדות', 'trial-knowledge' ), $body );
 		}
+
+		// next / previous witness in the same stage, and the full list
 		if ( $all ) {
-			$out .= self::section( 'tk-w-all', __( 'כל העדים', 'trial-knowledge' ), self::witnesses_list( $all, array( 'compact' => true, 'current' => $w['slug'] ) ) );
+			$out .= self::witness_pager( $w['slug'], $all );
 		}
 		return $out . '</article>';
+	}
+
+	/** The /v2/guide summary of a witness page's person (for its stage), or the page itself. */
+	private static function summary_of( array $w, array $all ) {
+		foreach ( $all as $x ) {
+			if ( ( $x['slug'] ?? '' ) === ( $w['slug'] ?? '' ) ) {
+				return $x;
+			}
+		}
+		$dates = array_column( (array) ( $w['hearings'] ?? array() ), 'hearing_date' );
+		sort( $dates );
+		return array( 'label' => $w['label'] ?? null, 'side' => $w['side'] ?? null, 'first_date' => $dates[0] ?? '' );
+	}
+
+	/** One testimony day on a witness page. */
+	private static function testimony_day( array $d, array $cits ) {
+		if ( isset( $d['h'] ) ) {
+			$h    = $d['h'];
+			$url  = TK_Public_Pages::url( 'hearing', $h['id'] );
+			$sent = (array) ( $h['digest_sentences'] ?? array() );
+			$out  = '<li class="tk-hlist__item"><h3 class="tk-hlist__h"><a href="' . esc_url( $url ) . '">' . esc_html( sprintf( __( 'דיון מיום %s', 'trial-knowledge' ), self::fmt_date( $h['hearing_date'] ) ) ) . '</a></h3>';
+			if ( $sent ) {
+				$out .= self::sentences( array_slice( $sent, 0, 1 ), $cits );
+				if ( count( $sent ) > 1 ) {
+					$out .= '<details class="tk-fold tk-fold--inline"><summary class="tk-fold__s">' . esc_html__( 'עוד מהיום הזה', 'trial-knowledge' ) . '</summary>' . self::sentences( array_slice( $sent, 1 ), $cits ) . '</details>';
+				}
+			} else {
+				$out .= '<p class="tk-muted">' . esc_html__( 'טרם פורסם תקציר לדיון זה.', 'trial-knowledge' ) . '</p>';
+			}
+			return $out . '</li>';
+		}
+		$a   = $d['a'];
+		$sv  = (string) ( $a['source_version_id'] ?? '' );
+		$out = '<li class="tk-hlist__item tk-hlist__item--notice"><h3 class="tk-hlist__h">' . esc_html( sprintf( __( 'יום עדות %s', 'trial-knowledge' ), self::fmt_date( $a['date'] ) ) ) . '</h3>';
+		if ( ! empty( $a['description'] ) ) {
+			$out .= '<p class="tk-glossable">' . esc_html( $a['description'] ) . '</p>';
+		}
+		$out .= '<p class="tk-muted tk-small">' . esc_html__( 'ידוע מהודעת בית המשפט; הפרוטוקול טרם פורסם.', 'trial-knowledge' ) .
+			( preg_match( '/^sv_[0-9a-f]{26}$/', $sv ) ? ' <a href="' . esc_url( TK_Public_Pages::url( 'document', $sv ) ) . '">' . esc_html__( 'להודעה', 'trial-knowledge' ) . '</a>' : '' ) . '</p>';
+		return $out . '</li>';
+	}
+
+	/** Previous / next witness of the same stage (the order of the witnesses page) and a link to all witnesses. */
+	public static function witness_pager( $slug, array $all ) {
+		$stage = '';
+		foreach ( $all as $x ) {
+			if ( ( $x['slug'] ?? '' ) === $slug ) {
+				$stage = TK_Render_Nav::witness_stage( $x, $all );
+			}
+		}
+		$same = array_values( array_filter( $all, static function ( $x ) use ( $stage, $all ) { return TK_Render_Nav::witness_stage( $x, $all ) === $stage; } ) );
+		$pos  = array_search( $slug, array_column( $same, 'slug' ), true );
+		$out  = '<nav class="tk-pager2" aria-label="' . esc_attr__( 'עדים נוספים', 'trial-knowledge' ) . '">';
+		if ( false !== $pos && $pos > 0 ) {
+			$p    = $same[ $pos - 1 ];
+			$out .= '<a class="tk-pager2__prev" href="' . esc_url( TK_Public_Pages::url( 'witness', $p['slug'] ) ) . '"><span class="tk-muted">' . esc_html__( 'העד הקודם', 'trial-knowledge' ) . '</span> ' . esc_html( $p['name'] ) . '</a>';
+		}
+		$out .= '<a class="tk-pager2__all" href="' . esc_url( TK_Public_Pages::section_url( 'witnesses' ) ) . '">' . esc_html__( 'לכל העדים', 'trial-knowledge' ) . '</a>';
+		if ( false !== $pos && $pos < count( $same ) - 1 ) {
+			$nx   = $same[ $pos + 1 ];
+			$out .= '<a class="tk-pager2__next" href="' . esc_url( TK_Public_Pages::url( 'witness', $nx['slug'] ) ) . '"><span class="tk-muted">' . esc_html__( 'העד הבא', 'trial-knowledge' ) . '</span> ' . esc_html( $nx['name'] ) . '</a>';
+		}
+		return $out . '</nav>';
 	}
 
 	/**
@@ -681,6 +870,7 @@ class TK_Render_Guides {
 		$cits = self::cit_map( $c['citations'] ?? array() );
 		$tl   = add_query_arg( 'tk_case', $key, $opts['timeline'] ?? TK_Public_Pages::section_url( 'timeline' ) );
 		$out  = '<article class="tk-guide tk-casepage tk-case--' . esc_attr( $key ) . '" dir="rtl" lang="he">';
+		$out .= TK_Render_Nav::bar( 'cases', array( array( __( 'התיקים', 'trial-knowledge' ), home_url( '/#tk-cases' ) ), array( sprintf( __( 'תיק %s', 'trial-knowledge' ), $key ), '' ) ) );
 		$out .= '<header class="tk-head tk-head--case"><p class="tk-kicker">' . esc_html( $c['title'] ?? sprintf( __( 'תיק %s', 'trial-knowledge' ), $key ) ) . '</p>';
 		$out .= '<h1 class="tk-head__title">' . esc_html( ! empty( $c['subtitle'] ) ? $c['subtitle'] : ( $c['title'] ?? '' ) ) . '</h1>';
 		$out .= '<p class="tk-banner" role="note">' . esc_html__( 'מה שמופיע כאן הוא תיאור הטענות בכתב האישום, לא קביעות של בית המשפט.', 'trial-knowledge' ) . '</p>';
@@ -694,7 +884,7 @@ class TK_Render_Guides {
 			$secs['tk-c-overview'] = array( self::BLOCKS['overview'], self::prose( $x, $cits ) );
 		}
 		if ( $x = self::block( $c, 'alleged' ) ) {
-			$secs['tk-c-alleged'] = array( self::BLOCKS['alleged'], '<p class="tk-sec__note">' . self::allegation_tag() . '</p>' . self::prose( $x, $cits ) );
+			$secs['tk-c-alleged'] = array( self::BLOCKS['alleged'], self::prose( $x, $cits ) );
 		}
 		if ( $x = self::block( $c, 'charges' ) ) {
 			$secs['tk-c-charges'] = array( self::BLOCKS['charges'], self::charges( $x, $cits ) );
@@ -704,7 +894,7 @@ class TK_Render_Guides {
 		}
 		$ev = self::block( $c, 'events' );
 		if ( $ev ) {
-			$secs['tk-c-events'] = array( self::BLOCKS['events'], '<p class="tk-sec__note">' . self::allegation_tag() . '</p>' . self::events( $ev, $cits ) .
+			$secs['tk-c-events'] = array( self::BLOCKS['events'], self::events( $ev, $cits ) .
 				'<p><a class="tk-button" href="' . esc_url( $tl ) . '">' . esc_html__( 'התיק בציר הזמן המלא', 'trial-knowledge' ) . '</a></p>' );
 		}
 		if ( '4000' === (string) $key && class_exists( 'TK_P315' ) && TK_P315::data()['items'] ) {
@@ -774,7 +964,7 @@ class TK_Render_Guides {
 			$slug = $it['witness_slug'] ?? '';
 			$name = esc_html( $it['label'] ?? '' );
 			if ( $slug && TK_Guides::valid_witness( $slug ) ) {
-				$name = '<a href="' . esc_url( TK_Public_Pages::url( 'witness', $slug ) ) . '">' . $name . '</a> <span class="tk-badge tk-badge--testified">' . esc_html__( 'העיד/ה במשפט', 'trial-knowledge' ) . '</span>';
+				$name = '<a href="' . esc_url( TK_Public_Pages::url( 'witness', $slug ) ) . '">' . $name . '</a> <span class="tk-badge tk-badge--testified">' . esc_html__( 'העדות במשפט', 'trial-knowledge' ) . '</span>';
 			}
 			$out .= '<li class="tk-people__item"><span class="tk-people__name">' . $name . '</span> <span class="tk-people__role tk-glossable">' . esc_html( $it['text'] ?? '' ) . self::chips( $it['citation_ids'] ?? array(), $cits ) . '</span></li>';
 		}
@@ -960,6 +1150,111 @@ class TK_Render_Guides {
 		return $out . '</div></div>';
 	}
 
+	// ------------------------------------------------------------------ documents page (2.7)
+
+	const DOC_TYPE_LABELS = array(
+		'decision'   => 'החלטות',
+		'motion'     => 'בקשות',
+		'response'   => 'תגובות',
+		'notice'     => 'הודעות',
+		'indictment' => 'כתבי אישום',
+		'exhibit'    => 'מוצגים',
+		'other'      => 'אחר',
+	);
+
+	const DOCS_PER_PAGE = 30;
+
+	/**
+	 * All documents with filters that work as a plain GET form (no JS): type, year, words, procedural too.
+	 *
+	 * @param array $items /v2/documents items (all types), newest first.
+	 * @param array $q     type, year, q, all (bool), p (page, 1-based).
+	 * @param string $base URL of the page.
+	 */
+	public static function documents_page( array $items, array $q, $base ) {
+		$type  = isset( self::DOC_TYPE_LABELS[ $q['type'] ?? '' ] ) ? $q['type'] : '';
+		$year  = preg_match( '/^\d{4}$/', (string) ( $q['year'] ?? '' ) ) ? $q['year'] : '';
+		$words = trim( (string) ( $q['q'] ?? '' ) );
+		$all   = ! empty( $q['all'] );
+		$page  = max( 1, (int) ( $q['p'] ?? 1 ) );
+
+		$years = array();
+		$count = array();
+		foreach ( $items as $it ) {
+			$y = substr( (string) ( $it['document_date'] ?? '' ), 0, 4 );
+			if ( preg_match( '/^\d{4}$/', $y ) ) {
+				$years[ $y ] = 1;
+			}
+			$t           = (string) ( $it['source_type'] ?? 'other' );
+			$count[ $t ] = ( $count[ $t ] ?? 0 ) + 1;
+		}
+		krsort( $years );
+		$hidden = 0;
+		$shown  = array();
+		foreach ( $items as $it ) {
+			if ( $type && ( $it['source_type'] ?? '' ) !== $type ) {
+				continue;
+			}
+			if ( $year && substr( (string) ( $it['document_date'] ?? '' ), 0, 4 ) !== $year ) {
+				continue;
+			}
+			if ( '' !== $words ) {
+				$hay = TK_Render::display_title( $it ) . ' ' . ( $it['title'] ?? '' ) . ' ' . ( is_string( $it['brief']['summary'] ?? null ) ? $it['brief']['summary'] : '' );
+				foreach ( preg_split( '/\s+/u', $words ) as $w ) {
+					if ( '' !== $w && false === mb_stripos( $hay, $w ) ) {
+						continue 2;
+					}
+				}
+			}
+			if ( ! $all && 'procedural' === TK_Render::significance( $it ) ) {
+				++$hidden;
+				continue;
+			}
+			$shown[] = $it;
+		}
+
+		$out  = '<form class="tk-docfilter" method="get" action="' . esc_url( $base ) . '" role="search" aria-label="' . esc_attr__( 'סינון מסמכים', 'trial-knowledge' ) . '">';
+		$out .= '<label><span>' . esc_html__( 'סוג', 'trial-knowledge' ) . '</span><select name="tk_type_f"><option value="">' . esc_html__( 'כל הסוגים', 'trial-knowledge' ) . '</option>';
+		foreach ( self::DOC_TYPE_LABELS as $k => $l ) {
+			if ( ! empty( $count[ $k ] ) ) {
+				$out .= '<option value="' . esc_attr( $k ) . '"' . ( $k === $type ? ' selected' : '' ) . '>' . esc_html( $l . ' (' . $count[ $k ] . ')' ) . '</option>';
+			}
+		}
+		$out .= '</select></label>';
+		$out .= '<label><span>' . esc_html__( 'שנה', 'trial-knowledge' ) . '</span><select name="tk_year"><option value="">' . esc_html__( 'כל השנים', 'trial-knowledge' ) . '</option>';
+		foreach ( array_keys( $years ) as $y ) {
+			$out .= '<option value="' . esc_attr( (string) $y ) . '"' . ( (string) $y === $year ? ' selected' : '' ) . '>' . esc_html( (string) $y ) . '</option>';
+		}
+		$out .= '</select></label>';
+		$out .= '<label class="tk-docfilter__q"><span>' . esc_html__( 'מילים', 'trial-knowledge' ) . '</span><input type="search" name="tk_q" value="' . esc_attr( $words ) . '" placeholder="' . esc_attr__( 'למשל: חסיון, ישועה, תדירות', 'trial-knowledge' ) . '"></label>';
+		$out .= '<label class="tk-docfilter__all"><input type="checkbox" name="tk_all" value="1"' . ( $all ? ' checked' : '' ) . '> ' . esc_html__( 'גם מסמכים פרוצדורליים', 'trial-knowledge' ) . '</label>';
+		$out .= '<button type="submit" class="tk-button">' . esc_html__( 'סינון', 'trial-knowledge' ) . '</button>';
+		if ( $type || $year || '' !== $words || $all ) {
+			$out .= ' <a class="tk-docfilter__reset" href="' . esc_url( $base ) . '">' . esc_html__( 'ניקוי', 'trial-knowledge' ) . '</a>';
+		}
+		$out .= '</form>';
+
+		$total = count( $shown );
+		$pages = max( 1, (int) ceil( $total / self::DOCS_PER_PAGE ) );
+		$page  = min( $page, $pages );
+		$out  .= '<p class="tk-docfilter__n" aria-live="polite">' . esc_html( 1 === $total ? __( 'מסמך אחד', 'trial-knowledge' ) : sprintf( __( '%d מסמכים', 'trial-knowledge' ), $total ) ) .
+			( $hidden ? ' <span class="tk-muted">' . esc_html( sprintf( __( '(ועוד %d פרוצדורליים — מועדים, ארכות, העתקים — מוסתרים)', 'trial-knowledge' ), $hidden ) ) . '</span>' : '' ) . '</p>';
+		$out  .= TK_Render::documents( array( 'items' => array_slice( $shown, ( $page - 1 ) * self::DOCS_PER_PAGE, self::DOCS_PER_PAGE ) ), array( 'mode' => 'all' ) );
+		if ( $pages > 1 ) {
+			$args = array_filter( array( 'tk_type_f' => $type, 'tk_year' => $year, 'tk_q' => $words, 'tk_all' => $all ? '1' : '' ) );
+			$out .= '<nav class="tk-pager" aria-label="' . esc_attr__( 'עמודים', 'trial-knowledge' ) . '">';
+			if ( $page > 1 ) {
+				$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( $args + array( 'tk_p' => $page - 1 ), $base ) ) . '">' . esc_html__( 'הקודמים', 'trial-knowledge' ) . '</a>';
+			}
+			$out .= '<span class="tk-pager__where">' . esc_html( sprintf( __( 'עמוד %1$d מתוך %2$d', 'trial-knowledge' ), $page, $pages ) ) . '</span>';
+			if ( $page < $pages ) {
+				$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( $args + array( 'tk_p' => $page + 1 ), $base ) ) . '">' . esc_html__( 'הבאים', 'trial-knowledge' ) . '</a>';
+			}
+			$out .= '</nav>';
+		}
+		return '<div class="tk-guide tk-docs" dir="rtl" lang="he">' . $out . '</div>';
+	}
+
 	// ------------------------------------------------------------------ document brief (2.4)
 
 	/**
@@ -1015,7 +1310,7 @@ class TK_Render_Guides {
 			}
 			$ws = array_filter( (array) ( $d['witnesses'] ?? array() ), 'is_array' );
 			if ( $ws ) {
-				$out .= '<div><dt>' . esc_html( count( $ws ) > 1 ? __( 'העידו', 'trial-knowledge' ) : __( 'העיד/ה', 'trial-knowledge' ) ) . '</dt><dd><ul class="tk-hday__ws">';
+				$out .= '<div><dt>' . esc_html( __( 'עדים', 'trial-knowledge' ) ) . '</dt><dd><ul class="tk-hday__ws">';
 				foreach ( $ws as $w ) {
 					$side = (string) ( $w['side'] ?? '' );
 					$out .= '<li>' . self::witness_link( (string) ( $w['name'] ?? '' ), $slugs ) .
@@ -1048,7 +1343,8 @@ class TK_Render_Guides {
 			$byid[ $t['id'] ] = $t;
 			$cats[ isset( self::GLOSSARY_CATEGORIES[ $t['category'] ?? '' ] ) ? $t['category'] : 'procedure' ][] = $t;
 		}
-		$out = '<div class="tk-glossary" dir="rtl" lang="he">';
+		$out  = '<div class="tk-glossary" dir="rtl" lang="he">';
+		$out .= '<section class="tk-sec tk-sec--steps" id="tk-steps"><h2 class="tk-sec__h">' . esc_html__( 'המשפט הפלילי בחמישה צעדים', 'trial-knowledge' ) . '</h2>' . TK_Render_Nav::five_steps() . '</section>';
 		if ( ! empty( $gl['note'] ) ) {
 			$out .= '<p class="tk-notice tk-notice--soft" role="note">' . esc_html( $gl['note'] ) . '</p>';
 		}
@@ -1112,6 +1408,7 @@ class TK_Render_Guides {
 		$t     = $opts['transcript'] ?? null;
 
 		$out  = '<div class="tk-guide tk-hearing" dir="rtl" lang="he">';
+		$out .= TK_Render_Nav::bar( 'timeline', array( array( __( 'ציר הזמן', 'trial-knowledge' ), TK_Public_Pages::section_url( 'timeline' ) ), array( sprintf( __( 'דיון מיום %s', 'trial-knowledge' ), self::fmt_date( $h['hearing_date'] ) ), '' ) ) );
 		$out .= '<header class="tk-head"><p class="tk-kicker">' . esc_html__( 'דיון בבית המשפט', 'trial-knowledge' ) . '</p>';
 		$out .= '<h1 class="tk-head__title">' . esc_html( sprintf( __( 'דיון מיום %s', 'trial-knowledge' ), self::fmt_date( $h['hearing_date'] ) ) ) . '</h1>';
 		$out .= '<dl class="tk-meta">';
@@ -1120,7 +1417,7 @@ class TK_Render_Guides {
 			foreach ( $h['witnesses'] as $raw ) {
 				$ws[] = self::witness_link( $raw, $slugs );
 			}
-			$out .= '<div><dt>' . esc_html( count( $ws ) > 1 ? __( 'עדים', 'trial-knowledge' ) : __( 'עד/ה', 'trial-knowledge' ) ) . '</dt><dd>' . implode( ', ', $ws ) . '</dd></div>';
+			$out .= '<div><dt>' . esc_html( __( 'עדים', 'trial-knowledge' ) ) . '</dt><dd>' . implode( ', ', $ws ) . '</dd></div>';
 		}
 		if ( ! empty( $h['judges'] ) ) {
 			$out .= '<div><dt>' . esc_html__( 'שופטים', 'trial-knowledge' ) . '</dt><dd>' . esc_html( implode( ', ', $h['judges'] ) ) . '</dd></div>';
@@ -1180,7 +1477,24 @@ class TK_Render_Guides {
 
 		// source document
 		$out .= self::tab_panel( 'source', self::source_info( $h, is_array( $t ) ? $t : array() ), $tab );
-		return $out . '</div></div>';
+		$out .= '</div>' . self::hearing_pager( (array) ( $opts['neighbors'] ?? array() ) );
+		return $out . '</div>';
+	}
+
+	/** Previous / next hearing. */
+	public static function hearing_pager( array $nb ) {
+		if ( empty( $nb['prev'] ) && empty( $nb['next'] ) ) {
+			return '';
+		}
+		$out = '<nav class="tk-pager2" aria-label="' . esc_attr__( 'דיונים סמוכים', 'trial-knowledge' ) . '">';
+		if ( ! empty( $nb['prev'] ) ) {
+			$out .= '<a class="tk-pager2__prev" href="' . esc_url( TK_Public_Pages::url( 'hearing', $nb['prev']['id'] ) ) . '"><span class="tk-muted">' . esc_html__( 'הדיון הקודם', 'trial-knowledge' ) . '</span> ' . esc_html( self::fmt_date( $nb['prev']['date'] ) ) . '</a>';
+		}
+		$out .= '<a class="tk-pager2__all" href="' . esc_url( TK_Public_Pages::section_url( 'timeline' ) ) . '">' . esc_html__( 'לציר הזמן', 'trial-knowledge' ) . '</a>';
+		if ( ! empty( $nb['next'] ) ) {
+			$out .= '<a class="tk-pager2__next" href="' . esc_url( TK_Public_Pages::url( 'hearing', $nb['next']['id'] ) ) . '"><span class="tk-muted">' . esc_html__( 'הדיון הבא', 'trial-knowledge' ) . '</span> ' . esc_html( self::fmt_date( $nb['next']['date'] ) ) . '</a>';
+		}
+		return $out . '</nav>';
 	}
 
 	private static function tab_panel( $k, $body, $active ) {

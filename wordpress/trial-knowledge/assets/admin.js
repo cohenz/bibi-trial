@@ -229,8 +229,8 @@
 
 	// ------------------------------------------------------------- guide review (2.3)
 	var BLOCK_HE = {
-		one_line: 'בשורה אחת', overview: 'סקירה', defendants: 'הנאשמים', alleged: 'מה טוען כתב האישום', people: 'מי מעורב',
-		charges: 'האישומים', events: 'ציר הזמן של התיק', role: 'מי העד או העדה', testimony: 'עיקרי העדות'
+		one_line: 'בשורה אחת', overview: 'סקירה', defendants: 'הנאשמים', alleged: 'מה טוען כתב האישום?', people: 'מי מעורב?',
+		charges: 'האישומים', events: 'ציר הזמן של התיק', role: 'מי העד או העדה?', testimony: 'עיקרי העדות'
 	};
 	var GATE_HE = {
 		citation: 'ציטוטים', support: 'תמיכה לשונית במקור', judicial_wording: 'ניסוח של קביעה שיפוטית', absolute_wording: 'ניסוח מוחלט',

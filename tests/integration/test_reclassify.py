@@ -83,3 +83,20 @@ def test_existing_false_hearing_is_demoted(services, pipeline, tmp_path):
         assert scalar(conn, """SELECT count(*) FROM ntk.generated_artifacts WHERE object_type = 'hearing' AND object_id = :h
                                AND review_state <> 'superseded'""", {"h": hid}) == 0
         assert not [c for c in reclassify.candidates(conn) if c["id"] == hid]
+
+
+def test_operator_names_a_record_the_rule_misses(services, pipeline, tmp_path):
+    """A motion that mentions "נוכחים" passes the rule; the operator names it (and its type) and it is demoted."""
+    path = tmp_path / "motion.pdf"
+    path.write_bytes(make_pdf([[ln.replace("26 ביולי", "28 ביולי") for ln in COURT_DECISION[0]]]))
+    job = pipeline.run_job(make_job(services, str(path), hearing_date="2026-07-28"))
+    with services.engine.begin() as conn:
+        sv = scalar(conn, "SELECT source_version_id FROM ntk.ingestion_jobs WHERE id = :j", {"j": job["id"]})
+        hid = scalar(conn, "SELECT id FROM ntk.hearings WHERE source_version_id = :sv", {"sv": sv})
+        found = reclassify.named(conn, [hid], kind="motion")
+        assert [c["id"] for c in found] == [hid] and found[0]["kind"] == "motion"
+        res = reclassify.demote(conn, hearing_id=hid, kind=found[0]["kind"], actor="test")
+        assert res["demoted"]
+        assert scalar(conn, "SELECT d.source_type::text FROM ntk.source_versions sv JOIN ntk.source_documents d "
+                            "ON d.id = sv.document_id WHERE sv.id = :sv", {"sv": sv}) == "motion"
+        assert reclassify.named(conn, [hid]) == []

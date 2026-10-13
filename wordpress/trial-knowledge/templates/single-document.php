@@ -27,6 +27,7 @@ get_header();
 	if ( $tk_cur && $tk_cur['data'] ) :
 		$tk_d   = $tk_cur['data'];
 		$tk_doc = $tk_d['document'];
+		echo TK_Render_Nav::bar( 'documents', array( array( __( 'מסמכים', 'trial-knowledge' ), TK_Public_Pages::section_url( 'documents' ) ), array( TK_Render::display_title( $tk_doc ), '' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in renderer
 		?>
 		<p class="tk-kicker"><span class="tk-badge"><?php echo esc_html( TK_Render::type_label( $tk_doc['source_type'] ) ); ?></span>
 			<?php if ( ! empty( $tk_doc['document_date'] ) ) : ?>

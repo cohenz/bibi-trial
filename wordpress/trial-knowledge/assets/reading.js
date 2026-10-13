@@ -78,4 +78,28 @@
 	// after the tabs script has shown the right panel
 	setTimeout(openTarget, 0);
 	window.addEventListener('hashchange', openTarget);
+
+	// ---- witnesses page: filter by case (2.7). Without JS every witness shows.
+	document.querySelectorAll('[data-tk-filter]').forEach(function (root) {
+		var buttons = root.querySelectorAll('.tk-filter__b');
+		buttons.forEach(function (b) {
+			b.addEventListener('click', function () {
+				var c = b.getAttribute('data-case');
+				buttons.forEach(function (x) {
+					var on = x === b;
+					x.classList.toggle('is-on', on);
+					x.setAttribute('aria-pressed', on ? 'true' : 'false');
+				});
+				root.querySelectorAll('.tk-wlist__item').forEach(function (li) {
+					var cs = (li.getAttribute('data-cases') || '').split(' ');
+					li.hidden = !!c && cs.indexOf(c) === -1;
+				});
+				root.querySelectorAll('.tk-wgroup').forEach(function (g) {
+					var any = g.querySelector('.tk-wlist__item:not([hidden])');
+					g.hidden = !any;
+					if (c && any) { g.querySelectorAll('details.tk-fold').forEach(function (d) { d.open = true; }); }
+				});
+			});
+		});
+	});
 }());

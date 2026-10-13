@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.engine import Connection
 
-from .. import guides, hebrew
+from .. import editorial, guides, hebrew
 from ..guide_service import slug_by_raw
 from ..guide_service import witnesses as all_witnesses
 from .core import row, rows
@@ -27,7 +27,7 @@ def published_guide(conn: Connection, object_type: str, object_id: str) -> dict 
     """, {"ot": object_type, "oid": object_id})
     if r is None:
         return None
-    return {**r["payload"], "artifact_id": r["id"], "published_at": r["published_at"]}
+    return {**editorial.polish(r["payload"]), "artifact_id": r["id"], "published_at": r["published_at"]}
 
 
 def published_guides(conn: Connection, object_type: str) -> list[dict]:
@@ -37,7 +37,7 @@ def published_guides(conn: Connection, object_type: str) -> list[dict]:
         WHERE ga.artifact_type = 'guide' AND ga.object_type = :ot
         ORDER BY ga.object_id, p.published_at DESC
     """, {"ot": object_type})
-    return [{**r["payload"], "artifact_id": r["id"]} for r in rs]
+    return [{**editorial.polish(r["payload"]), "artifact_id": r["id"]} for r in rs]
 
 
 def block(g: dict, name: str) -> list[dict]:
@@ -80,7 +80,7 @@ def _hearing_digest(conn: Connection, hearing_id: str) -> dict | None:
         SELECT ga.payload FROM ntk.generated_artifacts ga JOIN ntk.publications p ON p.artifact_id = ga.id
         AND p.unpublished_at IS NULL WHERE ga.artifact_type = 'summary' AND ga.object_type = 'hearing' AND ga.object_id = :h
         ORDER BY p.published_at DESC LIMIT 1""", {"h": hearing_id})
-    return r["payload"] if r else None
+    return editorial.polish(r["payload"]) if r else None
 
 
 def home(conn: Connection) -> dict:

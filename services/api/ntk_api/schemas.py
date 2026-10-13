@@ -7,9 +7,9 @@ describe the HTTP envelopes around them."""
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 SHA256 = r"^[0-9a-fA-F]{64}$"
 
@@ -219,6 +219,9 @@ class BriefBuildRequest(BaseModel):
 class NonHearingsRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     apply: bool = False  # false: list what would change
+    # an operator's call on records the rule misses (e.g. a motion that mentions "נוכחים"): these hearings, as this type
+    hearing_ids: list[Annotated[str, StringConstraints(pattern=r"^hr_[0-9a-f]{26}$")]] | None = Field(None, max_length=50)
+    kind: Literal["decision", "notice", "motion", "response", "other"] | None = None
 
 
 class DuplicateDecision(BaseModel):

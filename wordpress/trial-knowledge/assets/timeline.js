@@ -12,6 +12,7 @@
  * transcribed hearings) and a toggle for procedural documents (off by default; ?tk_all=1 turns it on). */
 (function () {
 	'use strict';
+	function nEv(n) { return n === 1 ? 'אירוע אחד' : n + ' אירועים'; }
 
 	var MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 	var MONTHS_SHORT = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
@@ -305,7 +306,7 @@
 					var z = zoomable(lv, k);
 					return h('td', { class: 'tk-tl__cell' }, [h('button', {
 						type: 'button', class: 'tk-tl__sum',
-						'aria-label': label(lv, k, true) + ', ' + TRACK[t] + ': ' + evs.length + ' אירועים' + (z ? '. התקרבות' : '. מעבר לרשימה'),
+						'aria-label': label(lv, k, true) + ', ' + TRACK[t] + ': ' + nEv(evs.length) + (z ? '. התקרבות' : '. מעבר לרשימה'),
 						onclick: function () { if (z) { zoomTo(k); } else { goGroup(k); } }
 					}, [dots, h('span', { class: 'tk-tl__n', text: String(evs.length) })])]);
 				})));
@@ -420,7 +421,7 @@
 					h('span', { class: 'tk-tl__dots', 'aria-hidden': 'true' }, evs.slice(0, 14).map(function (e) {
 						return h('span', { class: dotClass(e) });
 					})),
-					h('span', { class: 'tk-tl__n', text: evs.length + ' אירועים' })
+					h('span', { class: 'tk-tl__n', text: nEv(evs.length) })
 				]);
 				var sec = h('section', { class: 'tk-tl-m__year' }, [h('h3', { class: 'tk-tl-m__yh' }, [btn])]);
 				var body = h('div', { id: pid, hidden: open ? null : true });
@@ -451,7 +452,7 @@
 				nav.hidden = true;
 				strip.hidden = true;
 				renderMobile(vis);
-				live.textContent = vis.length + ' אירועים' + (S.cs ? ' · תיק ' + S.cs : '');
+				live.textContent = nEv(vis.length) + (S.cs ? ' · תיק ' + S.cs : '');
 				return;
 			}
 			nav.hidden = false;

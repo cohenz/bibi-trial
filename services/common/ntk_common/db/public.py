@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import Engine
 from sqlalchemy.engine import Connection
 
-from .. import hebrew, people
+from .. import editorial, hebrew, people
 from ..layers import UnitView
 from .core import execute, j, row, rows, scalar
 from .ops import audit, current_corpus_version
@@ -147,7 +147,7 @@ def public_hearing(conn: Connection, hearing_id: str) -> dict | None:
                                 count(*) FILTER (WHERE unit_type='answer') AS answers
                          FROM ntk.source_units WHERE hearing_id = :id AND superseded_at IS NULL""", {"id": hearing_id})
     h = {**h, "judges": people.clean_judges(h["judges"])}
-    return {"hearing": h, "digest": digest["payload"] if digest else None,
+    return {"hearing": h, "digest": editorial.polish(digest["payload"]) if digest else None,
             "digest_artifact_id": str(digest["id"]) if digest else None, "stats": stats}
 
 
@@ -177,7 +177,7 @@ def answer_by_id(conn: Connection, answer_id: str) -> dict | None:
     a = row(conn, "SELECT * FROM ntk.answers WHERE id = CAST(:id AS uuid)", {"id": answer_id})
     if a is None:
         return None
-    env = dict(a["envelope"])
+    env = editorial.polish(dict(a["envelope"]))
     latest = row(conn, """SELECT id, envelope->>'permalink' AS permalink FROM ntk.answers
                           WHERE normalized_question = :q AND locale = :l AND id <> :id
                           ORDER BY created_at DESC LIMIT 1""",
@@ -340,7 +340,7 @@ _BRIEF_JOIN = """
 
 
 def _with_brief(r: dict) -> dict:
-    b = r.pop("brief", None)
+    b = editorial.polish(r.pop("brief", None))
     r["brief"] = None if not b else {
         "title": b["title"]["text"], "summary": " ".join(x["text"] for x in b["summary_sentences"]),
         "significance": b["significance"], "significance_reason": b.get("significance_reason"),
@@ -383,7 +383,7 @@ def public_document(conn: Connection, source_version_id: str) -> dict | None:
     """, {"sv": source_version_id})
     if r is None:
         return None
-    full = r.get("brief")
+    full = editorial.polish(r.get("brief"))
     out = _with_brief(r)
     if full:
         out["brief"]["summary_sentences"] = full["summary_sentences"]

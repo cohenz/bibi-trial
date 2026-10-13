@@ -49,8 +49,8 @@
 		affirmation_not_verified: 'אישור/הכחשה שלא נבדקו',
 		affirmation_must_cite_question_and_answer: 'אישור/הכחשה בלי הפניה לשאלה ולתשובה'
 	};
-	var BLOCK_HE = { one_line: 'בשורה אחת', overview: 'סקירה', defendants: 'הנאשמים', alleged: 'מה טוען כתב האישום', people: 'מי מעורב',
-		charges: 'האישומים', events: 'ציר הזמן', role: 'מי העד', testimony: 'עיקרי העדות' };
+	var BLOCK_HE = { one_line: 'בשורה אחת', overview: 'סקירה', defendants: 'הנאשמים', alleged: 'מה טוען כתב האישום?', people: 'מי מעורב?',
+		charges: 'האישומים', events: 'ציר הזמן', role: 'מי העד?', testimony: 'עיקרי העדות' };
 
 	function el(tag, attrs, kids) {
 		var n = document.createElement(tag);
@@ -152,7 +152,7 @@
 	function whyText(d, an) {
 		var a = d.artifact || {}, w = d.writer_output || {};
 		if (an.blocked) { return { cls: 'block', head: 'לא ניתן לפרסם את הפריט הזה כמו שהוא', items: an.reasons }; }
-		if (an.reasons.length) { return { cls: 'issue', head: 'למה זה מחכה לך', items: an.reasons }; }
+		if (an.reasons.length) { return { cls: 'issue', head: 'למה זה מחכה לך?', items: an.reasons }; }
 		var t = w.source_type;
 		var msg = a.artifact_type === 'guide' ? 'מדריכים תמיד מחכים לאישור אנושי לפני פרסום.'
 			: t === 'other' ? 'סוג המסמך לא זוהה בוודאות, ולכן הוא מתפרסם רק באישור.'
@@ -248,7 +248,7 @@
 			}
 			if (t.object_type !== 'artifact') {
 				card.appendChild(el('p', { class: 'tk-qr__kicker', text: t.object_type === 'qa_exchange' ? 'שאלה ותשובה' : 'דברי בית המשפט' }));
-				card.appendChild(el('div', { class: 'tk-qr__why tk-qr__why--issue' }, [el('strong', { text: 'למה זה מחכה לך' }), el('p', { text: t.reason || '' })]));
+				card.appendChild(el('div', { class: 'tk-qr__why tk-qr__why--issue' }, [el('strong', { text: 'למה זה מחכה לך?' }), el('p', { text: t.reason || '' })]));
 				card.appendChild(buttons(t, false));
 				return;
 			}

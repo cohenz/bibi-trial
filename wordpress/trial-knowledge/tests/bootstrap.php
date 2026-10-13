@@ -44,7 +44,14 @@ function get_bloginfo( $s ) { return 'Site'; }
 function add_action() {}
 function add_filter() {}
 function add_shortcode() {}
-function add_query_arg( $k, $v, $u = "https://site.test/page/" ) { return $u . ( false === strpos( $u, '?' ) ? '?' : '&' ) . rawurlencode( $k ) . '=' . rawurlencode( (string) $v ); }
+function add_query_arg( $k, $v = null, $u = "https://site.test/page/" ) {
+	if ( is_array( $k ) ) { // add_query_arg( array $args, string $url )
+		$u = null === $v ? "https://site.test/page/" : $v;
+		foreach ( $k as $kk => $vv ) { $u = add_query_arg( $kk, $vv, $u ); }
+		return $u;
+	}
+	return $u . ( false === strpos( $u, '?' ) ? '?' : '&' ) . rawurlencode( $k ) . '=' . rawurlencode( (string) $v );
+}
 function _n( $s, $p, $n, $d = null ) { return 1 === (int) $n ? $s : $p; }
 function absint( $v ) { return abs( (int) $v ); }
 function wp_unslash( $v ) { return $v; }
@@ -88,6 +95,7 @@ require TK_DIR . 'includes/class-public-pages.php';
 require TK_DIR . 'includes/class-render.php';
 require TK_DIR . 'includes/class-guides.php';
 require TK_DIR . 'includes/class-render-guides.php';
+require TK_DIR . 'includes/class-render-nav.php';
 require TK_DIR . 'includes/class-p315.php';
 require TK_DIR . 'includes/class-rest-proxy.php';
 require TK_DIR . 'includes/class-blocks.php';

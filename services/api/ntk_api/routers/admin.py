@@ -392,11 +392,12 @@ def inbox_duplicates(st: AppState = Depends(get_state), limit: int = Query(200, 
 def maintenance_non_hearings(body: NonHearingsRequest, request: Request, st: AppState = Depends(get_state),
                              p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
     """Hearings created from documents that are not hearing records (no speaker turns, no attendance list): list them,
-    or with apply=true turn them back into documents (decision / notice)."""
+    or with apply=true turn them back into documents (decision / notice). With ``hearing_ids`` the operator names the
+    records (and optionally their ``kind``) instead of the rule."""
     from ntk_common import inbox_dupes, reclassify
 
     with st.services.engine.begin() as conn:
-        found = reclassify.candidates(conn)
+        found = reclassify.named(conn, body.hearing_ids, kind=body.kind) if body.hearing_ids else reclassify.candidates(conn)
         out = {"candidates": [{k: v for k, v in c.items() if k != "metadata"} for c in found], "applied": []}
         if body.apply:
             for c in found:

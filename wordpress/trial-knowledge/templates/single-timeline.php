@@ -13,6 +13,7 @@ get_header();
 $tk_cur = TK_Public_Pages::$current;
 ?>
 <main id="primary" class="site-main tk-page tk-page--timeline" dir="rtl">
+	<?php echo TK_Render_Nav::bar( 'timeline', array( array( __( 'ציר הזמן', 'trial-knowledge' ), '' ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in renderer ?>
 	<header class="tk-head tk-guide"><p class="tk-kicker"><?php esc_html_e( 'המשפט של בנימין נתניהו', 'trial-knowledge' ); ?></p>
 		<h1 class="tk-head__title"><?php esc_html_e( 'ציר הזמן', 'trial-knowledge' ); ?></h1></header>
 	<?php

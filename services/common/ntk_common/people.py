@@ -233,19 +233,27 @@ def suspects(people: list[Person]) -> list[tuple[str, str, str]]:
 
 
 # --- judges -----------------------------------------------------------------------------------------------------
+PANEL = ("רבקה פרידמן-פלדמן", "משה בר-עם", "עודד שחם")  # the trial bench (ת"פ 67104-01-20)
+
+
 def clean_judges(names: list[str] | None) -> list[str]:
-    """Judges as printed in a protocol → clean, unique names. Dash spacing is unified ("בר – עם" → "בר-עם"), and
-    entries with digits or more than four words (OCR lines caught as names) are dropped."""
+    """Judges as printed in a protocol → clean, unique names. An entry naming a member of the trial bench (by family
+    name, whatever the spacing, initials or OCR noise around it) becomes that judge; any other entry is kept only when
+    it reads as a name (2–4 Hebrew words, no digits or Latin letters, no one-letter words)."""
     out: list[str] = []
-    seen: set[str] = set()
     for raw in names or []:
         s = hebrew.normalize(raw or "")
         s = re.sub(r"\s*[-–—]\s*", "-", s).strip(" .,:;()")
         s = re.sub(r"\s+", " ", s)
-        if not s or re.search(r"\d|[A-Za-z]", s) or len(s.split()) > 4 or len(s.split()) < 2:
+        flat = s.replace("-", "")
+        bench = next((j for j in PANEL if j.split()[-1].replace("-", "") in flat), None)
+        if bench:
+            name = bench
+        elif (not s or re.search(r"\d|[A-Za-z]", s) or not 2 <= len(s.split()) <= 4
+              or any(len(set(w.strip("׳'\""))) < 2 for w in s.split())):  # an initial ("ע׳", OCR "יי")
             continue
-        k = strict_key(s)
-        if k not in seen:
-            seen.add(k)
-            out.append(s)
+        else:
+            name = s
+        if name not in out:
+            out.append(name)
     return out

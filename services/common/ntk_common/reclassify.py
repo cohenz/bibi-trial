@@ -63,6 +63,24 @@ def candidates(conn) -> list[dict]:
     return out
 
 
+def named(conn, hearing_ids: list[str], *, kind: str | None = None) -> list[dict]:
+    """The operator's list (records the rule misses, e.g. a motion that mentions "נוכחים"), shaped like candidates()."""
+    out = []
+    for h in rows(conn, """SELECT h.id, h.hearing_date::text AS hearing_date, h.source_version_id, sv.metadata,
+                                  d.id AS document_id
+                           FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
+                           JOIN ntk.source_documents d ON d.id = sv.document_id WHERE h.id = ANY(:ids)""",
+                       {"ids": hearing_ids}):
+        us = rows(conn, """SELECT raw_text FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
+                           ORDER BY unit_ordinal""", {"sv": h["source_version_id"]})
+        text = "\n".join(u["raw_text"] or "" for u in us)
+        h["kind"] = kind or guess_kind(text, (h["metadata"] or {}).get("original_filename") or "")
+        h["units"] = len(us)
+        h["text"] = text[:300]
+        out.append(h)
+    return out
+
+
 def demote(conn, *, hearing_id: str, kind: str, actor: str) -> dict:
     from .db import ops
 

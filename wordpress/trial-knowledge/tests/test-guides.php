@@ -92,7 +92,7 @@ TK_T::eq( 2, substr_count( $tk_pill, 'class="tk-srcs__row"' ), 'chips (2.6): one
 TK_T::ok( false !== strpos( $tk_pill, 'aria-expanded="false"' ) && false !== strpos( $tk_pill, 'מקורות' ), 'chips (2.6): pill is a button with the count' );
 TK_T::eq( 1, substr_count( TK_Render_Guides::chips( array( $su1 ), TK_Render_Guides::cit_map( $case['citations'] ) ), 'class="tk-srcs tk-srcs--one"' ), 'chips (2.6): a single source is a direct link' );
 TK_T::ok( false !== strpos( $cp, '<li>שוחד</li>' ) && false !== strpos( $cp, '<li>מרמה והפרת אמונים</li>' ), 'case: charges split into offenses per defendant' );
-TK_T::ok( false !== strpos( $cp, '/trial/witness/w_346fdfeda0/' ) && 1 === substr_count( $cp, 'העיד/ה במשפט' ), 'case: people link witness pages and mark who testified' );
+TK_T::ok( false !== strpos( $cp, '/trial/witness/w_346fdfeda0/' ) && 1 === substr_count( $cp, 'העדות במשפט' ), 'case: people link witness pages and mark who testified' );
 TK_T::ok( strpos( $cp, '>2014<' ) < strpos( $cp, '>12.3.2015<' ) && strpos( $cp, '>12.3.2015<' ) < strpos( $cp, '>יוני 2015<' ), 'case: events sorted and grouped by year with precision' );
 TK_T::ok( false !== strpos( $cp, '/trial/timeline/?tk_case=4000' ), 'case: link to the timeline filtered to the case' );
 TK_T::ok( false !== strpos( $cp, '/trial/hearing/' . $hr . '/' ) && false !== strpos( $cp, '/trial/document/' . $sv . '/' ), 'case: hearings and source document linked' );

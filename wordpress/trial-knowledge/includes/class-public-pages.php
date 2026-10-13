@@ -12,6 +12,8 @@
  *   /{slug}/witnesses/        all witnesses            (templates/single-witnesses.php)
  *   /{slug}/glossary/         glossary                 (templates/single-glossary.php)
  *   /{slug}/315/              Project 315 bridge (2.6) (templates/single-315.php)
+ *   /{slug}/documents/        all documents, filtered (2.7) (templates/single-documents.php)
+ * The bare /{slug}/ page (the old raw list) redirects to the start page (2.7).
  *
  * @package TrialKnowledge
  */
@@ -32,6 +34,19 @@ class TK_Public_Pages {
 		add_filter( 'template_include', array( __CLASS__, 'template' ) );
 		add_filter( 'pre_get_document_title', array( __CLASS__, 'title' ) );
 		add_action( 'wp_head', array( __CLASS__, 'head' ), 1 );
+		add_action( 'template_redirect', array( __CLASS__, 'retire_base_page' ) );
+	}
+
+	/** /{slug}/ itself was a raw list of every document; readers start at the start page instead (2.7). */
+	public static function retire_base_page() {
+		if ( get_query_var( 'tk_type' ) || ! is_page() || ! apply_filters( 'tk_retire_base_page', true ) ) {
+			return;
+		}
+		$post = get_queried_object();
+		if ( $post && isset( $post->post_name ) && self::slug() === $post->post_name && ! $post->post_parent && home_url( '/' ) !== get_permalink( $post ) ) {
+			wp_safe_redirect( home_url( '/' ), 301 );
+			exit;
+		}
 	}
 
 	private static function slug() {
@@ -47,7 +62,7 @@ class TK_Public_Pages {
 		add_rewrite_rule( '^' . $s . '/document/(sv_[0-9a-f]{26})/?$', 'index.php?tk_type=document&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/case/(1000|2000|4000)/?$', 'index.php?tk_type=case&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/witness/(w_[0-9a-f]{10})/?$', 'index.php?tk_type=witness&tk_id=$matches[1]', 'top' );
-		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary|315)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
+		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary|315|documents)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
 	}
 
 	/** Section pages without an id: /{slug}/timeline/, /{slug}/witnesses/, /{slug}/glossary/. */
@@ -118,7 +133,7 @@ class TK_Public_Pages {
 		if ( ! $type || ! $id ) {
 			return null;
 		}
-		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary', '315' );
+		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary', '315', 'documents' );
 		if ( in_array( $type, $guides, true ) ) {
 			try {
 				$data          = self::load_guide( $type, $id );
@@ -194,6 +209,8 @@ class TK_Public_Pages {
 				return TK_Guides::glossary();
 			case '315':
 				return TK_P315::data()['items'] ? TK_P315::data() : null; // static data shipped with the plugin
+			case 'documents':
+				return TK_Guides::all_documents();
 		}
 		return null;
 	}
@@ -236,7 +253,7 @@ class TK_Public_Pages {
 			case 'source':
 				return sprintf( '%s — עמ׳ %d | %s', $d['document']['title'], $d['citation']['page'], get_bloginfo( 'name' ) );
 			case 'hearing':
-				return sprintf( 'דיון %s | %s', $d['hearing']['hearing_date'], get_bloginfo( 'name' ) );
+				return sprintf( 'דיון מיום %s | %s', TK_Render_Guides::fmt_date( $d['hearing']['hearing_date'] ), get_bloginfo( 'name' ) );
 			case 'document':
 				return TK_Render::display_title( $d['document'] ) . ' | ' . get_bloginfo( 'name' );
 			case 'case':
@@ -251,6 +268,8 @@ class TK_Public_Pages {
 				return 'מילון מונחים | ' . get_bloginfo( 'name' );
 			case '315':
 				return '315 האירועים בכתב האישום | ' . get_bloginfo( 'name' );
+			case 'documents':
+				return 'מסמכים בתיק | ' . get_bloginfo( 'name' );
 		}
 		return $title;
 	}

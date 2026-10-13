@@ -141,7 +141,9 @@ class TK_Blocks {
 		if ( 'substantive' === $req['mode'] ) {
 			$opts['hidden_count'] = self::procedural_count( $req['type'] );
 		}
-		return TK_Render::documents( $d, $opts );
+		$labels = array( 'decision' => 'החלטות', 'motion' => 'בקשות', 'response' => 'תגובות', 'notice' => 'הודעות' );
+		$bar    = isset( $labels[ $req['type'] ] ) ? TK_Render_Nav::bar( 'documents', array( array( __( 'מסמכים', 'trial-knowledge' ), TK_Public_Pages::section_url( 'documents' ) ), array( $labels[ $req['type'] ], '' ) ) ) : '';
+		return $bar . TK_Render::documents( $d, $opts );
 	}
 
 	/**

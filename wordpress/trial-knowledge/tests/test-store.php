@@ -167,7 +167,7 @@ $offline                  = $tk_view_all();
 TK_T::eq( $online, $offline, 'API down: every page renders the same from the store' );
 TK_T::eq( $calls, count( tk_api()->calls ), 'API down: no API request from page views once the store is filled' );
 TK_T::ok( false === strpos( implode( '', array_filter( $offline, 'is_string' ) ), 'המידע אינו זמין' ), 'API down: no "unavailable" box' );
-TK_T::eq( 'דיון 2024-01-01 | Site', $offline[0], 'API down: hearing page title from the store' );
+TK_T::eq( 'דיון מיום 1.1.2024 | Site', $offline[0], 'API down: hearing page title from the store' );
 TK_Cache::purge( array( 'hearing:' . $hr1 ) );
 TK_Store::forget_memo();
 TK_T::eq( $online, $tk_view_all(), 'API down: stale rows are still served' );

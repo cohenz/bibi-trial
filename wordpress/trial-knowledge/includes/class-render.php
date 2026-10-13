@@ -228,10 +228,10 @@ class TK_Render {
 		$out .= '<p class="tk-claim__short">' . esc_html( $b['answer_short'] ?? '' ) . '</p>';
 		$out .= '<p class="tk-claim__meta"><span class="tk-status tk-status--' . esc_attr( $status ) . '">' . esc_html( self::STATUS[ $status ] ?? $status ) . '</span> ';
 		$out .= '<time datetime="' . esc_attr( $b['as_of'] ) . '">' . esc_html( sprintf( __( 'נכון ל־%s', 'trial-knowledge' ), substr( $b['as_of'], 0, 10 ) ) ) . '</time></p></header>';
-		$out .= '<section class="tk-box tk-box--claim"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה נטען ומי טוען זאת', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '><p>' . esc_html( $b['claim_text'] ) . '</p></section>';
-		$out .= '<section class="tk-box tk-box--support"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה מחזק את הטענה', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . self::points( $b['support'], $cits, __( 'לא נמצא חומר מחזק בחומר שמופה.', 'trial-knowledge' ) ) . '</section>';
-		$out .= '<section class="tk-box tk-box--weakness"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה מחליש או סותר אותה', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . self::points( $b['weakness'], $cits, __( 'לא נמצא חומר מחליש בחומר שמופה.', 'trial-knowledge' ) ) . '</section>';
-		$out .= '<section class="tk-box tk-box--court"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה אמר או קבע בית המשפט', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . $court . '</section>';
+		$out .= '<section class="tk-box tk-box--claim"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה נטען ומי טוען זאת?', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '><p>' . esc_html( $b['claim_text'] ) . '</p></section>';
+		$out .= '<section class="tk-box tk-box--support"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה מחזק את הטענה?', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . self::points( $b['support'], $cits, __( 'לא נמצא חומר מחזק בחומר שמופה.', 'trial-knowledge' ) ) . '</section>';
+		$out .= '<section class="tk-box tk-box--weakness"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה מחליש או סותר אותה?', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . self::points( $b['weakness'], $cits, __( 'לא נמצא חומר מחליש בחומר שמופה.', 'trial-knowledge' ) ) . '</section>';
+		$out .= '<section class="tk-box tk-box--court"><h' . ( $h + 1 ) . '>' . esc_html__( 'מה אמר או קבע בית המשפט?', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '>' . $court . '</section>';
 		if ( ! empty( $b['unresolved_questions'] ) ) {
 			$out .= '<section class="tk-box tk-box--open"><h' . ( $h + 1 ) . '>' . esc_html__( 'שאלות פתוחות', 'trial-knowledge' ) . '</h' . ( $h + 1 ) . '><ul>';
 			foreach ( $b['unresolved_questions'] as $q ) {
@@ -504,6 +504,7 @@ class TK_Render {
 			'<form class="tk-ask__form" novalidate><label for="' . esc_attr( $id ) . '" class="tk-ask__label">' . esc_html__( 'שאלו את המשפט', 'trial-knowledge' ) . '</label>' .
 			'<textarea id="' . esc_attr( $id ) . '" class="tk-ask__q" name="question" rows="2" maxlength="500" required placeholder="' . esc_attr( $prompt ) . '"></textarea>' .
 			'<button type="submit" class="tk-ask__btn">' . esc_html__( 'שאלו', 'trial-knowledge' ) . '</button></form>' .
+			TK_Render_Nav::ask_examples() .
 			'<div class="tk-ask__out" aria-live="polite" aria-busy="false"></div>' .
 			'<p class="tk-ask__note tk-muted">' . esc_html__( 'התשובות נשענות רק על חומר שפורסם במאגר, עם ציטוט לכל קביעה. ייתכנו טעויות; המקור הוא הקובע.', 'trial-knowledge' ) . '</p></div>';
 	}
@@ -518,9 +519,9 @@ class TK_Render {
 		}
 		$labels = array(
 			'why'            => 'למה',
-			'supports'       => 'מה מחזק',
-			'weakens'        => 'מה מחליש או סותר',
-			'court_position' => 'מה אמר בית המשפט',
+			'supports'       => 'מה מחזק?',
+			'weakens'        => 'מה מחליש או סותר?',
+			'court_position' => 'מה אמר בית המשפט?',
 			'status'         => 'סטטוס',
 			'limitation'     => 'הסתייגות',
 		);

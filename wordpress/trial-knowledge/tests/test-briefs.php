@@ -58,9 +58,9 @@ TK_T::ok( false !== strpos( $bh, 'שם במסמך:' ) && false !== strpos( $bh, 
 TK_T::ok( false !== strpos( $bh, 'בית המשפט הודיע על &lt;b&gt;העדה&lt;/b&gt;.' ) && false !== strpos( $bh, 'class="tk-srcs' ) && false !== strpos( $bh, 'עמ׳ 2' ), 'doc page: summary sentences with a sources pill' );
 TK_T::ok( false === strpos( $bh, 'מסמך פרוצדורלי' ), 'doc page: no significance note for substantive documents' );
 TK_T::ok( false !== strpos( $bh, 'class="tk-hday"' ) && false !== strpos( $bh, '20.4.2026' ) && false !== strpos( $bh, 'הדיון הבא' ) && false !== strpos( $bh, '26.4.2026' ), 'doc page: hearing day box with date and next hearing' );
-TK_T::ok( false !== strpos( $bh, 'href="https://site.test/trial/witness/w_aaaaaaaaaa/"' ) && false !== strpos( $bh, 'עד/ת הגנה' ) && false !== strpos( $bh, 'מנכ&quot;לית לשעבר' ), 'doc page: witness linked by slug, side and description' );
+TK_T::ok( false !== strpos( $bh, 'href="https://site.test/trial/witness/w_aaaaaaaaaa/"' ) && false !== strpos( $bh, 'מטעם ההגנה' ) && false !== strpos( $bh, 'מנכ&quot;לית לשעבר' ), 'doc page: witness linked by slug, side and description' );
 TK_T::ok( false !== strpos( $bh, '/trial/witness/w_72da315abb/' ) && false !== strpos( $bh, 'tk-badge--label">נאשם 1<' ), 'doc page: defendant label stripped for the slug' );
-TK_T::ok( false !== strpos( $bh, 'עד לא מוכר' ) && false !== strpos( $bh, 'עד/ת תביעה' ) && 2 === substr_count( $bh, '/trial/witness/' ), 'doc page: unknown witness shown without a link; unknown side has no label' );
+TK_T::ok( false !== strpos( $bh, 'עד לא מוכר' ) && false !== strpos( $bh, 'מטעם התביעה' ) && 2 === substr_count( $bh, '/trial/witness/' ), 'doc page: unknown witness shown without a link; unknown side has no label' );
 $doc['brief']['significance']        = 'procedural';
 $doc['brief']['significance_reason'] = 'ארכה <i>להגשה</i>';
 $doc['brief']['hearing_days']        = array();
@@ -78,14 +78,14 @@ $wa = array(
 	),
 );
 $wh = TK_Render_Guides::witness_page( $wa, $bws );
-TK_T::ok( false !== strpos( $wh, 'ימי עדות לפי הודעות בית המשפט' ) && false !== strpos( $wh, '/trial/document/' . $bsv . '/' ) && false !== strpos( $wh, 'חקירה &lt;b&gt;נגדית' ), 'witness: appearances with description and the notice link' );
-TK_T::ok( strpos( $wh, '20.4.2026' ) < strpos( $wh, '21.4.2026' ), 'witness: appearances in date order' );
-TK_T::ok( 1 === substr_count( $wh, 'יש תמלול' ) && false !== strpos( $wh, 'עד/ת הגנה' ), 'witness: transcript mark and side label' );
+TK_T::ok( false !== strpos( $wh, '>ימי העדות<' ) && false !== strpos( $wh, '/trial/document/' . $bsv . '/' ) && false !== strpos( $wh, 'חקירה &lt;b&gt;נגדית' ), 'witness: days known from notices listed with description and the notice link' );
+TK_T::ok( false === strpos( $wh, 'יום עדות 20.4.2026' ), 'witness: a notice day that has a transcript is not listed twice (the hearing lists it)' );
+TK_T::ok( false !== strpos( $wh, 'מטעם ההגנה' ) && false === strpos( $wh, 'עד/ת' ) && false === strpos( $wh, '/ה ' ), 'witness: side label without gendered slashes' );
 TK_T::ok( false === strpos( $wh, 'הדיונים שבהם העיד/ה' ) && false === strpos( $wh, 'בינתיים מוצגים כאן עיקרי הדיונים' ) && false === strpos( $wh, 'ב־0 דיונים' ), 'witness: no hearings section or hearing-based note without hearings' );
-TK_T::ok( false !== strpos( $wh, 'עדיין לא פורסם תמלול של העדות' ) && false !== strpos( $wh, 'יום עדות אחד לפי הודעת בית המשפט' ), 'witness: appearance-only note and header count' );
+TK_T::ok( false !== strpos( $wh, 'עדיין לא פורסם פרוטוקול של העדות' ) && false !== strpos( $wh, 'יום עדות אחד לפי הודעת בית המשפט' ), 'witness: appearance-only note and header count' );
 $wl = TK_Render_Guides::witnesses_list( $bws );
 TK_T::ok( false !== strpos( $wl, 'tk-badge--defense' ) && false !== strpos( $wl, '>הגנה<' ), 'witness list: side badge' );
-TK_T::ok( false !== strpos( $wl, '3 דיונים מתומללים · יום עדות נוסף אחד' ) && false !== strpos( $wl, '2 ימי עדות לפי הודעות בית המשפט' ), 'witness list: transcribed hearings and notice-only days' );
+TK_T::ok( false !== strpos( $wl, '3 ימי עדות · עוד יום אחד לפי הודעת בית המשפט' ) && false !== strpos( $wl, '2 ימי עדות לפי הודעות בית המשפט' ), 'witness list: transcribed hearings and notice-only days' );
 
 // --- timeline: significance, hearing_day kind, procedural hidden in the fallback
 $btl = array(

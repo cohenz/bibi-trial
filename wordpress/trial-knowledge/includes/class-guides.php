@@ -73,6 +73,78 @@ class TK_Guides {
 		return TK_Rest_Proxy::cached_get( TK_Paths::glossary() );
 	}
 
+	/**
+	 * Previous and next published hearing (by date) from the timeline; empty on API errors.
+	 *
+	 * @param string $hearing_id hr_….
+	 * @return array{prev:array|null,next:array|null} timeline events (id, date, title).
+	 */
+	public static function hearing_neighbors( $hearing_id ) {
+		try {
+			$t = self::timeline();
+		} catch ( TK_Api_Error $e ) {
+			return array( 'prev' => null, 'next' => null );
+		}
+		return self::neighbors_in( (array) ( $t['events'] ?? array() ), $hearing_id );
+	}
+
+	/** @see hearing_neighbors() — pure part, tested. */
+	public static function neighbors_in( array $events, $hearing_id ) {
+		$hs = array_values(
+			array_filter(
+				$events,
+				static function ( $e ) {
+					return 'hearing' === ( $e['kind'] ?? '' ) && preg_match( '/^hr_[0-9a-f]{26}$/', (string) ( $e['id'] ?? '' ) );
+				}
+			)
+		);
+		usort(
+			$hs,
+			static function ( $a, $b ) {
+				return strcmp( (string) $a['date'], (string) $b['date'] ) ?: strcmp( (string) $a['id'], (string) $b['id'] );
+			}
+		);
+		$pos = array_search( $hearing_id, array_column( $hs, 'id' ), true );
+		if ( false === $pos ) {
+			return array( 'prev' => null, 'next' => null );
+		}
+		return array( 'prev' => $hs[ $pos - 1 ] ?? null, 'next' => $hs[ $pos + 1 ] ?? null );
+	}
+
+	/** Document types listed on the documents page, in that order. */
+	const DOC_TYPES = array( 'decision', 'motion', 'response', 'notice', 'indictment', 'exhibit', 'other' );
+
+	/**
+	 * Every published document (one request per type, the same paths the local copy keeps), newest first.
+	 *
+	 * @throws TK_Api_Error When no type could be read.
+	 * @return array{items:array}
+	 */
+	public static function all_documents() {
+		$items = array();
+		$ok    = false;
+		$err   = null;
+		foreach ( self::DOC_TYPES as $t ) {
+			try {
+				$d     = TK_Rest_Proxy::cached_get( TK_Paths::documents_list( $t, 200, '' ) );
+				$items = array_merge( $items, (array) ( $d['items'] ?? array() ) );
+				$ok    = true;
+			} catch ( TK_Api_Error $e ) {
+				$err = $e;
+			}
+		}
+		if ( ! $ok && $err ) {
+			throw $err;
+		}
+		usort(
+			$items,
+			static function ( $a, $b ) {
+				return strcmp( (string) ( $b['document_date'] ?? '' ), (string) ( $a['document_date'] ?? '' ) );
+			}
+		);
+		return array( 'items' => $items );
+	}
+
 	/** Witness list from the start-page data; empty on API errors (callers degrade to plain names). */
 	public static function witnesses() {
 		try {

@@ -51,8 +51,8 @@ class TK_P315 {
 			'url'   => '/list',
 		),
 		'exceptional'     => array(
-			'label' => 'היענות חריגה',
-			'long'  => 'היענות חריגה',
+			'label' => 'היענות חריגה לדרישות סיקור',
+			'long'  => 'היענות חריגה לדרישות סיקור',
 			'about' => 'האירועים שעומדים בשלושת המבחנים: הדרישה נענתה, ההיענות חריגה, ונתניהו מעורב לפי התביעה.',
 			'url'   => '/list',
 		),
@@ -172,7 +172,7 @@ class TK_P315 {
 		$out  = '<div class="tk-guide tk315" dir="rtl" lang="he">';
 		$out .= '<header class="tk-head"><p class="tk-kicker">' . TK_Render_Guides::case_badge( '4000' ) . ' ' . esc_html__( 'הנספח לכתב האישום', 'trial-knowledge' ) . '</p>';
 		$out .= '<h1 class="tk-head__title">' . esc_html__( '315 האירועים: מה נשאר מהם', 'trial-knowledge' ) . '</h1>';
-		$out .= '<p class="tk315-lead">' . esc_html__( 'לפי כתב האישום בתיק 4000, השוחד שקיבל נתניהו הוא "היענות חריגה" של אתר וואלה לדרישות סיקור. בנספח לכתב האישום מפורטים 315 אירועים כאלה. מתנדבי פרויקט 315 בדקו כל אירוע מול הארכיון של האתר ושאלו עליו שלוש שאלות. כאן מוצגות התוצאות בקצרה; ההסברים המלאים, הדוגמאות והסרטונים נמצאים באתר הפרויקט.', 'trial-knowledge' ) . '</p>';
+		$out .= '<p class="tk315-lead">' . esc_html__( 'לפי כתב האישום בתיק 4000, השוחד שקיבל נתניהו הוא "היענות חריגה לדרישות סיקור" באתר וואלה. בנספח לכתב האישום מפורטים 315 אירועים כאלה. מתנדבי פרויקט 315 בדקו כל אירוע מול הארכיון של האתר ושאלו עליו שלוש שאלות. כאן מוצגות התוצאות בקצרה; ההסברים המלאים, הדוגמאות והסרטונים נמצאים באתר הפרויקט.', 'trial-knowledge' ) . '</p>';
 		$out .= '<p class="tk-actions-row"><a class="tk-button" href="' . esc_url( self::site_url() ) . '" rel="noopener">' . esc_html__( 'לאתר פרויקט 315', 'trial-knowledge' ) . '</a> ' .
 			'<a class="tk-button" href="#tk315-list">' . esc_html__( 'לרשימה המלאה', 'trial-knowledge' ) . '</a></p></header>';
 
@@ -325,8 +325,8 @@ class TK_P315 {
 
 	/** The opposing reading, so the page shows both sides of the legal question. */
 	private static function other_view() {
-		return '<section class="tk-sec tk315-other" aria-labelledby="tk315-other-h"><h2 class="tk-sec__h" id="tk315-other-h">' . esc_html__( 'מה אומרים המבקרים', 'trial-knowledge' ) . '</h2>' .
-			'<p>' . esc_html__( 'יש המבקרים את שיטת הבדיקה של הפרויקט. לטענתם, "היענות חריגה" בכתב האישום מתארת את התנהלות בני הזוג אלוביץ\' מול עורכי האתר, ולא את אופי הפרסום עצמו; ולכן גם ידיעה שפורסמה בכל כלי התקשורת יכולה להיות חלק מהיענות חריגה, אם הדרך שבה הגיעה לאתר הייתה חריגה. השאלה הזאת תוכרע בבית המשפט.', 'trial-knowledge' ) . '</p>' .
+		return '<section class="tk-sec tk315-other" aria-labelledby="tk315-other-h"><h2 class="tk-sec__h" id="tk315-other-h">' . esc_html__( 'מה אומרים המבקרים?', 'trial-knowledge' ) . '</h2>' .
+			'<p>' . esc_html__( 'יש המבקרים את שיטת הבדיקה של הפרויקט. לטענתם, "היענות חריגה לדרישות סיקור" בכתב האישום מתארת את התנהלות בני הזוג אלוביץ\' מול עורכי האתר, ולא את אופי הפרסום עצמו; ולכן גם ידיעה שפורסמה בכל כלי התקשורת יכולה להיות חלק מהיענות חריגה לדרישות סיקור, אם הדרך שבה הגיעה לאתר הייתה חריגה. השאלה הזאת תוכרע בבית המשפט.', 'trial-knowledge' ) . '</p>' .
 			'<p><a href="https://en.wikipedia.org/wiki/Project_315" rel="noopener">' . esc_html__( 'על הפרויקט והביקורת עליו (ויקיפדיה, באנגלית)', 'trial-knowledge' ) . '</a></p></section>';
 	}
 
@@ -359,7 +359,7 @@ class TK_P315 {
 			}
 			$out .= '<p class="tk315-item__tests">' .
 				'<span>' . esc_html__( 'נענתה בפועל:', 'trial-knowledge' ) . ' ' . self::yn( $it['met'], 'כן', 'לא' ) . '</span>' .
-				( '' !== $it['exc'] ? '<span>' . esc_html__( 'היענות חריגה:', 'trial-knowledge' ) . ' ' . self::yn( $it['exc'], 'כן', 'לא' ) . '</span>' : '' ) .
+				( '' !== $it['exc'] ? '<span>' . esc_html__( 'היענות חריגה לדרישות סיקור:', 'trial-knowledge' ) . ' ' . self::yn( $it['exc'], 'כן', 'לא' ) . '</span>' : '' ) .
 				'<span>' . esc_html__( 'נתניהו מעורב לפי התביעה:', 'trial-knowledge' ) . ' ' . self::yn( $it['inv'], 'כן', 'לא' ) . '</span>' .
 				'<a class="tk315-item__more" href="' . esc_url( self::site_url( $c['url'] ) ) . '" rel="noopener">' . esc_html__( 'ההסבר באתר 315', 'trial-knowledge' ) . '</a></p>';
 			$out .= '</li>';

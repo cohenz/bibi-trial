@@ -7,6 +7,12 @@
 		var out = root.querySelector('.tk-ask__out');
 		var q = root.querySelector('.tk-ask__q');
 		var btn = root.querySelector('.tk-ask__btn');
+		root.querySelectorAll('.tk-ask__ex').forEach(function (b) {
+			b.addEventListener('click', function () {
+				q.value = b.getAttribute('data-q') || '';
+				if (form.requestSubmit) { form.requestSubmit(); } else { form.dispatchEvent(new Event('submit', { cancelable: true })); }
+			});
+		});
 		form.addEventListener('submit', function (ev) {
 			ev.preventDefault();
 			var question = (q.value || '').trim();

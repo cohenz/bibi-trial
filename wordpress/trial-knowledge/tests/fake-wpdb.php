@@ -23,12 +23,13 @@ final class TK_Fake_WPDB {
 		$this->pks = array(
 			'wp_tk_store'      => array( 'path_hash' ),
 			'wp_tk_store_tags' => array( 'tag', 'path_hash' ),
+			'wp_tk_questions'  => array( 'qkey' ),
 		);
 		$this->reset();
 	}
 
 	public function reset() {
-		$this->tables = array( 'wp_tk_store' => array(), 'wp_tk_store_tags' => array() );
+		$this->tables = array( 'wp_tk_store' => array(), 'wp_tk_store_tags' => array(), 'wp_tk_questions' => array() );
 	}
 
 	public function get_charset_collate() {

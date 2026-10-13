@@ -13,6 +13,63 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class TK_Admin_Costs {
 
+	const LIMITS_ACTION = 'tk_ask_limits';
+
+	public static function init() {
+		add_action( 'admin_post_' . self::LIMITS_ACTION, array( __CLASS__, 'save_limits' ) );
+	}
+
+	/** 2.7.8: the Ask caps, set here (stored by the API; an empty field goes back to the Railway value). */
+	public static function limits_form( array $lim ) {
+		$src    = (array) ( $lim['source'] ?? array() );
+		$rail   = (array) ( $lim['railway'] ?? array() );
+		$fields = array(
+			'per_visitor_daily' => array( 'תשובות חדשות ביום לכל מבקר', 0, 10000 ),
+			'daily'             => array( 'תשובות חדשות ביום לכל האתר', 0, 100000 ),
+			'per_minute'        => array( 'שאלות בדקה (לכל מבקר)', 1, 600 ),
+		);
+		$out = '<h2>' . esc_html__( 'מגבלות', 'trial-knowledge' ) . '</h2><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">' .
+			wp_nonce_field( self::LIMITS_ACTION, '_wpnonce', true, false ) . '<input type="hidden" name="action" value="' . esc_attr( self::LIMITS_ACTION ) . '"><table class="form-table" role="presentation">';
+		foreach ( $fields as $k => $f ) {
+			$admin = 'admin' === ( $src[ $k ] ?? '' );
+			$out  .= '<tr><th scope="row"><label for="tk-lim-' . esc_attr( $k ) . '">' . esc_html( $f[0] ) . '</label></th><td>' .
+				'<input type="number" class="small-text" id="tk-lim-' . esc_attr( $k ) . '" name="' . esc_attr( $k ) . '" min="' . (int) $f[1] . '" max="' . (int) $f[2] . '" value="' . ( $admin ? esc_attr( (string) ( $lim[ $k ] ?? '' ) ) : '' ) . '" placeholder="' . esc_attr( (string) ( $rail[ $k ] ?? '' ) ) . '"> ' .
+				'<span class="description">' . esc_html( sprintf( __( 'עכשיו: %1$s · ברירת מחדל: %2$s', 'trial-knowledge' ), (string) ( $lim[ $k ] ?? '' ), (string) ( $rail[ $k ] ?? '' ) ) ) . '</span></td></tr>';
+		}
+		$out .= '</table><p class="description">' . esc_html__( 'רק תשובה חדשה נספרת. שאלה שכבר נענתה, סירוב או "אין חומר" — בחינם. 0 = בלי הגבלה. שדה ריק = ברירת המחדל.', 'trial-knowledge' ) . '</p>' .
+			'<p><button type="submit" class="button button-primary">' . esc_html__( 'שמירת המגבלות', 'trial-knowledge' ) . '</button></p></form>';
+		return $out;
+	}
+
+	/** Values from the form: an int per filled field, null for an emptied one. Pure, for tests. */
+	public static function parse_limits( array $post ) {
+		$out = array();
+		foreach ( array( 'per_visitor_daily', 'daily', 'per_minute' ) as $k ) {
+			if ( ! array_key_exists( $k, $post ) ) {
+				continue;
+			}
+			$v         = trim( (string) $post[ $k ] );
+			$out[ $k ] = '' === $v ? null : (int) $v;
+		}
+		return $out;
+	}
+
+	public static function save_limits() {
+		if ( ! current_user_can( TK_Permissions::CAP_SETTINGS ) ) {
+			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ), 403 );
+		}
+		check_admin_referer( self::LIMITS_ACTION );
+		$body = self::parse_limits( array_map( 'sanitize_text_field', wp_unslash( $_POST ) ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		try {
+			tk_api()->post( '/v2/admin/ask/limits', $body, true );
+			$msg = __( 'המגבלות נשמרו. הן חלות מהשאלה הבאה.', 'trial-knowledge' );
+		} catch ( TK_Api_Error $e ) {
+			$msg = $e->getMessage();
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => 'trial-knowledge-costs', 'tk_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
 	public static function page() {
 		if ( ! current_user_can( TK_Permissions::CAP_SETTINGS ) ) {
 			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ) );
@@ -34,7 +91,11 @@ class TK_Admin_Costs {
 			echo '</div>';
 			return;
 		}
+		if ( isset( $_GET['tk_msg'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			echo '<div class="notice notice-info is-dismissible"><p>' . esc_html( sanitize_text_field( wp_unslash( $_GET['tk_msg'] ) ) ) . '</p></div>'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		}
 		echo self::render( (array) $u ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in render()
+		echo self::limits_form( (array) ( $u['limits'] ?? array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in limits_form()
 		try {
 			echo self::render_answers( (array) tk_api()->get( '/v2/admin/answers?limit=30', true ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in render_answers()
 		} catch ( TK_Api_Error $e ) {

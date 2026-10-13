@@ -66,6 +66,7 @@ function esc_url_raw( $u ) { return (string) $u; }
 function remove_query_arg( $k, $u = '' ) { return (string) $u; }
 function get_query_var( $k ) { return $GLOBALS['tk_query_vars'][ $k ] ?? ''; }
 function is_admin() { return false; }
+function wp_nonce_field( $a = -1, $n = '_wpnonce', $r = true, $e = true ) { return '<input type="hidden" name="' . $n . '" value="nonce">'; }
 function dbDelta( $sql ) { $GLOBALS['tk_dbdelta'][] = $sql; return array(); }
 
 // --- WP-Cron stubs (events kept in $GLOBALS['tk_cron'] as hook → timestamp)
@@ -101,6 +102,8 @@ require TK_DIR . 'includes/class-p315.php';
 require TK_DIR . 'includes/class-rest-proxy.php';
 require TK_DIR . 'includes/class-blocks.php';
 require TK_DIR . 'includes/class-admin-costs.php';
+require TK_DIR . 'includes/class-questions.php';
+require TK_DIR . 'includes/class-admin-questions.php';
 
 /**
  * Fake Knowledge API client: records every GET; $handler( $path ) returns the body or throws;

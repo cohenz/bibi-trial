@@ -68,7 +68,7 @@ class TK_Public_Pages {
 		add_rewrite_rule( '^' . $s . '/document/(sv_[0-9a-f]{26})/?$', 'index.php?tk_type=document&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/case/(1000|2000|4000)/?$', 'index.php?tk_type=case&tk_id=$matches[1]', 'top' );
 		add_rewrite_rule( '^' . $s . '/witness/(w_[0-9a-f]{10})/?$', 'index.php?tk_type=witness&tk_id=$matches[1]', 'top' );
-		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary|315|documents)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
+		add_rewrite_rule( '^' . $s . '/(timeline|witnesses|glossary|315|documents|questions)/?$', 'index.php?tk_type=$matches[1]&tk_id=all', 'top' );
 	}
 
 	/** Section pages without an id: /{slug}/timeline/, /{slug}/witnesses/, /{slug}/glossary/. */
@@ -100,6 +100,7 @@ class TK_Public_Pages {
 	public static function maybe_flush() {
 		if ( get_option( 'tk_rewrite_version' ) !== TK_VERSION ) {
 			TK_Sync::upgrade(); // 2.5: local-copy tables (dbDelta) and sync schedules
+			TK_Questions::maybe_upgrade(); // 2.7.8: visitors' questions
 			flush_rewrite_rules();
 			update_option( 'tk_rewrite_version', TK_VERSION );
 		}
@@ -139,7 +140,7 @@ class TK_Public_Pages {
 		if ( ! $type || ! $id ) {
 			return null;
 		}
-		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary', '315', 'documents' );
+		$guides = array( 'case', 'witness', 'timeline', 'witnesses', 'glossary', '315', 'documents', 'questions' );
 		if ( in_array( $type, $guides, true ) ) {
 			try {
 				$data          = self::load_guide( $type, $id );
@@ -217,6 +218,8 @@ class TK_Public_Pages {
 				return TK_P315::data()['items'] ? TK_P315::data() : null; // static data shipped with the plugin
 			case 'documents':
 				return TK_Guides::all_documents();
+			case 'questions':
+				return array( 'rows' => TK_Questions::rows( 'shown' ) ); // stored in WordPress, approved by the admin
 		}
 		return null;
 	}
@@ -276,6 +279,8 @@ class TK_Public_Pages {
 				return '315 האירועים בכתב האישום | ' . get_bloginfo( 'name' );
 			case 'documents':
 				return 'מסמכים בתיק | ' . get_bloginfo( 'name' );
+			case 'questions':
+				return 'שאלות ותשובות | ' . get_bloginfo( 'name' );
 		}
 		return $title;
 	}

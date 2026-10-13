@@ -22,6 +22,7 @@ class TK_Render_Nav {
 		'timeline'  => 'ציר הזמן',
 		'documents' => 'מסמכים',
 		'glossary'  => 'מילון',
+		'questions' => 'שאלות ותשובות',
 		'ask'       => 'שאלו',
 	);
 
@@ -42,6 +43,7 @@ class TK_Render_Nav {
 			'timeline'  => TK_Public_Pages::section_url( 'timeline' ),
 			'documents' => TK_Public_Pages::section_url( 'documents' ),
 			'glossary'  => TK_Public_Pages::section_url( 'glossary' ),
+			'questions' => TK_Public_Pages::section_url( 'questions' ),
 			'ask'       => $home . '#tk-ask',
 		);
 	}

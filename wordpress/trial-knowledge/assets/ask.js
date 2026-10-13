@@ -19,13 +19,22 @@
 			if (question.length < 2) { q.focus(); return; }
 			btn.disabled = true;
 			out.setAttribute('aria-busy', 'true');
-			// a new answer takes 20–40 seconds: show what is being done and why (2.7.3)
+			// a new answer takes about a minute: show what is being done and why (2.7.3, 2.7.8)
 			var wait = progress(root, out);
-			fetch(root.getAttribute('data-endpoint'), {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ question: question })
-			}).then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+			// 2.7.8: a defense-lens answer takes about a minute. If the site stops waiting first, ask once more: the
+			// server then waits for the answer being written (it is not written, or paid for, twice).
+			function send(attempt) {
+				return fetch(root.getAttribute('data-endpoint'), {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ question: question })
+				}).then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+					.then(function (res) {
+						if (res.status === 503 && res.body && res.body.retry && attempt < 2) { return send(attempt + 1); }
+						return res;
+					});
+			}
+			send(0)
 				.then(function (res) {
 					if (res.status === 200 && res.body.html) {
 						out.innerHTML = res.body.html; // server-escaped
@@ -48,21 +57,21 @@
 			: 'בפרוטוקולים, בסקירות העדים ובמסמכים שפורסמו';
 		var steps = [
 			[0, 'מחפש ' + scope],
-			[3, 'בוחר את הקטעים הרלוונטיים ביותר לשאלה'],
-			[7, 'מנסח תשובה מתוך הקטעים האלה בלבד'],
-			[18, 'מודל נפרד בודק כל משפט מול המקור'],
-			[32, 'מסיים את הבדיקה…']
+			[4, 'בוחר את הקטעים הרלוונטיים ביותר, ובהם החקירות הנגדיות'],
+			[10, 'מנסח תשובה מתוך הקטעים האלה בלבד'],
+			[35, 'מודל נפרד בודק כל משפט מול המקור'],
+			[60, 'מסיים את הבדיקה…']
 		];
 		out.textContent = '';
 		var box = document.createElement('div');
 		box.className = 'tk-wait';
 		box.innerHTML = '<div class="tk-wait__bar" aria-hidden="true"><span></span></div><ol class="tk-wait__steps"></ol>' +
-			'<p class="tk-wait__why">תשובה מקיפה לוקחת בדרך כלל 20–40 שניות: עוברים על כל החומר שפורסם, ומודל שני מאמת כל משפט מול הפרוטוקול, כך שלכל טענה בתשובה יש מקור.</p>' +
+			'<p class="tk-wait__why">תשובה מקיפה לוקחת בדרך כלל כדקה: עוברים על כל החומר שפורסם, ומודל שני מאמת כל משפט מול הפרוטוקול, כך שלכל טענה בתשובה יש מקור.</p>' +
 			'<p class="tk-wait__t" aria-hidden="true"></p>';
 		out.appendChild(box);
 		var sr = document.createElement('p');
 		sr.className = 'tk-sr';
-		sr.textContent = 'מחפש ומנסח תשובה. זה לוקח בדרך כלל 20 עד 40 שניות.';
+		sr.textContent = 'מחפש ומנסח תשובה. זה לוקח בדרך כלל כדקה.';
 		out.appendChild(sr);
 		var list = box.querySelector('.tk-wait__steps'), clock = box.querySelector('.tk-wait__t'), t0 = Date.now();
 		steps.forEach(function (s) {

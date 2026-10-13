@@ -515,6 +515,7 @@ class TK_Render {
 			'<textarea id="' . esc_attr( $id ) . '" class="tk-ask__q" name="question" rows="2" maxlength="500" required placeholder="' . esc_attr( $prompt ) . '"></textarea>' .
 			'<button type="submit" class="tk-ask__btn">' . esc_html__( 'שאלו', 'trial-knowledge' ) . '</button></form>' .
 			TK_Render_Nav::ask_examples() .
+			'<p class="tk-ask__more"><a href="' . esc_url( TK_Public_Pages::section_url( 'questions' ) ) . '">' . esc_html__( 'שאלות שמבקרים כבר שאלו, והתשובות להן ←', 'trial-knowledge' ) . '</a></p>' .
 			'<div class="tk-ask__out" aria-live="polite" aria-busy="false"></div>' .
 			'<p class="tk-ask__note tk-muted">' . esc_html__( 'התשובות נשענות רק על חומר שפורסם במאגר, עם ציטוט לכל קביעה. ייתכנו טעויות; המקור הוא הקובע.', 'trial-knowledge' ) . '</p></div>';
 	}

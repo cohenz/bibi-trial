@@ -212,6 +212,7 @@ class TK_Blocks {
 		wp_register_script( 'trial-knowledge-tabs', TK_URL . 'assets/tabs.js', array(), TK_VERSION, true );
 		wp_register_script( 'trial-knowledge-reading', TK_URL . 'assets/reading.js', array(), TK_VERSION, true );
 		wp_register_script( 'trial-knowledge-p315', TK_URL . 'assets/p315.js', array(), TK_VERSION, true );
+		wp_register_script( 'trial-knowledge-questions', TK_URL . 'assets/questions.js', array(), TK_VERSION, true );
 	}
 
 	public static function assets() {

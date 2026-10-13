@@ -10,7 +10,7 @@ $ws27 = array(
 
 // --- bar and breadcrumbs
 $bar = TK_Render_Nav::bar( 'witnesses', array( array( 'עדים', 'https://site.test/trial/witnesses/' ), array( 'אילן <ישועה>', '' ) ) );
-TK_T::eq( 7, substr_count( $bar, 'class="tk-subnav__a' ), 'bar: seven sections' );
+TK_T::eq( 8, substr_count( $bar, 'class="tk-subnav__a' ), 'bar: eight sections (2.7.8: questions)' );
 TK_T::eq( 1, substr_count( $bar, 'aria-current="page" >' ) + substr_count( $bar, '" aria-current="page">' ), 'bar: one current section' );
 TK_T::ok( false !== strpos( $bar, '<li aria-current="page">אילן &lt;ישועה&gt;</li>' ) && false !== strpos( $bar, '>ראשי</a>' ), 'crumbs: home first, current page last and escaped' );
 

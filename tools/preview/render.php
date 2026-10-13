@@ -4,7 +4,7 @@ $P = __DIR__;
 $css = file_get_contents( '/home/claude/bibi-trial/wordpress/trial-knowledge/assets/trial-knowledge.css' );
 $A = '/home/claude/bibi-trial/wordpress/trial-knowledge/assets/';
 $js  = '';
-foreach ( array( 'reading.js', 'ask.js', 'timeline.js', 'glossary.js' ) as $f ) { if ( file_exists( $A . $f ) ) { $js .= file_get_contents( $A . $f ) . ";\n"; } }
+foreach ( array( 'reading.js', 'ask.js', 'timeline.js', 'glossary.js', 'questions.js' ) as $f ) { if ( file_exists( $A . $f ) ) { $js .= file_get_contents( $A . $f ) . ";\n"; } }
 // the live theme (Astra) styles buttons and links globally; the plugin must hold its own against them
 $theme = 'a{color:#737880}a:hover,a:focus{color:#65696F}button,.button,input[type=submit]{border-style:solid;border-width:0;color:#fff;border-color:#737880;background-color:#737880;padding:15px 30px;font-weight:500;line-height:1em}button:focus,button:hover,.button:hover,.button:focus{color:#fff;background-color:#65696F;border-color:#65696F}';
 // on the live site the theme's stylesheets load AFTER the plugin's, so equal-specificity theme rules win
@@ -27,5 +27,8 @@ page( 'timeline', TK_Render_Guides::timeline( $t ), $css, $js );
 if ( file_exists( "$P/ask_after.json" ) ) {
 $ans = json_decode( file_get_contents( "$P/ask_after.json" ), true );
 page( 'ask', TK_Render::ask_form() . '<div>' . TK_Render::answer( $ans[1] ) . TK_Render::answer( $ans[0] ) . '</div>', $css, $js );
+}
+if ( file_exists( "$P/questions.json" ) ) {
+	page( 'questions', TK_Render_Nav::bar( 'questions', array( array( 'שאלות ותשובות', '' ) ) ) . '<h1>שאלות ותשובות</h1>' . TK_Questions::render_public( json_decode( file_get_contents( "$P/questions.json" ), true ) ), $css, $js );
 }
 echo "rendered\n";

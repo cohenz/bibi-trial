@@ -51,8 +51,9 @@ class TK_Rest_Proxy {
 	/**
 	 * @param WP_REST_Request $req Request.
 	 */
-	/** A new answer (writer + verifier) takes 10–40 seconds; other API calls keep the short timeout (2.7.3). */
-	const ASK_TIMEOUT = 55;
+	/** A new answer (writer + verifier) takes about a minute with the defense lens (2.7.8); other API calls keep the
+	 * short timeout. Under Cloudflare's 100-second limit for a request. */
+	const ASK_TIMEOUT = 85;
 
 	public static function ask( $req ) {
 		if ( function_exists( 'set_time_limit' ) && ! ( defined( 'TK_TESTING' ) && TK_TESTING ) ) {
@@ -81,9 +82,10 @@ class TK_Rest_Proxy {
 					: __( 'שאלתם היום הרבה שאלות חדשות. שאלות שכבר נשאלו עדיין נענות; לשאלות חדשות נסו שוב מחר.', 'trial-knowledge' );
 				return new WP_REST_Response( array( 'error' => $msg ), 429 );
 			}
-			if ( 'timeout' === $e->api_code ) {
-				// the answer keeps being prepared and is stored: asking again in a minute returns it at once, free
-				return new WP_REST_Response( array( 'error' => __( 'התשובה עדיין בהכנה. נסו לשאול שוב בעוד דקה — היא תופיע מיד.', 'trial-knowledge' ) ), 503 );
+			if ( in_array( $e->api_code, array( 'timeout', 'answer_in_progress' ), true ) ) {
+				// the answer keeps being prepared and is stored; asking again waits for it (the API never writes it
+				// twice), so the page asks once more by itself (retry) before showing this
+				return new WP_REST_Response( array( 'error' => __( 'התשובה עדיין בהכנה. נסו לשאול שוב בעוד דקה — היא תופיע מיד.', 'trial-knowledge' ), 'retry' => true ), 503 );
 			}
 			return new WP_REST_Response( array( 'error' => 429 === $status ? __( 'נשאלו יותר מדי שאלות. נסו שוב בעוד דקה.', 'trial-knowledge' ) : __( 'לא ניתן לענות כרגע.', 'trial-knowledge' ) ), $status );
 		}

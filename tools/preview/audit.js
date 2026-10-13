@@ -1,7 +1,7 @@
 // Contrast audit: every button/link in normal, hover and focus states, with the theme's global button/link styles.
 const { chromium } = require('playwright');
 const fs = require('fs');
-const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','witnesses','witness','documents','hearing','glossary','timeline','ask'].filter(n => fs.existsSync(__dirname + '/' + n + '.html'));
+const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','witnesses','witness','documents','hearing','glossary','timeline','ask','questions'].filter(n => fs.existsSync(__dirname + '/' + n + '.html'));
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--headless=new'] });
   const bad = {};
@@ -10,6 +10,7 @@ const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','w
     await p.goto('file://' + __dirname + '/' + name + '.html');
     await p.waitForTimeout(300);
     const n = await p.evaluate(() => {
+      document.querySelectorAll('details').forEach(d => { d.open = true; });
       const els = [...document.querySelectorAll('button, a, [role=button], summary, label.tk-tl__chip, .tk-tl__chip')]
         .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && (e.innerText || '').trim(); });
       els.forEach((e, i) => e.setAttribute('data-audit', i));

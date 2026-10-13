@@ -155,6 +155,17 @@ def test_full_flow(client, fixture_pdf, services):
     today = u.json()["days"][0]
     assert today["questions"]["total"] >= 4 and today["questions"]["cached"] >= 1 and today["questions"]["free"] >= 2
     assert u.json()["limits"]["daily"] == settings_daily_limit(client)
+    assert today["new_answers"] >= 1  # the defense-lens writer (task answer_defense) is counted too
+
+    # one answer as the engine decided it: gate report, retrieval, writer draft, verifier verdict
+    lst = signed(client, "GET", "/v2/admin/answers?limit=5")
+    assert lst.status_code == 200 and lst.json()["items"], lst.text
+    one = signed(client, "GET", f"/v2/admin/answers/{a1['answer_id']}")
+    assert one.status_code == 200, one.text
+    body = one.json()
+    assert body["gate_report"]["state"] and body["retrieval_ids"] and body["writer"]["task_type"] == "answer_defense"
+    assert "defense" in body["gate_report"]["retrieval"]
+    assert signed(client, "GET", "/v2/admin/answers/00000000-0000-0000-0000-000000000000").status_code == 404
 
     audit = signed(client, "GET", "/v2/admin/audit").json()["items"]
     actions = {x["action"] for x in audit}

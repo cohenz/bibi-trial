@@ -788,7 +788,7 @@ def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=
             runs AS (
                 SELECT (f.at AT TIME ZONE 'UTC')::date AS d, m.id, m.task_type, m.usage FROM firsts f
                 JOIN ntk.model_runs m ON m.id = f.run_id WHERE f.at >= now() - make_interval(days => :n))
-            SELECT d::text AS day, count(DISTINCT id) FILTER (WHERE task_type = 'answer') AS answers,
+            SELECT d::text AS day, count(DISTINCT id) FILTER (WHERE task_type IN ('answer', 'answer_defense')) AS answers,
                    coalesce(sum((usage->>'promptTokenCount')::bigint), 0) AS input_tokens,
                    coalesce(sum((usage->>'candidatesTokenCount')::bigint), 0) AS output_tokens,
                    coalesce(sum((usage->>'thoughtsTokenCount')::bigint), 0) AS thinking_tokens
@@ -810,6 +810,39 @@ def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=
                              "per_minute": s.rate_limit_ask_per_minute},
                   "thinking": {"writer": s.ask_thinking or "default", "verifier": s.ask_verify_thinking or "default"}},
                  cache="no-store")
+
+
+@router.get("/answers")
+def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1, le=200), status: str | None = None,
+                 p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """Recent Ask answers, newest first: question, status, prompt and how the gates decided."""
+    with st.services.engine.connect() as conn:
+        rs = rows(conn, """
+            SELECT id::text AS answer_id, question, answer_status, prompt_version, created_at,
+                   gate_report->>'state' AS gate_state, gate_report->'risk_flags' AS risk_flags
+            FROM ntk.answers WHERE (CAST(:s AS text) IS NULL OR answer_status = :s)
+            ORDER BY created_at DESC LIMIT :n""", {"s": status, "n": limit})
+    return _json({"items": rs}, cache="no-store")
+
+
+@router.get("/answers/{answer_id}")
+def get_answer(answer_id: str, st: AppState = Depends(get_state), p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """One Ask answer as the engine decided it (13.10.2026): the gate report (which gate failed and why), what was
+    retrieved, the writer's draft and the verifier's verdict — also for an answer the public sees only as passages."""
+    with st.services.engine.connect() as conn:
+        a = row(conn, """SELECT id::text AS answer_id, question, answer_status, prompt_version, model_version, corpus_version,
+                                created_at, envelope, gate_report, retrieval_ids, model_run_id::text AS model_run_id
+                         FROM ntk.answers WHERE id::text = :i OR slug = :i""", {"i": answer_id})
+        if a is None:
+            raise ApiError(404, "not_found", "answer not found")
+        run_ids = [x for x in (a["model_run_id"], (a["gate_report"] or {}).get("verifier_run_id")) if x]
+        runs = rows(conn, """SELECT id::text AS run_id, task_type, prompt_version, output, usage FROM ntk.model_runs
+                             WHERE id::text = ANY(:ids)""", {"ids": run_ids}) if run_ids else []
+    by_id = {r["run_id"]: r for r in runs}
+    a["writer"] = by_id.get(a["model_run_id"]) if a["model_run_id"] else None
+    vid = (a["gate_report"] or {}).get("verifier_run_id")
+    a["verifier"] = by_id.get(vid) if vid else None
+    return _json(a, cache="no-store")
 
 
 @router.get("/whoami")

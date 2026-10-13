@@ -29,7 +29,7 @@ from urllib.parse import parse_qsl, urlencode
 import requests
 
 BASE = os.environ.get("NTK_API", "https://api-production-6562.up.railway.app")
-KEY_ID = os.environ.get("NTK_OPS_KEY_ID", "claude-ops")
+KEY_ID = os.environ.get("NTK_OPS_KEY_ID", "claude-ops-2")
 ACTOR = os.environ.get("NTK_OPS_ACTOR", "claude-session")
 
 

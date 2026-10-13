@@ -1,6 +1,7 @@
 // Contrast audit: every button/link in normal, hover and focus states, with the theme's global button/link styles.
 const { chromium } = require('playwright');
-const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','witnesses','witness','documents','hearing','glossary','timeline','ask'];
+const fs = require('fs');
+const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','witnesses','witness','documents','hearing','glossary','timeline','ask'].filter(n => fs.existsSync(__dirname + '/' + n + '.html'));
 (async () => {
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--headless=new'] });
   const bad = {};
@@ -32,6 +33,22 @@ const pages = process.argv.slice(2).length ? process.argv.slice(2) : ['start','w
                sig: e.tagName.toLowerCase() + '.' + [...e.classList].join('.'), text: (e.innerText||'').trim().slice(0,30) };
     }, i);
     for (let i = 0; i < Math.min(n, 600); i++) {
+      // toggles (aria-pressed): also the other position, under the pointer, focused, and at rest
+      const toggle = await p.evaluate((i) => document.querySelector(`[data-audit="${i}"]`).hasAttribute('aria-pressed'), i).catch(() => false);
+      if (toggle) {
+        try {
+          const loc = p.locator(`[data-audit="${i}"]`);
+          await loc.click({ timeout: 800 });
+          for (const st of ['toggled+hover', 'toggled+focus', 'toggled']) {
+            if (st === 'toggled+focus') await p.mouse.move(0, 0);
+            if (st === 'toggled') await p.evaluate(() => document.activeElement && document.activeElement.blur());
+            const m = await measure(i);
+            if (m.ratio < 4.5) { const k = name + ' | ' + m.sig + ' | ' + st; (bad[k] = bad[k] || { n: 0, ex: m }).n++; }
+          }
+          await loc.click({ timeout: 800 });
+          await p.mouse.move(0, 0); await p.evaluate(() => document.activeElement && document.activeElement.blur());
+        } catch (err) { }
+      }
       for (const state of ['normal','hover','focus']) {
         try {
           const loc = p.locator(`[data-audit="${i}"]`);

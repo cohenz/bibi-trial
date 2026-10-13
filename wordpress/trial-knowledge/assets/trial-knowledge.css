@@ -679,12 +679,15 @@ a.tk-case-badge:hover { text-decoration: underline; }
    The site theme (Astra) styles every button (white text on grey, darker grey on hover/focus) and every link (grey).
    A plugin button that does not set a colour got white text; on hover a light background of ours met the theme's
    white text, or the theme's grey background met our grey text. These rules give every plugin button and link a
-   readable colour in every state; specific rules (two classes, or a class and a state) still win. */
+   readable colour in every state; specific rules (two classes, or a class and a state) still win.
+   2.7.5: the theme's stylesheets load AFTER ours, so a rule of equal weight loses to the theme. The leading `html`
+   adds one element to each guard rule: enough to beat the theme's `a`, `a:hover`, `button`, `button:hover`, and
+   still lighter than any plugin rule with a class (so specific rules keep winning). */
 :root { --tk-accent-strong: #163a5c; --tk-hover-bg: #e6eef7; }
-button:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-ink); line-height: 1.4; font-weight: inherit; }
-button:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus, :active) { color: var(--tk-accent-strong); background-color: var(--tk-hover-bg); border-color: var(--tk-accent); }
-:where([class*="tk-"], [class*="tk315-"]) a, a:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-accent); }
-:where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), a:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus) { color: var(--tk-accent-strong); }
+html button:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-ink); line-height: 1.4; font-weight: inherit; }
+html button:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus, :active) { color: var(--tk-accent-strong); background-color: var(--tk-hover-bg); border-color: var(--tk-accent); }
+html :where([class*="tk-"], [class*="tk315-"]) a, html a:where([class*="tk-"], [class*="tk315-"]) { color: var(--tk-accent); }
+html :where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), html a:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus) { color: var(--tk-accent-strong); }
 /* buttons that are dark when on or primary stay dark (and readable) under the pointer */
 .tk-ask__btn { background: var(--tk-accent); color: #fff; border: 1px solid var(--tk-accent); border-radius: 8px; font-weight: 600; }
 .tk-ask__btn:is(:hover, :focus, :active) { background: var(--tk-accent-strong); border-color: var(--tk-accent-strong); color: #fff; }
@@ -692,6 +695,8 @@ button:where([class*="tk-"], [class*="tk315-"]):is(:hover, :focus, :active) { co
 .tk-filter__b.is-on:is(:hover, :focus, :active) { background: var(--tk-accent-strong); border-color: var(--tk-accent-strong); color: #fff; }
 .tk-srcs__btn:is(:hover, :focus, :active), .tk-srcs.is-open .tk-srcs__btn, a.tk-srcs--one:is(:hover, :focus) { background: var(--tk-accent); border-color: var(--tk-accent); color: #fff; }
 .tk-srcs__btn, a.tk-srcs--one { color: #55636f; }
+.tk-tl__chip[aria-pressed="false"]:is(:hover, :focus) { background: var(--tk-hover-bg); border-color: var(--tk-accent); color: var(--tk-accent-strong); }
+.tk-tl__chip.tk-case--4000[aria-pressed="false"]:is(:hover, :focus), .tk-tl__chip.tk-case--2000[aria-pressed="false"]:is(:hover, :focus), .tk-tl__chip.tk-case--1000[aria-pressed="false"]:is(:hover, :focus) { background: var(--tk-case-bg); border-color: var(--tk-case); color: var(--tk-case); }
 .tk-tl__chip[aria-pressed="true"]:is(:hover, :focus) { background: #d6e3f2; color: var(--tk-accent-strong); }
 .tk-tl__chip.tk-case--4000[aria-pressed="true"]:is(:hover, :focus), .tk-tl__chip.tk-case--2000[aria-pressed="true"]:is(:hover, :focus), .tk-tl__chip.tk-case--1000[aria-pressed="true"]:is(:hover, :focus) { background: var(--tk-case-bg); color: var(--tk-case); filter: brightness(.96); }
 .tk-chip:is(:hover, :focus-visible) { color: var(--tk-accent-strong); }

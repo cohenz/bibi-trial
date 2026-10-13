@@ -67,6 +67,8 @@ def test_non_names_attach_to_the_person_they_name_or_share_a_defendant_label():
 def test_checked_aliases_and_suspects():
     m, ps = _resolve([("אהוד הירש", "2023-07-11"), ("אודי הירש", "2023-07-12"), ("אהוד הירש", "2023-07-18")])
     assert len(ps) == 1 and m["אודי הירש"].name == "אהוד הירש"
+    m, ps = _resolve([("שרלי הרדן", "2024-01-02"), ("שרלי ארדן", "2024-01-08")])
+    assert len(ps) == 1 and m["שרלי הרדן"].name == "שרלי ארדן"  # checked in the transcripts (13.10.2026)
     _, ps = _resolve([("בועז סטמבלר", "2022-01-31"), ("ארז סטמבלר", "2022-01-31")])
     sus = people.suspects(list(ps.values()))
     assert len(ps) == 2 and len(sus) == 1  # reported for a person to decide, never merged silently

@@ -111,6 +111,11 @@ class GateDecision:
     def report(self) -> dict:
         return {"state": self.state, "risk_flags": self.risk_flags, "gates": [r.to_dict() for r in self.results]}
 
+    @classmethod
+    def from_report(cls, report: dict) -> GateDecision:
+        return cls(report["state"], [GateResult(g["gate"], g["passed"], g.get("severity", "error"), g.get("details") or [])
+                                     for g in report.get("gates", [])], list(report.get("risk_flags") or []))
+
 
 # --- gates ----------------------------------------------------------------------
 def citation_gate(assertions: Iterable[Assertion], units: dict[str, UnitFacts], *, require_published: bool) -> GateResult:

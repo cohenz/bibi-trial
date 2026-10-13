@@ -154,7 +154,7 @@
 		if (an.blocked) { return { cls: 'block', head: 'לא ניתן לפרסם את הפריט הזה כמו שהוא', items: an.reasons }; }
 		if (an.reasons.length) { return { cls: 'issue', head: 'למה זה מחכה לך?', items: an.reasons }; }
 		var t = w.source_type;
-		var msg = a.artifact_type === 'guide' ? 'מדריכים תמיד מחכים לאישור אנושי לפני פרסום.'
+		var msg = a.artifact_type === 'guide' ? 'מדריכים כלליים (כתב האישום והתיקים) תמיד מחכים לאישור אנושי לפני פרסום.'
 			: t === 'other' ? 'סוג המסמך לא זוהה בוודאות, ולכן הוא מתפרסם רק באישור.'
 			: (t && /^(exhibit|indictment|affidavit)$/.test(t)) ? 'מסמכים מסוג "' + (TYPE_HE[t] || t) + '" מתפרסמים רק באישור.'
 			: t ? 'לא אומת אוטומטית שהמסמך שייך לתיק, ולכן הוא מתפרסם רק באישור.'
@@ -257,6 +257,9 @@
 			srcMap = {};
 			(d.sources || []).forEach(function (s) { srcMap[s.source_unit_id] = s; });
 			var an = analyse(d), why = whyText(d, an);
+			// a guide the auto-publish policy left for a person says why (13.10.2026)
+			var note = (t.reason || '').split(' — ')[1];
+			if (note) { why = { cls: 'issue', head: 'למה זה מחכה לך?', items: [note].concat(why.cls === 'clean' ? [] : why.items) }; }
 			var kind = a.artifact_type === 'guide' ? 'מדריך' : a.object_type === 'hearing' ? 'תקציר דיון' : 'תקציר ' + (TYPE_HE[w.source_type] || 'מסמך');
 			var title = (w.title && (w.title.text || w.title)) || (a.object_type === 'hearing' ? 'דיון מיום ' + fmtDate(ctx.date) : '') || w.title || '';
 			var head = el('div', { class: 'tk-qr__head' }, [

@@ -435,3 +435,64 @@ def build_witness_guide(*, name: str, slug: str, hearings: list[WitnessHearing],
     return _run_with_framing_retry("witness_guide", payload_in, runner=runner, allowed=allowed,
                                    corpus_version=corpus_version, assemble=assemble, units=units, env=env,
                                    allegation=False, citation_base=citation_base)
+
+
+# --- witness guides without a person (operator policy, 13.10.2026) --------------------------------------------------
+# "Publish what is correct; leave me only what is wrong, irrelevant or merely procedural." A witness guide whose only
+# misses are sentences the verifier did not confirm (or the support gate found weak) is published without those
+# sentences. Anything else — a failed gate of another kind, a risk flag, too little left, an operator hold — waits.
+_DROPPABLE = {"verifier": {"verifier_not_confirmed"}, "support": {"low_lexical_support"}}
+MIN_TESTIMONY_ITEMS = 3
+
+
+@dataclass
+class PolicyOutcome:
+    publish: bool
+    payload: dict
+    decision: gates.GateDecision
+    dropped: list[str] = field(default_factory=list)
+    reason: str | None = None  # why it stays for a person (Hebrew: the review screen shows it)
+
+
+def _item_paths(payload: dict) -> list[str]:
+    return [f"blocks/{bi}/items/{ii}" for bi, b in enumerate(payload["blocks"]) for ii in range(len(b["items"]))]
+
+
+def witness_policy(payload: dict, decision: gates.GateDecision, *, hold: str | None = None) -> PolicyOutcome:
+    def wait(reason: str) -> PolicyOutcome:
+        return PolicyOutcome(False, payload, decision, reason=reason)
+
+    if decision.state == "rejected":
+        return wait("נדחה בבדיקות האוטומטיות")
+    if hold:
+        return wait(hold)
+    if decision.risk_flags:
+        return wait("תוכן רגיש: " + ", ".join(decision.risk_flags))
+    dropped: set[str] = set()
+    for r in decision.results:
+        if r.passed:
+            continue
+        allowed = _DROPPABLE.get(r.gate)
+        if not allowed or any(d.get("problem") not in allowed for d in r.details) or not r.details:
+            return wait(f"בדיקת {r.gate} נכשלה")
+        for d in r.details:
+            dropped |= set(d.get("paths") or ([d["path"]] if d.get("path") else []))
+    paths = _item_paths(payload)
+    if len(dropped) > len(paths) / 2:
+        return wait(f"{len(dropped)} מתוך {len(paths)} משפטים לא אושרו בבדיקה")
+    out = {**payload, "blocks": []}
+    for bi, b in enumerate(payload["blocks"]):
+        items = [it for ii, it in enumerate(b["items"]) if f"blocks/{bi}/items/{ii}" not in dropped]
+        if items:
+            out["blocks"].append({**b, "items": items})
+    testimony = sum(len(b["items"]) for b in out["blocks"] if b["block"] == "testimony")
+    if testimony < MIN_TESTIMONY_ITEMS:
+        return wait(f"נשארו רק {testimony} משפטים מאומתים על העדות")
+    if dropped:
+        used = {c for b in out["blocks"] for it in b["items"] for c in it["citation_ids"]}
+        out["citations"] = [c for c in payload["citations"] if c["source_unit_id"] in used]
+        out["id"] = str(ids.derived_uuid("guide_policy", payload["id"], *sorted(dropped)))
+    out["review"] = {**payload.get("review", {}), "state": "machine_verified"}
+    policy = gates.GateResult("policy", True, "info", [{"policy": "witness_guides_auto", "dropped": sorted(dropped)}])
+    # the failed checks stay in the report: they say which sentences were taken out and why
+    return PolicyOutcome(True, out, gates.GateDecision("machine_verified", [*decision.results, policy], []), sorted(dropped))

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import guides, ids, people
+from . import contracts, gates, guides, ids, people
 from .db import knowledge as kdb
 from .db import ops, sources
-from .db.core import rows, scalar
+from .db.core import execute, rows, scalar
 from .db.public import units_by_ids
 from .layers import UnitView
 
@@ -143,6 +143,37 @@ def witness_hearings(conn, w: dict) -> list[guides.WitnessHearing]:
     return out
 
 
+def _hold(conn, slug: str) -> str | None:
+    """An operator's hold on a witness guide (irrelevant or merely procedural testimony): it never publishes by policy."""
+    r = rows(conn, """SELECT action, details FROM ntk.audit_events WHERE object_type = 'witness' AND object_id = :s
+                      AND action IN ('guide.policy.hold', 'guide.policy.release') ORDER BY occurred_at DESC LIMIT 1""",
+             {"s": slug})
+    if not r or r[0]["action"] != "guide.policy.hold":
+        return None
+    return (r[0]["details"] or {}).get("reason") or "הושאר לבדיקה"
+
+
+def _store(pipeline, payload: dict, decision, *, object_type: str, object_id: str, writer: str | None,
+           verifier: str | None) -> tuple[str, bool, bool]:
+    """Save a guide version; a witness guide that the policy clears is published right away (NTK_AUTO_PUBLISH=gates)."""
+    art_id = str(ids.derived_uuid("guide_artifact", payload["id"]))
+    with pipeline.s.engine.begin() as conn:
+        aid, created = kdb.save_artifact(conn, artifact_id=art_id, artifact_type="guide", object_type=object_type,
+                                         object_id=object_id, payload=payload, decision=decision,
+                                         model_run_id=writer, verifier_run_id=verifier)
+    published = pipeline.auto_publish(aid, decision) if decision.state == "machine_verified" else False
+    return aid, created, published
+
+
+def _wait_note(pipeline, artifact_id: str, reason: str) -> None:
+    """The review screen shows the part after " — " as "why this waits for you"."""
+    with pipeline.s.engine.begin() as conn:
+        execute(conn, """UPDATE ntk.review_tasks SET reason = left(split_part(reason, ' — ', 1) || ' — ' || :r, 500),
+                                updated_at = now()
+                         WHERE object_type = 'artifact' AND object_id = :a AND status = 'open'""",
+                {"a": artifact_id, "r": reason})
+
+
 def _save(pipeline, res, *, object_type: str, object_id: str) -> dict:
     if res.payload is None:
         with pipeline.s.engine.begin() as conn:
@@ -151,16 +182,76 @@ def _save(pipeline, res, *, object_type: str, object_id: str) -> dict:
         return {"object": f"{object_type}:{object_id}", "state": "failed", "errors": res.errors[:5]}
     writer = next(r.id for r in res.runs if r.task_type != "verify")
     verifier = next((r.id for r in reversed(res.runs) if r.task_type == "verify"), None)
-    art_id = str(ids.derived_uuid("guide_artifact", res.payload["id"]))
-    with pipeline.s.engine.begin() as conn:
-        aid, created = kdb.save_artifact(conn, artifact_id=art_id, artifact_type="guide", object_type=object_type,
-                                         object_id=object_id, payload=res.payload, decision=res.decision,
-                                         model_run_id=writer, verifier_run_id=verifier)
-    report = res.decision.report() if res.decision else {}
+    payload, decision, extra = res.payload, res.decision, {}
+    if object_type == "witness" and decision is not None and pipeline.cfg.auto_publish == "gates":
+        with pipeline.s.engine.connect() as conn:
+            hold = _hold(conn, object_id)
+        out = guides.witness_policy(payload, decision, hold=hold)
+        if out.publish:
+            contracts.validate("GuideObject", out.payload)
+            payload, decision = out.payload, out.decision
+            extra = {"dropped": out.dropped}
+        else:
+            extra = {"waits": out.reason}
+    aid, created, published = _store(pipeline, payload, decision, object_type=object_type, object_id=object_id,
+                                     writer=writer, verifier=verifier)
+    if extra.get("waits") and decision.state != "rejected":
+        _wait_note(pipeline, aid, extra["waits"])
+    report = decision.report() if decision else {}
     failed = [g["gate"] for g in report.get("gates", []) if not g["passed"]]
     return {"object": f"{object_type}:{object_id}", "artifact_id": aid, "created": created,
-            "state": res.decision.state if res.decision else None, "failed_gates": failed,
-            "items": sum(len(b["items"]) for b in res.payload["blocks"])}
+            "state": "published" if published else (decision.state if decision else None), "failed_gates": failed,
+            "items": sum(len(b["items"]) for b in payload["blocks"]), **extra}
+
+
+def apply_witness_policy(pipeline, *, keys: list[str] | None = None, holds: dict[str, str] | None = None,
+                         release: list[str] | None = None, apply: bool = False, actor: str = "operator") -> dict:
+    """Run the witness-guide policy over guides already waiting in the review queue (built before the policy, or
+    released from a hold). ``holds``: slug → reason (irrelevant / procedural) — recorded, and those guides wait."""
+    holds, release = holds or {}, release or []
+    if apply and (holds or release):
+        with pipeline.s.engine.begin() as conn:
+            for slug, reason in holds.items():
+                ops.audit(conn, actor=actor, action="guide.policy.hold", object_type="witness", object_id=slug,
+                          details={"reason": reason})
+            for slug in release:
+                ops.audit(conn, actor=actor, action="guide.policy.release", object_type="witness", object_id=slug)
+    with pipeline.s.engine.connect() as conn:
+        waiting = rows(conn, """SELECT DISTINCT ON (object_id) id, object_id, payload, gate_report, model_run_id,
+                                       verifier_run_id, review_state::text AS st
+                                FROM ntk.generated_artifacts
+                                WHERE artifact_type = 'guide' AND object_type = 'witness'
+                                  AND review_state = 'human_review_required'
+                                ORDER BY object_id, created_at DESC""")
+        held = {w["object_id"]: holds.get(w["object_id"]) or (None if w["object_id"] in release else _hold(conn, w["object_id"]))
+                for w in waiting}
+    out: dict[str, list] = {"published": [], "waits": [], "errors": []}
+    for w in waiting:
+        slug = w["object_id"]
+        if keys and slug not in keys:
+            continue
+        payload = w["payload"]
+        res = guides.witness_policy(payload, gates.GateDecision.from_report(w["gate_report"]), hold=held[slug])
+        entry = {"slug": slug, "name": payload.get("title"), "artifact_id": str(w["id"])}
+        if not res.publish:
+            out["waits"].append({**entry, "reason": res.reason})
+            if apply:
+                _wait_note(pipeline, str(w["id"]), res.reason or "")
+            continue
+        entry["dropped"] = res.dropped
+        if apply:
+            try:
+                contracts.validate("GuideObject", res.payload)
+                aid, _created, published = _store(pipeline, res.payload, res.decision, object_type="witness", object_id=slug,
+                                                  writer=str(w["model_run_id"]) if w["model_run_id"] else None,
+                                                  verifier=str(w["verifier_run_id"]) if w["verifier_run_id"] else None)
+                entry.update(artifact_id=aid, published=published)
+            except Exception as exc:  # noqa: BLE001 — one guide must not stop the rest
+                out["errors"].append({**entry, "error": str(exc)[:300]})
+                continue
+        out["published"].append(entry)
+    out["counts"] = {k: len(v) for k, v in out.items() if isinstance(v, list)}
+    return out
 
 
 def build(pipeline, *, kind: str = "all", source_version_id: str | None = None, keys: list[str] | None = None) -> dict:

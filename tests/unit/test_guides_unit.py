@@ -91,3 +91,57 @@ def test_batch_quota_split_sends_what_fits():
         raise AssertionError("non-quota errors must propagate")
     except ProviderError:
         pass
+
+
+# --- witness guides without a person (13.10.2026) --------------------------------------------------------------------
+def _wguide(role=2, testimony=6):
+    def it(i):
+        return {"label": None, "text": f"משפט {i}", "date": None, "date_precision": None, "case_keys": [],
+                "witness_slug": None, "citation_ids": [f"su_{i}"]}
+    blocks = [{"block": "role", "items": [it(f"r{i}") for i in range(role)]},
+              {"block": "testimony", "items": [it(f"t{i}") for i in range(testimony)]}]
+    cits = [{"source_unit_id": c} for b in blocks for x in b["items"] for c in x["citation_ids"]]
+    return {"id": "00000000-0000-5000-8000-000000000001", "kind": "witness", "key": "w_0123456789", "blocks": blocks,
+            "citations": cits, "review": {"state": "human_review_required"}}
+
+
+def _decision(*failed, flags=()):
+    from ntk_common import gates
+
+    res = [gates.GateResult("citation", True), *failed]
+    return gates.GateDecision("human_review_required", res, list(flags))
+
+
+def test_witness_policy_drops_unconfirmed_sentences_and_publishes():
+    from ntk_common import gates, guides
+
+    d = _decision(gates.GateResult("verifier", False, "review", [{"problem": "verifier_not_confirmed",
+                                                                  "paths": ["blocks/1/items/0", "blocks/1/items/4"]}]),
+                  gates.GateResult("support", False, "review", [{"path": "blocks/0/items/1", "problem": "low_lexical_support"}]))
+    p = _wguide()
+    out = guides.witness_policy(p, d)
+    assert out.publish and out.decision.state == "machine_verified"
+    assert out.dropped == ["blocks/0/items/1", "blocks/1/items/0", "blocks/1/items/4"]
+    texts = [x["text"] for b in out.payload["blocks"] for x in b["items"]]
+    assert texts == ["משפט r0", "משפט t1", "משפט t2", "משפט t3", "משפט t5"]
+    assert {c["source_unit_id"] for c in out.payload["citations"]} == {"su_r0", "su_t1", "su_t2", "su_t3", "su_t5"}
+    assert out.payload["id"] != p["id"] and len(p["blocks"][1]["items"]) == 6  # a new version; the original untouched
+    assert any(r.gate == "policy" for r in out.decision.results)
+    clean = guides.witness_policy(p, _decision())
+    assert clean.publish and clean.payload["id"] == p["id"] and not clean.dropped
+
+
+def test_witness_policy_leaves_the_doubtful_for_a_person():
+    from ntk_common import gates, guides
+
+    v = lambda *paths: gates.GateResult("verifier", False, "review", [{"problem": "verifier_not_confirmed", "paths": list(paths)}])  # noqa: E731
+    assert not guides.witness_policy(_wguide(), _decision(), hold="עדות פרוצדורלית").publish
+    assert not guides.witness_policy(_wguide(), _decision(flags=["investigator_offense"])).publish
+    assert not guides.witness_policy(_wguide(), _decision(gates.GateResult("judicial_wording", False, "review", [{"path": "x"}]))).publish
+    assert not guides.witness_policy(_wguide(), _decision(gates.GateResult("verifier", False, "review", [{"problem": "not_verified"}]))).publish
+    out = guides.witness_policy(_wguide(role=1, testimony=6), _decision(v(*[f"blocks/1/items/{i}" for i in range(4)])))
+    assert not out.publish and "מתוך" in out.reason  # most of it unconfirmed
+    out = guides.witness_policy(_wguide(role=2, testimony=3), _decision(v("blocks/1/items/0")))
+    assert not out.publish and "רק 2" in out.reason  # too little left about the testimony
+    rejected = gates.GateDecision("rejected", [], [])
+    assert not guides.witness_policy(_wguide(), rejected).publish

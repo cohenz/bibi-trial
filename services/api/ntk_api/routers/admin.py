@@ -57,6 +57,7 @@ from ..schemas import (
     ReviewRequest,
     StageRerunRequest,
     UnpublishRequest,
+    WitnessPolicyRequest,
 )
 from ..security import Principal
 from .public import _json
@@ -430,6 +431,24 @@ def maintenance_non_hearings(body: NonHearingsRequest, request: Request, st: App
                 ops.bump_corpus_version(conn, reason=f"{len(out['applied'])} documents taken for hearings reclassified",
                                         actor=p.label)
             out["names"] = inbox_dupes.refresh_names(conn)
+    return _json(out, cache="no-store")
+
+
+@router.post("/guides/witness-policy")
+def guides_witness_policy(body: WitnessPolicyRequest, request: Request, st: AppState = Depends(get_state),
+                          p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """Operator policy (13.10.2026): witness guides that passed every gate but the verifier are published without the
+    sentences it did not confirm; those with other problems, too little left, or held as irrelevant/procedural wait."""
+    from ntk_common import guide_service
+    from ntk_common.orchestrator import Pipeline
+
+    if body.apply and st.settings.auto_publish != "gates":
+        raise ApiError(409, "conflict", "auto-publish policy is off (NTK_AUTO_PUBLISH)")
+    out = guide_service.apply_witness_policy(Pipeline(st.services), keys=body.keys, holds=body.holds, release=body.release,
+                                             apply=body.apply, actor=p.label)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="guides.witness_policy", object_type="guide", object_id="witness",
+                  request_id=_rid(request), details={"apply": body.apply, **out["counts"]})
     return _json(out, cache="no-store")
 
 

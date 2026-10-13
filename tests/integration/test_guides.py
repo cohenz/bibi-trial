@@ -125,3 +125,55 @@ def test_witness_guide_through_batch(services, pipeline, built):
         assert row(conn, "SELECT status FROM ntk.model_runs WHERE id = CAST(:i AS uuid)", {"i": run_id})["status"] == "succeeded"
         assert row(conn, "SELECT count(*) AS n FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
                    {"a": built_[0]["artifact_id"]})["n"] == 1
+
+
+def test_witness_policy_publishes_clean_guides_and_keeps_holds(services, pipeline, built, monkeypatch):
+    """Operator policy (13.10.2026): a waiting witness guide that passes is published by the policy; a held one waits,
+    with the reason on its review task; a release lets it through."""
+    import dataclasses
+
+    from ntk_common.db.core import execute
+    from ntk_common.orchestrator import Pipeline
+
+    slug = next(b["object"].split(":", 1)[1] for b in built[1]["built"] if b["object"].startswith("witness:"))
+    gp_ = Pipeline(services)
+    gp_.cfg = dataclasses.replace(services.settings, auto_publish="gates")
+
+    def waiting_copy():
+        with services.engine.begin() as conn:
+            a = row(conn, """SELECT id::text AS id FROM ntk.generated_artifacts WHERE object_type = 'witness' AND object_id = :s
+                             ORDER BY created_at DESC LIMIT 1""", {"s": slug})
+            if scalar(conn, "SELECT review_state::text FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)", {"a": a["id"]}) == "published":
+                kdb.unpublish_artifact(conn, artifact_id=a["id"], actor="test", reason="test")
+            execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'human_review_required' WHERE id = CAST(:a AS uuid)",
+                    {"a": a["id"]})
+            kdb.open_review_task(conn, object_type="artifact", object_id=a["id"], risk_flags=[], reason="guide for test")
+        return a["id"]
+
+    aid = waiting_copy()
+    dry = guide_service.apply_witness_policy(gp_, keys=[slug], holds={slug: "עדות פרוצדורלית בלבד"})
+    assert dry["counts"]["waits"] == 1 and dry["waits"][0]["reason"] == "עדות פרוצדורלית בלבד"
+    with services.engine.connect() as conn:  # a dry run records nothing
+        assert guide_service._hold(conn, slug) is None
+    out = guide_service.apply_witness_policy(gp_, holds={slug: "עדות פרוצדורלית בלבד"}, apply=True, actor="test")
+    assert slug in {w["slug"] for w in out["waits"]}
+    with services.engine.connect() as conn:
+        t = row(conn, "SELECT reason FROM ntk.review_tasks WHERE object_id = :a AND status = 'open'", {"a": aid})
+        assert t["reason"].endswith(" — עדות פרוצדורלית בלבד")
+    # a rebuild of a held witness waits too
+    rebuilt = guide_service.build(gp_, kind="witnesses", keys=[slug])["built"][0]
+    assert rebuilt["state"] != "published" and rebuilt.get("waits") == "עדות פרוצדורלית בלבד"
+    from ntk_common import guides
+
+    monkeypatch.setattr(guides, "MIN_TESTIMONY_ITEMS", 1)  # the mock writes a two-sentence guide
+    out = guide_service.apply_witness_policy(gp_, keys=[slug], release=[slug], apply=True, actor="test")
+    assert out["counts"]["published"] == 1 and out["published"][0]["published"] is True, out
+    with services.engine.connect() as conn:
+        pub = rows(conn, """SELECT id::text AS id, gate_report FROM ntk.generated_artifacts WHERE object_type = 'witness'
+                            AND object_id = :s AND review_state = 'published'""", {"s": slug})
+        assert len(pub) == 1
+        assert row(conn, "SELECT decided_by FROM ntk.review_tasks WHERE object_id = :a ORDER BY completed_at DESC NULLS LAST LIMIT 1",
+                   {"a": pub[0]["id"]})["decided_by"] == "policy:auto-publish-gates"
+        assert row(conn, "SELECT count(*) AS n FROM ntk.review_tasks WHERE object_id = :a AND status = 'open'",
+                   {"a": pub[0]["id"]})["n"] == 0
+        assert gp.witness_page(conn, slug)["artifact_id"] == pub[0]["id"]

@@ -234,6 +234,17 @@ class NonHearingsRequest(BaseModel):
     kind: Literal["decision", "notice", "motion", "response", "other"] | None = None
 
 
+class WitnessPolicyRequest(BaseModel):
+    """Run the witness-guide auto-publish policy over guides waiting for review (see guides.witness_policy)."""
+    model_config = ConfigDict(extra="forbid")
+    apply: bool = False  # false: list what would be published and what waits
+    keys: list[Annotated[str, StringConstraints(pattern=r"^w_[0-9a-f]{10}$")]] | None = Field(None, max_length=200)
+    # slug → why it waits for a person (irrelevant / merely procedural); recorded, and later builds wait too
+    holds: dict[Annotated[str, StringConstraints(pattern=r"^w_[0-9a-f]{10}$")],
+                Annotated[str, StringConstraints(min_length=2, max_length=300)]] | None = Field(None, max_length=200)
+    release: list[Annotated[str, StringConstraints(pattern=r"^w_[0-9a-f]{10}$")]] | None = Field(None, max_length=200)
+
+
 class DuplicateDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
     # remove_copy: delete this intake copy, keep the document already in the system

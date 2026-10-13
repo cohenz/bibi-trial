@@ -30,6 +30,7 @@ from ntk_common.jobs import (
     TASK_VERIFY_ARTIFACT,
 )
 from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempotency_key
+from pydantic import BaseModel, ConfigDict
 
 from ..app import ApiError, AppState
 from ..deps import admin, get_state
@@ -773,10 +774,11 @@ def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=
     answers (writer and verifier, thinking included) and their cost at the configured prices."""
     import datetime as dt
 
-    from ..ask_budget import AskBudget
+    from ..ask_budget import AskBudget, effective_limits
 
     s = st.settings
-    budget = AskBudget(st.redis, daily_limit=s.ask_daily_limit, visitor_limit=s.ask_visitor_daily_limit)
+    budget = AskBudget.from_settings(st.redis, s)
+    lim = effective_limits(st.redis, s)
     with st.services.engine.connect() as conn:
         rs = rows(conn, """
             WITH refs AS (  -- each paid model run once, on the UTC day of the first answer that used it
@@ -806,22 +808,73 @@ def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=
     n_new = sum(x["new_answers"] for x in out)
     return _json({"days": out, "total_cost_usd": total, "avg_cost_per_new_answer_usd": round(total / n_new, 4) if n_new else None,
                   "prices_per_million": {"input": s.price_input_per_m, "output_and_thinking": s.price_output_per_m},
-                  "limits": {"daily": s.ask_daily_limit, "per_visitor_daily": s.ask_visitor_daily_limit,
-                             "per_minute": s.rate_limit_ask_per_minute},
+                  "limits": {"daily": lim["daily"], "per_visitor_daily": lim["per_visitor_daily"],
+                             "per_minute": lim["per_minute"], "railway": lim["railway"], "source": lim["source"]},
                   "thinking": {"writer": s.ask_thinking or "default", "verifier": s.ask_verify_thinking or "default"}},
                  cache="no-store")
 
 
+@router.get("/ask/limits")
+def get_ask_limits(st: AppState = Depends(get_state), p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    from ..ask_budget import effective_limits
+
+    return _json(effective_limits(st.redis, st.settings), cache="no-store")
+
+
+class AskLimitsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    daily: int | None = None
+    per_visitor_daily: int | None = None
+    per_minute: int | None = None
+
+
+@router.post("/ask/limits")
+def set_ask_limits(body: AskLimitsIn, st: AppState = Depends(get_state),
+                   p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """Override the Ask caps from WordPress (13.10.2026): {"daily": 200, "per_visitor_daily": 5, "per_minute": 6};
+    null clears an override (back to the Railway value). Takes effect on the next question."""
+    from ..ask_budget import effective_limits, set_limits
+
+    values = {k: getattr(body, k) for k in body.model_fields_set}
+    if not values:
+        raise ApiError(400, "invalid_request", "give one or more of daily, per_visitor_daily, per_minute")
+    try:
+        set_limits(st.redis, values)
+    except ValueError as exc:
+        raise ApiError(400, "invalid_request", str(exc)) from exc
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="ask.limits.set", object_type="settings", object_id="ask_limits",
+                  details={"set": values})
+    return _json(effective_limits(st.redis, st.settings), cache="no-store")
+
+
 @router.get("/answers")
-def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1, le=200), status: str | None = None,
+def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1, le=500), status: str | None = None,
+                 since: str | None = None, envelope: bool = False,
                  p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
-    """Recent Ask answers, newest first: question, status, prompt and how the gates decided."""
+    """Ask answers, newest first: question, status, prompt and how the gates decided. ``status`` takes a comma list;
+    ``since`` (ISO time) returns only answers stored after it; ``envelope=true`` adds the public answer — WordPress
+    syncs the visitors' questions with it (13.10.2026)."""
+    statuses = [x.strip() for x in (status or "").split(",") if x.strip()] or None
+    since_dt = None
+    if since:
+        try:
+            since_dt = dt.datetime.fromisoformat(since.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ApiError(400, "invalid_request", "since must be an ISO date-time") from exc
     with st.services.engine.connect() as conn:
-        rs = rows(conn, """
-            SELECT id::text AS answer_id, question, answer_status, prompt_version, created_at,
+        rs = rows(conn, f"""
+            SELECT id::text AS answer_id, question, normalized_question, answer_status, prompt_version, created_at,
                    gate_report->>'state' AS gate_state, gate_report->'risk_flags' AS risk_flags
-            FROM ntk.answers WHERE (CAST(:s AS text) IS NULL OR answer_status = :s)
-            ORDER BY created_at DESC LIMIT :n""", {"s": status, "n": limit})
+                   {", envelope" if envelope else ""}
+            FROM ntk.answers
+            WHERE (CAST(:s AS text[]) IS NULL OR answer_status = ANY(CAST(:s AS text[])))
+              AND (CAST(:since AS timestamptz) IS NULL OR created_at > CAST(:since AS timestamptz))
+            ORDER BY created_at DESC LIMIT :n""", {"s": statuses, "since": since_dt, "n": limit})
+    if envelope:
+        from ntk_common import editorial
+        for r in rs:
+            r["envelope"] = editorial.polish(r["envelope"])
     return _json({"items": rs}, cache="no-store")
 
 

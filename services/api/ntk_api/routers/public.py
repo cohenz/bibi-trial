@@ -12,6 +12,7 @@ from ntk_common.db import public as pub
 from ntk_common.db.core import row
 from ntk_common.search.base import SearchFilters, SearchRequest
 
+from .. import inflight
 from ..app import ApiError, AppState
 from ..deps import get_state, rate_limit
 from ..schemas import AskRequest, SearchRequestIn
@@ -263,8 +264,19 @@ def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -
 
     from ..ask_budget import MESSAGES, AskBudget
 
-    budget = AskBudget(st.redis, daily_limit=st.settings.ask_daily_limit, visitor_limit=st.settings.ask_visitor_daily_limit)
+    budget = AskBudget.from_settings(st.redis, st.settings)
     visitor = getattr(request.state, "ip_hash", None)
+    # the same question is being answered right now (a visitor asking again, or two visitors): wait for that answer
+    # rather than paying for a second run
+    lock = st.ask.inflight_key(body.question, body.locale) if body.as_of is None else None
+    owner = inflight.acquire(st.redis, lock)
+    if not owner:
+        res = inflight.wait(st.redis, st.ask, body.question, body.locale)
+        if res is None:
+            raise ApiError(503, "answer_in_progress", "the answer to this question is still being prepared")
+        budget.count("total")
+        budget.count("cached")
+        return _json(editorial.polish(res.envelope), cache="no-store")
     try:
         res = st.ask.answer(body.question, as_of=body.as_of, locale=body.locale, client_request_id=body.client_request_id,
                             before_model=lambda: budget.reserve(visitor))
@@ -273,6 +285,8 @@ def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -
         raise ApiError(429, exc.reason, MESSAGES.get(exc.reason, "")) from exc
     except ValueError as exc:
         raise ApiError(400, "invalid_request", str(exc)) from exc
+    finally:
+        inflight.release(st.redis, lock, owner)
     budget.count("total")
     if res.cached or not res.model_run_id:  # a new answer was counted by reserve()
         budget.count("cached" if res.cached else "free")

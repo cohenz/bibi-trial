@@ -222,3 +222,80 @@ def test_defense_lens_uses_its_own_prompts():
     assert eng._prompt.task_type == "answer_defense" and ROLE_FOR_TASK["answer_defense"] == "writer"
     assert ROLE_FOR_TASK["verify_answer_defense"] == "verifier" and "verify_answer_defense" in ALL
     assert AskEngine(None, None, None, AskConfig(answer_base="a", citation_base="c", lens="neutral"))._prompt.task_type == "answer"
+
+
+def test_prune_unapproved_publishes_what_is_right():
+    """13.10.2026: the verifier failed a Barnor answer over one allegation sentence; publish the rest, as for guides."""
+    from ntk_common.ask import prune_unapproved
+
+    secs = [{"kind": "allegation", "text": "a", "citation_ids": ["x"]}, {"kind": "defense", "text": "d1", "citation_ids": ["x"]},
+            {"kind": "defense", "text": "d2", "citation_ids": ["x"]}, {"kind": "defense", "text": "d3", "citation_ids": ["x"]},
+            {"kind": "limitation", "text": "l", "citation_ids": []}]
+    ok = {"supported": "yes", "attribution_ok": True}
+    v = {"verdict": "fail", "omitted_counterevidence": [], "assertions": [
+        {"path": "answer_short", **ok}, {"path": "sections/0", "supported": "partial", "attribution_ok": True, "note": "n"},
+        {"path": "sections/1", **ok}, {"path": "sections/2", "supported": "yes", "attribution_ok": False}, {"path": "sections/3", **ok}]}
+    kept, dropped = prune_unapproved(secs, v)
+    assert [s["text"] for s in kept] == ["d1", "d3", "l"] and [d["path"] for d in dropped] == ["sections/0", "sections/2"]
+    # held: the short answer failed / contradicting material / too few points left
+    assert prune_unapproved(secs, {**v, "assertions": v["assertions"] + [{"path": "answer_short", "supported": "no"}]}) is None
+    assert prune_unapproved(secs, {**v, "omitted_counterevidence": [{"source_unit_ids": ["y"]}]}) is None
+    few = {**v, "assertions": [{"path": "answer_short", **ok}, {"path": "sections/1", "supported": "no"},
+                               {"path": "sections/2", "supported": "no"}]}
+    assert prune_unapproved(secs, few) is None
+
+
+def test_ask_limits_overrides(monkeypatch):
+    from types import SimpleNamespace
+
+    import pytest
+    from ntk_api import ask_budget as ab
+
+    monkeypatch.setattr(ab, "_MEM_LIMITS", {})
+    s = SimpleNamespace(ask_daily_limit=200, ask_visitor_daily_limit=20, rate_limit_ask_per_minute=6)
+    assert ab.effective_limits(None, s)["per_visitor_daily"] == 20
+    ab.set_limits(None, {"per_visitor_daily": 5})
+    lim = ab.effective_limits(None, s)
+    assert lim["per_visitor_daily"] == 5 and lim["source"]["per_visitor_daily"] == "admin" and lim["daily"] == 200
+    assert ab.AskBudget.from_settings(None, s).visitor_limit == 5
+    ab.set_limits(None, {"per_visitor_daily": None})
+    assert ab.effective_limits(None, s)["per_visitor_daily"] == 20
+    for bad in ({"per_minute": 0}, {"daily": -1}, {"nope": 1}, {"daily": True}):
+        with pytest.raises(ValueError):
+            ab.set_limits(None, bad)
+
+
+def test_inflight_second_request_waits_for_the_first():
+    """A visitor who asks again while the answer is being written gets that answer, free, not a second paid run."""
+    from types import SimpleNamespace
+
+    from ntk_api import inflight
+
+    class R:
+        def __init__(self):
+            self.d = {}
+
+        def set(self, k, v, nx=False, ex=None):
+            if nx and k in self.d:
+                return None
+            self.d[k] = v
+            return True
+
+        def delete(self, k):
+            self.d.pop(k, None)
+
+        def exists(self, k):
+            return int(k in self.d)
+
+    r = R()
+    assert inflight.acquire(r, "L") is True and inflight.acquire(r, "L") is False
+    calls = {"n": 0}
+
+    def stored(q, locale="he"):
+        calls["n"] += 1
+        return "ANSWER" if calls["n"] >= 2 else None
+
+    ask = SimpleNamespace(stored=stored, inflight_key=lambda q, loc: "L")
+    assert inflight.wait(r, ask, "q", "he", sleep=lambda s: None) == "ANSWER"
+    inflight.release(r, "L", True)
+    assert not r.exists("L") and inflight.acquire(None, "L") is True

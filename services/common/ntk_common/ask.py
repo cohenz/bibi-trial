@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.5"
+ASK_ENGINE_VERSION = "ask-engine-1.6"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -298,6 +298,27 @@ class AskEngine:
         contracts.validate("AnswerEnvelope", env)
         return env
 
+    def _key(self, normalized: str, as_of: dt.datetime, cv: str, locale: str) -> dict:
+        # the engine version is part of the key: a changed detector must not serve answers cached under the old logic
+        return {"normalized_question": normalized, "as_of_date": as_of.date().isoformat(), "corpus_version": cv,
+                "prompt_version": f"{self._prompt.version}+{ASK_ENGINE_VERSION}", "model_version": self._model_version(),
+                "locale": locale}
+
+    def inflight_key(self, question: str, locale: str = "he") -> str:
+        """One key per question being answered right now: a second request for it waits for the first (13.10.2026 —
+        a defense-lens answer takes about a minute, and a visitor who asks again must not start a second paid run)."""
+        return "ntk:ask:inflight:" + ids.sha256_json([normalize_question((question or "").strip()), locale,
+                                                       self._prompt.version, ASK_ENGINE_VERSION])
+
+    def stored(self, question: str, *, as_of: dt.datetime | None = None, locale: str = "he") -> AskResult | None:
+        """The stored answer to this question for today and this corpus, without computing anything."""
+        as_of = (as_of or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
+        cached = self.store.find_answer(self._key(normalize_question((question or "").strip()), as_of,
+                                                  self.store.corpus_version(), locale))
+        if not cached:
+            return None
+        return AskResult(cached["envelope"], True, cached.get("gate_report", {}), cached.get("retrieval_ids", []))
+
     # -- main --------------------------------------------------------------------
     def answer(self, question: str, *, as_of: dt.datetime | None = None, locale: str = "he",
                client_request_id: str | None = None, before_model=None) -> AskResult:
@@ -310,9 +331,7 @@ class AskEngine:
         as_of = (as_of or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
         normalized = normalize_question(q)
         cv = self.store.corpus_version()
-        # the engine version is part of the key: a changed detector must not serve answers cached under the old logic
-        key = {"normalized_question": normalized, "as_of_date": as_of.date().isoformat(), "corpus_version": cv,
-               "prompt_version": f"{self._prompt.version}+{ASK_ENGINE_VERSION}", "model_version": self._model_version(), "locale": locale}
+        key = self._key(normalized, as_of, cv, locale)
         cached = self.store.find_answer(key)
         if cached:
             return AskResult(cached["envelope"], True, cached.get("gate_report", {}), cached.get("retrieval_ids", []))
@@ -449,6 +468,7 @@ class AskEngine:
             flags.update(gates.risk_flags(a.text))
         verdict = None
         vrun_id = None
+        pruned: list[dict] = []
         if self.cfg.verify_answers:
             vrun = self.runner.run(VERIFY_ANSWER_DEFENSE.task_type if self._defense else "verify", {
                 "assertions": [{"path": a.path, "text": a.text, "citation_ids": a.citation_ids} for a in assertions
@@ -458,6 +478,17 @@ class AskEngine:
                 input_source_ids=sorted(allowed), corpus_version=cv, thinking=self.cfg.verify_thinking or None)
             verdict = vrun.output.get("verdict") if vrun.ok else None
             vrun_id = vrun.id
+            if verdict == "fail" and vrun.ok and self._defense:
+                kept = prune_unapproved(sections, vrun.output)
+                if kept is not None:
+                    sections, pruned = kept
+                    assertions = [a for a in assertions if not a.path.startswith("sections/")]
+                    assertions += [gates.Assertion(f"sections/{i}", s["text"], s["citation_ids"], kind=s["kind"])
+                                   for i, s in enumerate(sections)]
+                    flags = set(flags_q)
+                    for a in assertions:
+                        flags.update(gates.risk_flags(a.text))
+                    verdict = "pass"
         results = [
             gates.citation_gate(assertions, facts, require_published=True),
             gates.support_gate(assertions, facts),
@@ -468,7 +499,8 @@ class AskEngine:
         if self.cfg.verify_answers:
             results.append(gates.verifier_gate(verdict, independent_family=self.cfg.independent_verifier, sensitive=bool(flags)))
         decision = gates.decide(results, flags=flags)
-        report = {**decision.report(), "retrieval": origins, "verifier_run_id": vrun_id, "context_hash": context_hash}
+        report = {**decision.report(), "retrieval": origins, "verifier_run_id": vrun_id, "context_hash": context_hash,
+                  "verifier_pruned": pruned}
         if decision.state != "machine_verified":
             return self._citations_only(base, context, ["requires_human_review"], sorted(flags), origins, run.id, report)
         cited = [units[c] for s in sections for c in s["citation_ids"] if c in units]
@@ -745,6 +777,33 @@ def named_witnesses(q: str, guides_: list[dict]) -> list[dict]:
 
 
 MAX_CONTEXT_WITH_PAIRS = 32
+MIN_DEFENSE_POINTS_AFTER_PRUNING = 2
+
+
+def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], list[dict]] | None:
+    """13.10.2026, the same policy as the witness guides ('publish what is right, hold only what is not'): when the
+    verifier fails an answer only because of some of its sections (not fully supported, misattributed, a judicial
+    overstatement, a false premise), those sections are dropped and the rest is published. The answer is held when
+    the short answer itself failed, when the verifier found material in the bundle that contradicts the text, or when
+    fewer than two of the defense's points would remain. Returns (kept sections, what was dropped) or None."""
+    if verifier.get("omitted_counterevidence"):
+        return None
+    bad = {x.get("path"): x for x in verifier.get("assertions", [])
+           if x.get("supported") != "yes" or not x.get("attribution_ok", True)
+           or x.get("judicial_overstatement") or x.get("false_premise")}
+    if not bad or "answer_short" in bad:
+        return None
+    kept, dropped = [], []
+    for i, s in enumerate(sections):
+        x = bad.get(f"sections/{i}")
+        if x is not None and s["kind"] != "limitation":
+            dropped.append({"path": f"sections/{i}", "kind": s["kind"], "text": s["text"], "note": x.get("note"),
+                            "supported": x.get("supported"), "attribution_ok": x.get("attribution_ok", True)})
+        else:
+            kept.append(s)
+    if sum(1 for s in kept if s["kind"] == "defense") < MIN_DEFENSE_POINTS_AFTER_PRUNING:
+        return None
+    return kept, dropped
 MAX_CONTEXT_DEFENSE = 52  # the defense layer adds up to 2 × defense_context units ahead of the general search
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 

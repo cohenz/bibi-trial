@@ -49,8 +49,13 @@ def rate_limit(bucket: str) -> Callable:
     thresholds for ask and search (spec §33.2)."""
 
     def dep(request: Request, st: AppState = Depends(get_state)) -> None:
+        if bucket == "ask":
+            from .ask_budget import effective_limits
+            ask_limit = effective_limits(st.redis, st.settings)["per_minute"]
+        else:
+            ask_limit = st.settings.rate_limit_ask_per_minute
         limit = {
-            "ask": st.settings.rate_limit_ask_per_minute,
+            "ask": ask_limit,
             "search": st.settings.rate_limit_search_per_minute,
         }.get(bucket, st.settings.rate_limit_public_per_minute)
         fwd = forwarded_client(request, st)

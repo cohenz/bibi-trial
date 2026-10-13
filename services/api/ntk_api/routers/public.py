@@ -258,12 +258,24 @@ def search(body: SearchRequestIn, st: AppState = Depends(get_state)) -> JSONResp
 def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -> JSONResponse:
     if len(body.question) > st.settings.max_question_chars:
         raise ApiError(400, "invalid_request", f"question longer than {st.settings.max_question_chars} characters")
+    from ntk_common import editorial
+    from ntk_common.ask import AskLimited
+
+    from ..ask_budget import MESSAGES, AskBudget
+
+    budget = AskBudget(st.redis, daily_limit=st.settings.ask_daily_limit, visitor_limit=st.settings.ask_visitor_daily_limit)
+    visitor = getattr(request.state, "ip_hash", None)
     try:
-        res = st.ask.answer(body.question, as_of=body.as_of, locale=body.locale, client_request_id=body.client_request_id)
+        res = st.ask.answer(body.question, as_of=body.as_of, locale=body.locale, client_request_id=body.client_request_id,
+                            before_model=lambda: budget.reserve(visitor))
+    except AskLimited as exc:
+        budget.count("limited")
+        raise ApiError(429, exc.reason, MESSAGES.get(exc.reason, "")) from exc
     except ValueError as exc:
         raise ApiError(400, "invalid_request", str(exc)) from exc
-    from ntk_common import editorial
-
+    budget.count("total")
+    if res.cached or not res.model_run_id:  # a new answer was counted by reserve()
+        budget.count("cached" if res.cached else "free")
     return _json(editorial.polish(res.envelope), cache="no-store")
 
 

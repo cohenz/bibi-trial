@@ -52,7 +52,7 @@ class TK_Rest_Proxy {
 	 * @param WP_REST_Request $req Request.
 	 */
 	public static function ask( $req ) {
-		$ip      = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+		$ip      = self::visitor_ip();
 		$session = substr( hash( 'sha256', $ip . '|' . ( isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '' ) ), 0, 32 );
 		try {
 			$env = tk_api()->request(
@@ -68,9 +68,28 @@ class TK_Rest_Proxy {
 			);
 		} catch ( TK_Api_Error $e ) {
 			$status = 429 === $e->status ? 429 : ( $e->status >= 400 && $e->status < 500 ? 400 : 503 );
+			if ( 429 === $status && in_array( $e->api_code, array( 'daily_limit', 'visitor_daily_limit' ), true ) ) {
+				$msg = 'daily_limit' === $e->api_code
+					? __( 'הגענו למכסת השאלות החדשות להיום. שאלות שכבר נשאלו עדיין נענות, ואפשר לחפש בעמודי העדים, הדיונים והמסמכים. נסו שוב מחר.', 'trial-knowledge' )
+					: __( 'שאלתם היום הרבה שאלות חדשות. שאלות שכבר נשאלו עדיין נענות; לשאלות חדשות נסו שוב מחר.', 'trial-knowledge' );
+				return new WP_REST_Response( array( 'error' => $msg ), 429 );
+			}
 			return new WP_REST_Response( array( 'error' => 429 === $status ? __( 'נשאלו יותר מדי שאלות. נסו שוב בעוד דקה.', 'trial-knowledge' ) : __( 'לא ניתן לענות כרגע.', 'trial-knowledge' ) ), $status );
 		}
 		return new WP_REST_Response( array( 'html' => TK_Render::answer( $env ), 'envelope' => $env ), 200 );
+	}
+
+	/** The visitor's address: behind Cloudflare REMOTE_ADDR is a Cloudflare edge, so its header comes first. */
+	public static function visitor_ip() {
+		foreach ( array( 'HTTP_CF_CONNECTING_IP', 'REMOTE_ADDR' ) as $k ) {
+			if ( ! empty( $_SERVER[ $k ] ) && is_string( $_SERVER[ $k ] ) ) {
+				$ip = trim( sanitize_text_field( wp_unslash( $_SERVER[ $k ] ) ) );
+				if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) {
+					return $ip;
+				}
+			}
+		}
+		return '';
 	}
 
 	/**

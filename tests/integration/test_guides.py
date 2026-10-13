@@ -92,3 +92,36 @@ def test_nothing_public_before_approval_then_pages_after(services, built):
         assert page["name"] == w["name"] and page["hearings"]
         assert page["artifact_id"] and any(b["block"] == "testimony" for b in page["blocks"])
         assert gp.witness_page(conn, "w_0000000000") is None
+
+
+def test_witness_guide_through_batch(services, pipeline, built):
+    """A witness without a guide → batch submit with the direct path's run id → poll saves the run → the guide is
+    built from the stored run, without a direct witness_guide call."""
+    from ntk_common import batches
+    from ntk_common.db.core import execute
+
+    slug = next(b["object"].split(":", 1)[1] for b in built[1]["built"] if b["object"].startswith("witness:"))
+    with services.engine.begin() as conn:
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'witness' AND object_id = :s",
+                {"s": slug})
+        execute(conn, "UPDATE ntk.model_runs SET status = 'provider_error' WHERE task_type = 'witness_guide'")
+        execute(conn, "UPDATE ntk.model_batches SET finished_at = now() WHERE finished_at IS NULL")
+    out = batches.submit(pipeline, "witness_guide", keys=[slug])
+    assert out["requests"] == 1 and len(out["batches"]) == 1, out
+    assert batches.submit(pipeline, "witness_guide", keys=[slug])["requests"] == 0  # already in an open batch
+    calls = []
+    prov = pipeline.s.runner.providers["mock"]
+    orig = prov.generate_json
+    prov.generate_json = lambda **kw: (calls.append(kw["task_type"]), orig(**kw))[1]
+    try:
+        res = batches.poll(pipeline)
+    finally:
+        prov.generate_json = orig
+    built_ = next(b for b in res["batches"] if b["name"] == out["batches"][0]["name"])["built"]
+    assert built_[0].get("artifact_id") and built_[0]["via"] == "batch", built_
+    assert calls.count("witness_guide") <= 1  # at most the wording retry is made directly
+    with services.engine.connect() as conn:
+        run_id = row(conn, "SELECT items FROM ntk.model_batches WHERE name = :n", {"n": out["batches"][0]["name"]})["items"][0]["run_id"]
+        assert row(conn, "SELECT status FROM ntk.model_runs WHERE id = CAST(:i AS uuid)", {"i": run_id})["status"] == "succeeded"
+        assert row(conn, "SELECT count(*) AS n FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
+                   {"a": built_[0]["artifact_id"]})["n"] == 1

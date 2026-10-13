@@ -98,3 +98,28 @@ def test_model_dates_are_normalised():
     assert [v("18.05.2021"), v("28 אפריל 2026"), v("2026-04-20"), v("20/4/2026")] == ["2021-05-18", "2026-04-28",
                                                                                       "2026-04-20", "2026-04-20"]
     assert v("1999-01-01") is None and v("") is None and v(None) is None
+
+
+def test_document_brief_through_batch(services):
+    """A published document without a brief → batch → the brief is built from the stored run."""
+    from ntk_common import batches
+    from ntk_common.db.core import execute, scalar
+    from ntk_common.orchestrator import Pipeline
+
+    p = Pipeline(services)
+    with services.engine.begin() as conn:
+        svid = scalar(conn, """SELECT sv.id FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                               WHERE d.source_type <> 'protocol' ORDER BY sv.created_at DESC LIMIT 1""")
+        assert svid
+        execute(conn, "UPDATE ntk.generated_artifacts SET review_state = 'superseded' WHERE object_type = 'document' AND object_id = :s",
+                {"s": svid})
+        execute(conn, "UPDATE ntk.model_runs SET status = 'provider_error' WHERE task_type = 'document_brief'")
+        execute(conn, "UPDATE ntk.model_batches SET finished_at = now() WHERE finished_at IS NULL")
+    out = batches.submit(p, "document_brief", keys=[svid])
+    assert out["requests"] == 1, out
+    res = batches.poll(p)
+    built = next(b for b in res["batches"] if b["name"] == out["batches"][0]["name"])["built"]
+    assert built[0].get("artifact_id") and built[0]["via"] == "batch", built
+    with services.engine.connect() as conn:
+        assert row(conn, "SELECT object_id FROM ntk.generated_artifacts WHERE id = CAST(:a AS uuid)",
+                   {"a": built[0]["artifact_id"]})["object_id"] == svid

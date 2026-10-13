@@ -141,7 +141,8 @@ class ModelRunner:
                 "input_hash": input_hash, "response_schema": contracts.json_schema_for(prompt.schema)}
 
     def run(self, task_type: str, payload: dict, *, input_source_ids: list[str], corpus_version: str,
-            semantic_check: SemanticCheck | None = None, role: str | None = None) -> ModelRunRecord:
+            semantic_check: SemanticCheck | None = None, role: str | None = None,
+            thinking: str | None = None) -> ModelRunRecord:
         req = self.request_for(task_type, payload, role=role)
         spec, prompt = req["spec"], req["prompt"]
         cached = self.store.get_run(req["run_id"])
@@ -163,7 +164,8 @@ class ModelRunner:
             try:
                 result = provider.generate_json(model_id=spec.model_id, system=prompt.system, user=req["user"],
                                                 temperature=spec.temperature, task_type=task_type, payload=payload,
-                                                response_schema=req["response_schema"])
+                                                response_schema=req["response_schema"],
+                                                **({"thinking": thinking} if thinking else {}))
                 break
             except ProviderError as exc:
                 last_error = exc

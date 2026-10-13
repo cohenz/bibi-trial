@@ -176,13 +176,14 @@ def submit_digest_batch(spec: str) -> dict:
     p = _pipeline()
     args = json.loads(spec or "{}")
     try:
-        out = batches.submit_digests(p, hearing_ids=args.get("hearing_ids"), limit=int(args.get("limit", 200)),
-                                     approved_by=args.get("approved_by"))
+        kind = args.get("kind", "digest")
+        out = batches.submit(p, kind, keys=args.get("keys") if "keys" in args else args.get("hearing_ids"),
+                             limit=int(args.get("limit", 200)), approved_by=args.get("approved_by"))
     except Exception as exc:  # noqa: BLE001 - recorded, not redelivered
         log.error("submit_digest_batch failed: %s: %s", type(exc).__name__, str(exc)[:300])
         out = {"error": {"type": type(exc).__name__, "message": str(exc)[:1000]}}
     with p.s.engine.begin() as conn:
-        ops.audit(conn, actor="worker", action="batch.submit_requested", object_type="model_batch", object_id="digest",
+        ops.audit(conn, actor="worker", action="batch.submit_requested", object_type="model_batch", object_id=args.get("kind", "digest"),
                   details=json.loads(json.dumps(out, ensure_ascii=False, default=str)))
     return {"ok": "error" not in out}
 

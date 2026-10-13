@@ -122,6 +122,21 @@ def test_full_flow(client, fixture_pdf, services):
     assert a1["answer_status"] in {"answered", "requires_human_review"} and a1["citations"]
     a2 = client.post("/v2/ask", json={"question": "מי שלח את המיילים?"}).json()
     assert a2["answer_id"] == a1["answer_id"]
+    # an unrelated publication changes the corpus version; the same question over the same evidence is not re-asked
+    from ntk_common.db import ops as _ops
+
+    with services.engine.begin() as conn:
+        _ops.bump_corpus_version(conn, reason="e2e: unrelated change", actor="test")
+    calls = []
+    prov = services.runner.providers["mock"]
+    orig = prov.generate_json
+    prov.generate_json = lambda **kw: (calls.append(kw["task_type"]), orig(**kw))[1]
+    try:
+        a3 = client.post("/v2/ask", json={"question": "מי שלח את המיילים?"}).json()
+    finally:
+        prov.generate_json = orig
+    if a1["answer_status"] == "answered":
+        assert a3["answer_id"] == a1["answer_id"] and "answer" not in calls
     perm = client.get(f"/v2/answers/{a1['answer_id']}")
     assert perm.status_code == 200 and perm.json()["answer_id"] == a1["answer_id"]
     fp = client.post("/v2/ask", json={"question": "למה זוכה נתניהו בתיק 4000?"}).json()
@@ -133,6 +148,13 @@ def test_full_flow(client, fixture_pdf, services):
     r = signed(client, "POST", f"/v2/admin/artifacts/{card['id']}/unpublish", {"reason": "e2e test"})
     if r.status_code == 200:
         assert client.get(f"/v2/claims/{claim_id}").status_code == 404
+
+    # cost report (13.10.2026): the answers above show up with their tokens; refused / corrected ones are free
+    u = signed(client, "GET", "/v2/admin/ask/usage?days=2")
+    assert u.status_code == 200, u.text
+    today = u.json()["days"][0]
+    assert today["questions"]["total"] >= 4 and today["questions"]["cached"] >= 1 and today["questions"]["free"] >= 2
+    assert u.json()["limits"]["daily"] == settings_daily_limit(client)
 
     audit = signed(client, "GET", "/v2/admin/audit").json()["items"]
     actions = {x["action"] for x in audit}
@@ -161,6 +183,30 @@ def test_input_limits_and_errors(client, settings):
     assert r.status_code == 400
     assert client.get("/v2/citations/not-an-id").status_code == 400
     assert client.get("/v2/claims/00000000-0000-0000-0000-000000000000").json()["code"] == "unpublished_object"
+
+
+def settings_daily_limit(client):
+    return client.app.state.ntk.settings.ask_daily_limit if hasattr(client.app.state, "ntk") else 200
+
+
+def test_daily_ask_budget(settings, services, pipeline):
+    """New answers stop at the daily cap; a question answered before is still served (13.10.2026)."""
+    import dataclasses
+
+    from ntk_api import ask_budget
+
+    ask_budget._MEM.clear()
+    s2 = dataclasses.replace(settings, ask_daily_limit=1, rate_limit_ask_per_minute=50)
+    state = build_state(s2, queue=InlineQueue({}), services=services, redis_client=None)
+    with TestClient(create_app(state)) as c:
+        first = c.post("/v2/ask", json={"question": "מה אמר העד על המיילים בתקופה ההיא?"})
+        again = c.post("/v2/ask", json={"question": "מה אמר העד על המיילים בתקופה ההיא?"})
+        other = c.post("/v2/ask", json={"question": "מי שלח את ההודעות על המיילים?"})
+    assert first.status_code == 200 and again.status_code == 200
+    assert again.json()["answer_id"] == first.json()["answer_id"]  # stored answers are never limited
+    if first.json()["answer_status"] in {"answered", "requires_human_review"} and other.status_code != 200:
+        assert other.status_code == 429 and other.json()["code"] == "daily_limit"
+    ask_budget._MEM.clear()
 
 
 def test_rate_limit(settings, services, pipeline):

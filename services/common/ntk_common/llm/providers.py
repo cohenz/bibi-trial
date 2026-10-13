@@ -81,14 +81,27 @@ class GeminiProvider:
         return resp.json()
 
     def generate_json(self, *, model_id: str, system: str, user: str, temperature: float, task_type: str,
-                      payload: dict | None = None, response_schema: dict | None = None) -> ProviderResult:
+                      payload: dict | None = None, response_schema: dict | None = None,
+                      thinking: str | None = None) -> ProviderResult:
         """``response_schema`` (the output contract) constrains decoding via ``responseJsonSchema``. If the API
         rejects the schema (HTTP 400), the call is repeated once with the schema written into the prompt instead;
-        the contract is validated afterwards either way."""
+        the contract is validated afterwards either way.
+
+        ``thinking`` (13.10.2026, cost control): how much the model may think before answering — a level ("low",
+        "medium", "high") or a token budget ("512"). Thinking tokens are billed as output. A model that does not
+        take the setting gets the call again without it."""
         body = self.request_body(system=system, user=user, temperature=temperature, response_schema=response_schema)
         gen = body["generationConfig"]
+        if thinking:
+            gen["thinkingConfig"] = {"thinkingBudget": int(thinking)} if str(thinking).isdigit() else {"thinkingLevel": str(thinking)}
         try:
-            data = self._post(f"models/{model_id}:generateContent", body)
+            try:
+                data = self._post(f"models/{model_id}:generateContent", body)
+            except ProviderError as exc:
+                if not (thinking and exc.status == 400 and "thinking" in str(exc).lower()):
+                    raise
+                gen.pop("thinkingConfig", None)
+                data = self._post(f"models/{model_id}:generateContent", body)
         except ProviderError as exc:
             if not (response_schema and exc.status == 400):
                 raise
@@ -258,7 +271,8 @@ class MockProvider:
     name = "mock"
 
     def generate_json(self, *, model_id: str, system: str, user: str, temperature: float, task_type: str,
-                      payload: dict | None = None, response_schema: dict | None = None) -> ProviderResult:
+                      payload: dict | None = None, response_schema: dict | None = None,
+                      thinking: str | None = None) -> ProviderResult:
         payload = payload or {}
         fn = getattr(self, f"_task_{task_type}", None)
         if fn is None:

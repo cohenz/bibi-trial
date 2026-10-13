@@ -56,17 +56,23 @@ def _valid_date(d: str | None) -> str | None:
     return iso if iso and "2016-01-01" <= iso <= "2035-12-31" else None
 
 
-def build_document_brief(*, source_version_id: str, source_type: str, units: list[UnitView], runner: ModelRunner,
-                         corpus_version: str, citation_base: str, env: str, archive_title: str | None = None) -> BuildResult:
+def brief_input(source_type: str, units: list[UnitView], archive_title: str | None) -> tuple[dict, list[UnitView]]:
+    """The model input of a document brief and the units it may cite (direct and batch paths: same input, same run)."""
     sample = [u for u in units if (u.text or "").strip()][:MAX_UNITS]
-    by_id = {u.id: u for u in sample}
-    allowed = set(by_id)
     payload_in = {
         "document_source_type": source_type,
         "archive_title": archive_title,
         "units": [{"id": u.id, "page": u.page, "speaker": u.speaker_label, "unit_type": u.unit_type, "text": u.text[:1500]}
                   for u in sample],
     }
+    return payload_in, sample
+
+
+def build_document_brief(*, source_version_id: str, source_type: str, units: list[UnitView], runner: ModelRunner,
+                         corpus_version: str, citation_base: str, env: str, archive_title: str | None = None) -> BuildResult:
+    payload_in, sample = brief_input(source_type, units, archive_title)
+    by_id = {u.id: u for u in sample}
+    allowed = set(by_id)
     run = runner.run("document_brief", payload_in, input_source_ids=sorted(allowed), corpus_version=corpus_version)
     if not run.ok:
         return BuildResult(None, [run], None, run.validation_errors or [run.error or {}])

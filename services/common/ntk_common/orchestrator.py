@@ -559,14 +559,7 @@ class Pipeline:
         once its source is public."""
         from .briefs import build_document_brief
 
-        with self.s.engine.connect() as conn:
-            unit_rows = sources.units_for_version(conn, svid)
-            views = units_by_ids(conn, [r["id"] for r in unit_rows], published_only=False)
-            units = [views[r["id"]] for r in unit_rows if r["id"] in views]
-            meta = row(conn, """SELECT d.source_type::text AS st, d.canonical_title AS title, sv.publication_state::text AS ps
-                                FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
-                                WHERE sv.id = :sv""", {"sv": svid})
-            cv = ops.current_corpus_version(conn)
+        units, meta, cv = self.brief_material(svid)
         if not units:
             return {"brief": None, "note": "no text units"}
         res = build_document_brief(source_version_id=svid, source_type=meta["st"], units=units, runner=self.s.runner,
@@ -587,6 +580,18 @@ class Pipeline:
         return {"brief_artifact_id": art_id, "state": res.decision.state if res.decision else None,  # type: ignore[union-attr]
                 "significance": res.payload["significance"], "hearing_days": len(res.payload["hearing_days"]),
                 "title": res.payload["title"]["text"], "published": published}
+
+    def brief_material(self, svid: str) -> tuple[list, dict, str]:
+        """Units, document metadata and corpus version a document brief is built from (direct and batch paths)."""
+        with self.s.engine.connect() as conn:
+            unit_rows = sources.units_for_version(conn, svid)
+            views = units_by_ids(conn, [r["id"] for r in unit_rows], published_only=False)
+            units = [views[r["id"]] for r in unit_rows if r["id"] in views]
+            meta = row(conn, """SELECT d.source_type::text AS st, d.canonical_title AS title, sv.publication_state::text AS ps
+                                FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                                WHERE sv.id = :sv""", {"sv": svid})
+            cv = ops.current_corpus_version(conn)
+        return units, meta, cv
 
     def rebuild_hearing_digest(self, hearing_id: str) -> dict:
         """Rebuild Layer A for a hearing outside a job (sources or judicial statements changed)."""

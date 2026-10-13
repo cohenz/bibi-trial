@@ -221,6 +221,17 @@ class AskConfig:
     verify_answers: bool = True
     independent_verifier: bool = False
     max_context: int = 12
+    # cost control (13.10.2026): how much the writer / verifier may think (a level or a token budget; "" = model default)
+    thinking: str = "low"
+    verify_thinking: str = ""
+
+
+class AskLimited(Exception):
+    """A new answer would need the model, and today's budget (site-wide or this visitor's) is spent."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 @dataclass
@@ -273,7 +284,9 @@ class AskEngine:
 
     # -- main --------------------------------------------------------------------
     def answer(self, question: str, *, as_of: dt.datetime | None = None, locale: str = "he",
-               client_request_id: str | None = None) -> AskResult:
+               client_request_id: str | None = None, before_model=None) -> AskResult:
+        """``before_model`` is called right before the first model call of a new answer (never for a stored answer or
+        a deterministic one); it raises ``AskLimited`` when the day's budget is spent."""
         q = (question or "").strip()
         q = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", q)
         if not q or len(q) > self.cfg.max_question_chars:
@@ -287,7 +300,9 @@ class AskEngine:
         cached = self.store.find_answer(key)
         if cached:
             return AskResult(cached["envelope"], True, cached.get("gate_report", {}), cached.get("retrieval_ids", []))
-        result = self._answer_uncached(q, normalized, as_of, cv, locale)
+        result = self._answer_uncached(q, normalized, as_of, cv, locale, key=key, before_model=before_model)
+        if result.cached:  # the same question over the same evidence was answered before: nothing new to store
+            return result
         self.store.save_answer({**key, "answer_id": result.envelope["answer_id"], "question": q,
                                 "envelope": result.envelope, "answer_status": result.envelope["answer_status"],
                                 "gate_report": result.gate_report, "retrieval_ids": result.retrieval_ids,
@@ -295,7 +310,8 @@ class AskEngine:
                                 "as_of": as_of})
         return result
 
-    def _answer_uncached(self, q: str, normalized: str, as_of: dt.datetime, cv: str, locale: str) -> AskResult:
+    def _answer_uncached(self, q: str, normalized: str, as_of: dt.datetime, cv: str, locale: str, *, key: dict | None = None,
+                         before_model=None) -> AskResult:
         base = dict(question=q, normalized=normalized, as_of=as_of, cv=cv, locale=locale)
 
         # 2. refusal
@@ -360,6 +376,16 @@ class AskEngine:
         if self.runner is None:
             return self._citations_only(base, context, ["no_writer_model"], flags_q, origins)
 
+        # 4b. the same question over the same published evidence was answered before (another day, or before an
+        # unrelated publication changed the corpus version): reuse it — the answer could only change with the evidence
+        by_evidence = getattr(self.store, "find_answer_by_evidence", None)
+        if key is not None and by_evidence is not None:
+            prev = by_evidence(key, retrieval_ids)
+            if prev:
+                return AskResult(prev["envelope"], True, prev.get("gate_report", {}), prev.get("retrieval_ids", []))
+        if before_model is not None:
+            before_model()
+
         # 5. generation
         payload = {"question": q, "as_of": as_of.date().isoformat(), "context": [
             {"id": c.unit.id, "bucket": c.bucket, "attribution": c.attribution, "speaker": c.unit.speaker_label,
@@ -367,7 +393,8 @@ class AskEngine:
              "judicial_level": c.unit.judicial_level} for c in context]}
         allowed = {c.unit.id for c in context}
         run = self.runner.run("answer", payload, input_source_ids=sorted(allowed), corpus_version=cv,
-                              semantic_check=unknown_ids_check(allowed, "sections[].citation_ids[]", "answer_short_citation_ids[]"))
+                              semantic_check=unknown_ids_check(allowed, "sections[].citation_ids[]", "answer_short_citation_ids[]"),
+                              thinking=self.cfg.thinking or None)
         if not run.ok:
             return self._citations_only(base, context, ["generation_failed"], flags_q, origins, run.id)
         draft = run.output
@@ -404,7 +431,7 @@ class AskEngine:
                                if a.kind not in gates.NON_FACTUAL_SECTION_KINDS],
                 "sources": [{"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role, "text": u.text[:1500],
                              "judicial_level": u.judicial_level} for u in units.values()]},
-                input_source_ids=sorted(allowed), corpus_version=cv)
+                input_source_ids=sorted(allowed), corpus_version=cv, thinking=self.cfg.verify_thinking or None)
             verdict = vrun.output.get("verdict") if vrun.ok else None
             vrun_id = vrun.id
         results = [

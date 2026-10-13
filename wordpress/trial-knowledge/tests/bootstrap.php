@@ -99,6 +99,7 @@ require TK_DIR . 'includes/class-render-nav.php';
 require TK_DIR . 'includes/class-p315.php';
 require TK_DIR . 'includes/class-rest-proxy.php';
 require TK_DIR . 'includes/class-blocks.php';
+require TK_DIR . 'includes/class-admin-costs.php';
 
 /**
  * Fake Knowledge API client: records every GET; $handler( $path ) returns the body or throws;

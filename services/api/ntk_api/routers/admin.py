@@ -34,6 +34,7 @@ from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempot
 from ..app import ApiError, AppState
 from ..deps import admin, get_state
 from ..schemas import (
+    BatchSubmitRequest,
     BriefBuildRequest,
     CaseEventIn,
     ClaimIn,
@@ -225,13 +226,34 @@ def submit_digest_batch(body: DigestBatchRequest, request: Request, st: AppState
     return _json({"queued": TASK_SUBMIT_DIGEST_BATCH, "task_id": tid, **spec}, cache="no-store", status=202)
 
 
+@router.post("/batches/submit", status_code=202)
+def submit_batch(body: BatchSubmitRequest, request: Request, st: AppState = Depends(get_state),
+                 p: Principal = Depends(admin("admin:ingest"))) -> JSONResponse:
+    """Witness guides, document briefs or hearing digests through the provider's Batch API (half price, within 24 h).
+    ``limit`` is an approval kept per kind; ``keys`` names the objects (hr_…, w_…, sv_…) instead."""
+    spec = body.model_dump(exclude_none=True)
+    now = spec.pop("now", False)
+    with st.services.engine.begin() as conn:
+        ops.audit(conn, actor=p.label, action="batch.requested", object_type="model_batch", object_id=body.kind,
+                  request_id=_rid(request), details={**spec, "now": now})
+    if now:
+        from ntk_common import batches
+        from ntk_common.orchestrator import Pipeline
+
+        out = batches.submit(Pipeline(st.services), body.kind, keys=body.keys, limit=body.limit, approved_by=p.label)
+        return _json(out, cache="no-store", status=200)
+    tid = st.queue.enqueue(TASK_SUBMIT_DIGEST_BATCH, json.dumps({**spec, "approved_by": p.label}))
+    return _json({"queued": TASK_SUBMIT_DIGEST_BATCH, "task_id": tid, **spec}, cache="no-store", status=202)
+
+
 @router.get("/batches")
 def list_batches(st: AppState = Depends(get_state), limit: int = Query(50, le=500),
                  p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
     from ntk_common import batches
 
     with st.services.engine.connect() as conn:
-        return _json({"items": batches.listing(conn, limit), "allowance": batches.allowance(conn, "digest")}, cache="no-store")
+        return _json({"items": batches.listing(conn, limit), "allowance": batches.allowance(conn, "digest"),
+                      "allowances": {k: batches.allowance(conn, k) for k in batches.KINDS}}, cache="no-store")
 
 
 @router.post("/batches/poll", status_code=202)
@@ -723,6 +745,50 @@ def audit_log(st: AppState = Depends(get_state), object_type: str | None = None,
               p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
     with st.services.engine.connect() as conn:
         return _json({"items": ops.list_audit(conn, object_type=object_type, object_id=object_id)}, cache="no-store")
+
+
+@router.get("/ask/usage")
+def ask_usage(st: AppState = Depends(get_state), days: int = Query(14, ge=1, le=120),
+              p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """What "שאלו" costs, per UTC day: questions (new / stored / free / refused for the budget), tokens of the new
+    answers (writer and verifier, thinking included) and their cost at the configured prices."""
+    import datetime as dt
+
+    from ..ask_budget import AskBudget
+
+    s = st.settings
+    budget = AskBudget(st.redis, daily_limit=s.ask_daily_limit, visitor_limit=s.ask_visitor_daily_limit)
+    with st.services.engine.connect() as conn:
+        rs = rows(conn, """
+            WITH runs AS (
+                SELECT a.created_at::date AS d, a.id, m.usage FROM ntk.answers a JOIN ntk.model_runs m ON m.id = a.model_run_id
+                WHERE a.created_at >= now() - make_interval(days => :n)
+                UNION ALL
+                SELECT a.created_at::date, a.id, m.usage FROM ntk.answers a
+                JOIN ntk.model_runs m ON m.id::text = a.gate_report->>'verifier_run_id'
+                WHERE a.created_at >= now() - make_interval(days => :n))
+            SELECT d::text AS day, count(DISTINCT id) AS answers,
+                   coalesce(sum((usage->>'promptTokenCount')::bigint), 0) AS input_tokens,
+                   coalesce(sum((usage->>'candidatesTokenCount')::bigint), 0) AS output_tokens,
+                   coalesce(sum((usage->>'thoughtsTokenCount')::bigint), 0) AS thinking_tokens
+            FROM runs GROUP BY d ORDER BY d DESC""", {"n": days})
+    by_day = {r["day"]: r for r in rs}
+    out = []
+    for i in range(days):
+        day = (dt.datetime.now(dt.UTC).date() - dt.timedelta(days=i)).isoformat()
+        r = by_day.get(day, {})
+        tin, tout, tth = int(r.get("input_tokens", 0)), int(r.get("output_tokens", 0)), int(r.get("thinking_tokens", 0))
+        cost = tin / 1e6 * s.price_input_per_m + (tout + tth) / 1e6 * s.price_output_per_m
+        out.append({"day": day, "questions": budget.counters(day), "new_answers": int(r.get("answers", 0)),
+                    "input_tokens": tin, "output_tokens": tout, "thinking_tokens": tth, "cost_usd": round(cost, 4)})
+    total = round(sum(x["cost_usd"] for x in out), 2)
+    n_new = sum(x["new_answers"] for x in out)
+    return _json({"days": out, "total_cost_usd": total, "avg_cost_per_new_answer_usd": round(total / n_new, 4) if n_new else None,
+                  "prices_per_million": {"input": s.price_input_per_m, "output_and_thinking": s.price_output_per_m},
+                  "limits": {"daily": s.ask_daily_limit, "per_visitor_daily": s.ask_visitor_daily_limit,
+                             "per_minute": s.rate_limit_ask_per_minute},
+                  "thinking": {"writer": s.ask_thinking or "default", "verifier": s.ask_verify_thinking or "default"}},
+                 cache="no-store")
 
 
 @router.get("/whoami")

@@ -404,17 +404,23 @@ class WitnessHearing:
     units: list[UnitView]  # the witness's turns and the questions put to them (a bounded sample), in order
 
 
-def build_witness_guide(*, name: str, slug: str, hearings: list[WitnessHearing], indictment_units: list[UnitView],
-                        runner: ModelRunner, corpus_version: str, citation_base: str, env: str,
-                        source_version_ids: list[str]) -> BuildResult:
+def witness_guide_input(name: str, hearings: list[WitnessHearing], indictment_units: list[UnitView]) -> tuple[dict, list[UnitView]]:
+    """The model input of a witness guide and the units it may cite (direct and batch paths: same input, same run)."""
     mentions = [u for u in indictment_units if name_matches(name, u.text)][:12]
     units = _uniq(mentions + [u for h in hearings for u in h.units])
-    allowed = {u.id for u in units}
     payload_in = {
         "witness": name,
         "indictment_mentions": _unit_payload(mentions, 1500),
         "hearings": [{"hearing_id": h.hearing_id, "date": h.hearing_date, "units": _unit_payload(h.units, 900)} for h in hearings],
     }
+    return payload_in, units
+
+
+def build_witness_guide(*, name: str, slug: str, hearings: list[WitnessHearing], indictment_units: list[UnitView],
+                        runner: ModelRunner, corpus_version: str, citation_base: str, env: str,
+                        source_version_ids: list[str]) -> BuildResult:
+    payload_in, units = witness_guide_input(name, hearings, indictment_units)
+    allowed = {u.id for u in units}
 
     def assemble(run: ModelRunRecord) -> dict:
         out = run.output

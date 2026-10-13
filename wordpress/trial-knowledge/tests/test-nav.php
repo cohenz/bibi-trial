@@ -82,3 +82,11 @@ $dp = TK_Render_Guides::documents_page( $docs, array( 'type' => 'decision', 'yea
 TK_T::ok( false !== strpos( $dp, 'מסמך אחד' ) && false !== strpos( $dp, 'חסיון' ) && false === strpos( $dp, 'פסילת חומרים' ), 'documents: type and year filters' );
 $dp = TK_Render_Guides::documents_page( $docs, array( 'q' => 'טלפון', 'all' => true ), 'https://site.test/trial/documents/' );
 TK_T::ok( false !== strpos( $dp, 'מסמך אחד' ) && false !== strpos( $dp, 'value="טלפון"' ) && false !== strpos( $dp, 'ניקוי' ), 'documents: words search, reset link' );
+
+// --- costs screen (2.7.1)
+$cu = TK_Admin_Costs::render( array(
+	'days' => array( array( 'day' => '2026-10-13', 'questions' => array( 'total' => 12, 'cached' => 5, 'free' => 3, 'limited' => 1 ), 'new_answers' => 3, 'input_tokens' => 15000, 'output_tokens' => 2000, 'thinking_tokens' => 6000, 'cost_usd' => 0.041 ) ),
+	'total_cost_usd' => 0.04, 'avg_cost_per_new_answer_usd' => 0.0137, 'limits' => array( 'daily' => 200, 'per_visitor_daily' => 20, 'per_minute' => 6 ),
+	'thinking' => array( 'writer' => 'low', 'verifier' => 'default' ), 'prices_per_million' => array( 'input' => 0.75, 'output_and_thinking' => 3.75 ),
+) );
+TK_T::ok( false !== strpos( $cu, '13.10.2026' ) && false !== strpos( $cu, '0.041' ) && false !== strpos( $cu, '15,000' ) && false !== strpos( $cu, '200 תשובות חדשות' ), 'costs: day row, cost, tokens and limits' );

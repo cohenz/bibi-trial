@@ -85,6 +85,14 @@ class Settings:
     cors_origins: str = ""
     ip_hash_salt: str = ""
     rate_limit_ask_per_minute: int = 6
+    # Ask cost control (13.10.2026): new answers per UTC day, site-wide and per visitor (0 = no cap); thinking of the
+    # writer / verifier ("low", "medium", "high", a token budget, or "" for the model default); prices for the report
+    ask_daily_limit: int = 200
+    ask_visitor_daily_limit: int = 20
+    ask_thinking: str = "low"
+    ask_verify_thinking: str = ""
+    price_input_per_m: float = 0.75
+    price_output_per_m: float = 3.75
     rate_limit_search_per_minute: int = 30
     rate_limit_public_per_minute: int = 120
     max_question_chars: int = 500
@@ -206,6 +214,12 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         cors_origins=g("NTK_CORS_ORIGINS"),
         ip_hash_salt=g("NTK_IP_HASH_SALT"),
         rate_limit_ask_per_minute=_int(g("NTK_RATE_LIMIT_ASK_PER_MINUTE"), 6),
+        ask_daily_limit=_int(g("NTK_ASK_DAILY_LIMIT"), 200),
+        ask_visitor_daily_limit=_int(g("NTK_ASK_VISITOR_DAILY_LIMIT"), 20),
+        ask_thinking=(g("NTK_ASK_THINKING", "low") or "").strip(),
+        ask_verify_thinking=(g("NTK_ASK_VERIFY_THINKING", "") or "").strip(),
+        price_input_per_m=float(g("NTK_PRICE_INPUT_PER_M", "0.75") or 0.75),
+        price_output_per_m=float(g("NTK_PRICE_OUTPUT_PER_M", "3.75") or 3.75),
         rate_limit_search_per_minute=_int(g("NTK_RATE_LIMIT_SEARCH_PER_MINUTE"), 30),
         rate_limit_public_per_minute=_int(g("NTK_RATE_LIMIT_PUBLIC_PER_MINUTE"), 120),
         max_question_chars=_int(g("NTK_MAX_QUESTION_CHARS"), 500),

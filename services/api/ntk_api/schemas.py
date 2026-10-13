@@ -210,6 +210,16 @@ class DigestBatchRequest(BaseModel):
     now: bool = False  # run in this request instead of the worker queue (the queue may be busy for hours)
 
 
+class BatchSubmitRequest(BaseModel):
+    """Any batch kind (13.10.2026): digest | witness_guide | document_brief."""
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["digest", "witness_guide", "document_brief"]
+    keys: list[Annotated[str, StringConstraints(pattern=r"^(hr_[0-9a-f]{26}|w_[0-9a-f]{10}|sv_[0-9a-f]{26})$")]] | None = Field(
+        default=None, max_length=1000)
+    limit: int = Field(default=200, ge=0, le=1000)  # an approval; 0 cancels what is left of the previous one
+    now: bool = False
+
+
 class BriefBuildRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_version_ids: list[str] | None = Field(default=None, max_length=2000)

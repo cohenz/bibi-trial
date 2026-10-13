@@ -71,7 +71,8 @@ def build_state(settings: Settings, *, queue: JobQueue | None = None, services: 
     ask = AskEngine(PgAskStore(engine, case_id=settings.case_id), services.search_backend(), services.runner,
                     AskConfig(answer_base=settings.answer_base, citation_base=settings.citation_base,
                               max_question_chars=settings.max_question_chars, env=settings.env,
-                              independent_verifier=not services.registry.single_family))
+                              independent_verifier=not services.registry.single_family,
+                              thinking=settings.ask_thinking, verify_thinking=settings.ask_verify_thinking))
     return AppState(settings=settings, services=services, queue=queue or CeleryQueue(settings.redis_url),
                     nonces=NonceStore(r), limiter=RateLimiter(r), ask=ask, redis=r)
 

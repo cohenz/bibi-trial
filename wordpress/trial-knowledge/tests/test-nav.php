@@ -91,6 +91,16 @@ $cu = TK_Admin_Costs::render( array(
 ) );
 TK_T::ok( false !== strpos( $cu, '13.10.2026' ) && false !== strpos( $cu, '0.041' ) && false !== strpos( $cu, '15,000' ) && false !== strpos( $cu, '200 תשובות חדשות' ), 'costs: day row, cost, tokens and limits' );
 
+// --- answers diagnostics (2.7.7)
+$al = TK_Admin_Costs::render_answers( array( 'items' => array( array( 'answer_id' => 'a-1', 'question' => 'מה <b>התברר</b>?', 'answer_status' => 'requires_human_review', 'prompt_version' => 'answer-defense-1', 'created_at' => '2026-10-13T18:10:00Z' ) ) ) );
+TK_T::ok( false !== strpos( $al, 'tk_answer=a-1' ) && false !== strpos( $al, 'נעצרה לבדיקה' ) && false === strpos( $al, '<b>' ), 'answers: list links to one answer, escaped' );
+$ad = TK_Admin_Costs::render_answer( array( 'question' => 'ש', 'answer_status' => 'requires_human_review',
+	'gate_report' => array( 'state' => 'human_review_required', 'risk_flags' => array(), 'retrieval' => array( 'defense' => 12 ), 'gates' => array(
+		array( 'gate' => 'support', 'passed' => true ), array( 'gate' => 'verifier', 'passed' => false, 'details' => array( array( 'problem' => 'writer_verifier_disagreement' ) ) ) ) ),
+	'verifier' => array( 'output' => array( 'verdict' => 'fail', 'assertions' => array( array( 'path' => 'sections/2', 'supported' => 'partial', 'attribution_ok' => false, 'note' => 'הערה <script>' ) ), 'omitted_counterevidence' => array() ) ),
+	'writer' => array( 'output' => array( 'answer_short' => 'קצר', 'sections' => array( array( 'kind' => 'defense', 'text' => 'נקודה' ) ) ) ) ) );
+TK_T::ok( false !== strpos( $ad, 'writer_verifier_disagreement' ) && false !== strpos( $ad, 'sections/2' ) && false !== strpos( $ad, 'הגנה 12' ) && false === strpos( $ad, '<script>' ) && 1 === substr_count( $ad, '<strong>' ), 'answer: failed gates only, verifier per sentence, draft, escaped' );
+
 // --- visitor address behind Cloudflare (2.7.1)
 TK_T::eq( '9.9.9.9', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '172.70.1.2', 'HTTP_CF_CONNECTING_IP' => '9.9.9.9' ) ), 'visitor ip: from a Cloudflare edge, the header is used' );
 TK_T::eq( '5.6.7.8', TK_Rest_Proxy::visitor_ip( array( 'REMOTE_ADDR' => '5.6.7.8', 'HTTP_CF_CONNECTING_IP' => '9.9.9.9' ) ), 'visitor ip: a forged header from elsewhere is ignored' );

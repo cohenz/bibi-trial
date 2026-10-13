@@ -55,6 +55,7 @@ function add_query_arg( $k, $v = null, $u = "https://site.test/page/" ) {
 function _n( $s, $p, $n, $d = null ) { return 1 === (int) $n ? $s : $p; }
 function absint( $v ) { return abs( (int) $v ); }
 function wp_unslash( $v ) { return $v; }
+function admin_url( $p = '' ) { return 'https://site.test/wp-admin/' . $p; }
 function sanitize_text_field( $v ) { return trim( strip_tags( (string) $v ) ); }
 function add_option( $k, $v = '', $d = '', $a = 'yes' ) { if ( array_key_exists( $k, $GLOBALS['tk_options'] ) ) { return false; } $GLOBALS['tk_options'][ $k ] = $v; return true; }
 function shortcode_atts( $pairs, $atts, $sc = '' ) { $out = array(); foreach ( $pairs as $k => $d ) { $out[ $k ] = array_key_exists( $k, (array) $atts ) ? $atts[ $k ] : $d; } return $out; }

@@ -24,7 +24,21 @@ TEXT_KEYS = frozenset({"text", "summary", "title", "label", "long", "short", "on
                        "description", "answer_short", "about", "claim_text", "body"})
 
 
+# a writer sometimes puts passage ids in the prose ("… רגולטוריות [su_56bb…, su_2ffb…]."): readers see them as
+# gibberish, and the citations are listed anyway (13.10.2026)
+UNIT_ID = r"su_[0-9a-f]{26}"
+_INLINE_IDS = re.compile(r"\s*[\[(]\s*" + UNIT_ID + r"(?:\s*[,;،]\s*" + UNIT_ID + r")*\s*[\])]|\s*" + UNIT_ID)
+
+
+def strip_unit_ids(s: str) -> str:
+    if not s or "su_" not in s:
+        return s
+    out = _INLINE_IDS.sub("", s)
+    return re.sub(r"\s+([.,;:!?])", r"\1", re.sub(r"[ \t]{2,}", " ", out)).strip()
+
+
 def polish_text(s: str) -> str:
+    s = strip_unit_ids(s)
     if not s or "חריגה" not in s:
         return s
     quoted = [m.span() for m in _QUOTED.finditer(s)]

@@ -299,3 +299,15 @@ def test_inflight_second_request_waits_for_the_first():
     assert inflight.wait(r, ask, "q", "he", sleep=lambda s: None) == "ANSWER"
     inflight.release(r, "L", True)
     assert not r.exists("L") and inflight.acquire(None, "L") is True
+
+
+def test_inline_passage_ids_leave_the_text_and_join_the_citations():
+    """13.10.2026: '… במשרד התקשורת [su_…, su_…].' reached readers as gibberish."""
+    from ntk_common.ask import move_inline_ids
+    from ntk_common.editorial import polish
+
+    a, b, c = "su_" + "a" * 26, "su_" + "b" * 26, "su_" + "c" * 26
+    text, ids_ = move_inline_ids(f"בבזק [{a}, {b}]. ההגנה טוענת כי X {c}, וציינה.", [a], {a, b})
+    assert text == "בבזק. ההגנה טוענת כי X, וציינה." and ids_ == [a, b]  # c is not in the context: dropped, not cited
+    stored = {"answer_short": f"קצר ({a})", "sections": [{"text": f"נקודה [{b}]", "citation_ids": [b]}]}
+    assert polish(stored) == {"answer_short": "קצר", "sections": [{"text": "נקודה", "citation_ids": [b]}]}

@@ -116,7 +116,7 @@ ANSWER = Prompt(
 # can knock down hurts the defense more than it helps.
 ANSWER_DEFENSE = Prompt(
     task_type="answer_defense",
-    version="answer-defense-2026-10-13.2",
+    version="answer-defense-2026-10-13.3",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Editorial lens: this knowledge base presents the defense's case. Readers come to learn what the trial record "
@@ -143,7 +143,7 @@ ANSWER_DEFENSE = Prompt(
     "witness confirmed, admitted or said something only when you cite that witness's own answer; when the cited "
     "unit is counsel's question or argument, or a defendant describing someone else's testimony, write it as theirs "
     "('עו\"ד חדד הציג ל־X ש…', 'נתניהו העיד כי לדבריה…'), and add the witness's answer when the context has it. "
-    "Cite every unit whose content a sentence uses, including names, dates and numbers. A conclusion is the defense's argument, never an established fact or a "
+    "Cite every unit whose content a sentence uses, including names, dates and numbers. Ids go only in citation_ids and answer_short_citation_ids, never in the text: readers see the text as it is. A conclusion is the defense's argument, never an established fact or a "
     "ruling: let the cited exchange carry the weight. Never write that a witness lied, that investigators or "
     "prosecutors committed an offense or acted from a motive or conspiracy, or that something was proven or refuted "
     "(שיקר, קנוניה, תפירה, הוכח, הופרך); instead show the contradiction or the gap with its citations, and attribute "

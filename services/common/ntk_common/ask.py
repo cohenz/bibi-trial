@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.6"
+ASK_ENGINE_VERSION = "ask-engine-1.7"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -450,6 +450,12 @@ class AskEngine:
 
         units = {c.unit.id: c.unit for c in context}
         sections = [dict(s) for s in draft["sections"]]
+        # ids written into the prose become citations of that sentence, and leave the text (13.10.2026)
+        draft = dict(draft)
+        draft["answer_short"], draft["answer_short_citation_ids"] = move_inline_ids(
+            draft["answer_short"], draft.get("answer_short_citation_ids", []), allowed)
+        for sec in sections:
+            sec["text"], sec["citation_ids"] = move_inline_ids(sec["text"], sec["citation_ids"], allowed)
         # contradiction completeness: weakening context must be represented (a claim card's weakness is material
         # against the defense's claim, so under the defense lens it is the prosecution's side)
         weak_kind = "prosecution" if self._defense else "weakens"
@@ -777,6 +783,15 @@ def named_witnesses(q: str, guides_: list[dict]) -> list[dict]:
 
 
 MAX_CONTEXT_WITH_PAIRS = 32
+
+
+def move_inline_ids(text: str, citation_ids: list[str], allowed: set[str]) -> tuple[str, list[str]]:
+    """Passage ids the writer put in the prose: known ones join the citations, all of them leave the text."""
+    from .editorial import UNIT_ID, strip_unit_ids
+
+    found = [x for x in re.findall(UNIT_ID, text or "") if x in allowed]
+    ids_ = list(dict.fromkeys([*citation_ids, *found]))
+    return strip_unit_ids(text), ids_
 MIN_DEFENSE_POINTS_AFTER_PRUNING = 2
 
 

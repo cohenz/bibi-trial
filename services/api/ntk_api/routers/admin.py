@@ -396,8 +396,10 @@ def maintenance_non_hearings(body: NonHearingsRequest, request: Request, st: App
     records (and optionally their ``kind``) instead of the rule."""
     from ntk_common import inbox_dupes, reclassify
 
+    if body.kind and body.hearing_ids is None:
+        raise ApiError(400, "invalid_request", "kind applies only to the hearings named in hearing_ids")
     with st.services.engine.begin() as conn:
-        found = reclassify.named(conn, body.hearing_ids, kind=body.kind) if body.hearing_ids else reclassify.candidates(conn)
+        found = reclassify.named(conn, body.hearing_ids, kind=body.kind) if body.hearing_ids is not None else reclassify.candidates(conn)
         out = {"candidates": [{k: v for k, v in c.items() if k != "metadata"} for c in found], "applied": []}
         if body.apply:
             for c in found:

@@ -236,24 +236,38 @@ def suspects(people: list[Person]) -> list[tuple[str, str, str]]:
 PANEL = ("רבקה פרידמן-פלדמן", "משה בר-עם", "עודד שחם")  # the trial bench (ת"פ 67104-01-20)
 
 
+def _judge_tokens(s: str) -> list[str]:
+    return [t for t in re.split(r"[\s\-–—]+", s) if t]
+
+
 def clean_judges(names: list[str] | None) -> list[str]:
-    """Judges as printed in a protocol → clean, unique names. An entry naming a member of the trial bench (by family
-    name, whatever the spacing, initials or OCR noise around it) becomes that judge; any other entry is kept only when
-    it reads as a name (2–4 Hebrew words, no digits or Latin letters, no one-letter words)."""
+    """Judges as printed in a protocol → clean, unique names. An entry is a member of the trial bench when it holds the
+    judge's first name (or its initial) followed by the whole family name, whatever the dashes or spacing around them
+    ("משה בר – עם", "רבקה פרידמן – ר' פרידמן-פלדמן", "עודד שחם 5"); "ערן שחם-שביט" is not עודד שחם. Any other entry is
+    kept only when it reads as a name (2–4 Hebrew words, no digits or Latin letters, no initials), once per person."""
     out: list[str] = []
+    seen: set[str] = set()
     for raw in names or []:
         s = hebrew.normalize(raw or "")
         s = re.sub(r"\s*[-–—]\s*", "-", s).strip(" .,:;()")
         s = re.sub(r"\s+", " ", s)
-        flat = s.replace("-", "")
-        bench = next((j for j in PANEL if j.split()[-1].replace("-", "") in flat), None)
-        if bench:
-            name = bench
-        elif (not s or re.search(r"\d|[A-Za-z]", s) or not 2 <= len(s.split()) <= 4
-              or any(len(set(w.strip("׳'\""))) < 2 for w in s.split())):  # an initial ("ע׳", OCR "יי")
-            continue
-        else:
+        toks = [t.strip("׳'\"") for t in _judge_tokens(s)]
+        name = None
+        for judge in PANEL:
+            first, *family = _judge_tokens(judge)
+            for i in range(len(toks) - len(family) + 1):
+                if toks[i:i + len(family)] == family and any(t in (first, first[0]) for t in toks[:i]):
+                    name = judge
+                    break
+            if name:
+                break
+        if name is None:
+            if (not s or re.search(r"\d|[A-Za-z]", s) or not 2 <= len(s.split()) <= 4
+                    or any(len(set(w.strip("׳'\""))) < 2 for w in s.split())):  # an initial ("ע׳", OCR "יי")
+                continue
             name = s
-        if name not in out:
+        key = strict_key(loose_key(name))
+        if key not in seen:
+            seen.add(key)
             out.append(name)
     return out

@@ -633,6 +633,7 @@ a.tk-case-badge:hover { text-decoration: underline; }
 .tk-keyw__meta { font-size: .88rem; color: var(--tk-muted); }
 
 /* witnesses page */
+.tk-wgroups [hidden] { display: none !important; }
 .tk-filter { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-block: 0 1rem; }
 .tk-filter__b { font: inherit; min-height: 40px; padding: .2rem .9rem; border-radius: 999px; border: 1px solid var(--tk-line); background: var(--tk-card); cursor: pointer; }
 .tk-filter__b.is-on { background: var(--tk-accent); border-color: var(--tk-accent); color: #fff; }

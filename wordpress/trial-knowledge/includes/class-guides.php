@@ -112,7 +112,7 @@ class TK_Guides {
 	}
 
 	/** Document types listed on the documents page, in that order. */
-	const DOC_TYPES = array( 'decision', 'motion', 'response', 'notice', 'indictment', 'exhibit', 'other' );
+	const DOC_TYPES = array( 'decision', 'motion', 'response', 'notice', 'indictment', 'affidavit', 'exhibit', 'other' );
 
 	/**
 	 * Every published document (one request per type, the same paths the local copy keeps), newest first.
@@ -125,12 +125,19 @@ class TK_Guides {
 		$ok    = false;
 		$err   = null;
 		foreach ( self::DOC_TYPES as $t ) {
-			try {
-				$d     = TK_Rest_Proxy::cached_get( TK_Paths::documents_list( $t, 200, '' ) );
-				$items = array_merge( $items, (array) ( $d['items'] ?? array() ) );
-				$ok    = true;
-			} catch ( TK_Api_Error $e ) {
-				$err = $e;
+			for ( $offset = 0; $offset < 5000; $offset += 200 ) { // pages of 200 until a short page
+				try {
+					$d     = TK_Rest_Proxy::cached_get( TK_Paths::documents_list( $t, 200, '', $offset ) );
+					$got   = (array) ( $d['items'] ?? array() );
+					$items = array_merge( $items, $got );
+					$ok    = true;
+				} catch ( TK_Api_Error $e ) {
+					$err = $e;
+					break;
+				}
+				if ( count( $got ) < 200 ) {
+					break;
+				}
 			}
 		}
 		if ( ! $ok && $err ) {

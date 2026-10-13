@@ -39,14 +39,20 @@ class TK_Public_Pages {
 
 	/** /{slug}/ itself was a raw list of every document; readers start at the start page instead (2.7). */
 	public static function retire_base_page() {
-		if ( get_query_var( 'tk_type' ) || ! is_page() || ! apply_filters( 'tk_retire_base_page', true ) ) {
+		if ( get_query_var( 'tk_type' ) || ! is_page() || is_front_page() || ! apply_filters( 'tk_retire_base_page', true ) ) {
 			return;
 		}
 		$post = get_queried_object();
-		if ( $post && isset( $post->post_name ) && self::slug() === $post->post_name && ! $post->post_parent && home_url( '/' ) !== get_permalink( $post ) ) {
-			wp_safe_redirect( home_url( '/' ), 301 );
-			exit;
+		if ( ! $post || ! isset( $post->post_name, $post->ID ) || self::slug() !== $post->post_name || $post->post_parent
+			|| (int) get_option( 'page_on_front' ) === (int) $post->ID ) {
+			return;
 		}
+		$to = home_url( '/' );
+		if ( untrailingslashit( (string) get_permalink( $post ) ) === untrailingslashit( $to ) ) {
+			return; // never to itself
+		}
+		wp_safe_redirect( $to, 302 );
+		exit;
 	}
 
 	private static function slug() {

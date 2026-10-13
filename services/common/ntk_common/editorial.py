@@ -13,7 +13,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_EXCEPTIONAL = re.compile(r"(?<![א-ת])([ובלכמש]{0,2})היענות\s+חריגה(?!\s+(?:\S+\s+){0,4}?לדרישו?ת)")
+_EXCEPTIONAL = re.compile(r"(?<![א-ת])([ובלכמש]{0,2})היענות\s+חריגה(?![\"״”’]?[\s,.;:]+(?:\S+\s+){0,4}?ל(?:דרישו?ת|בקשו?ת))")
+# quoted words (a witness's or a document's own words) are never changed; ' and ׳ are geresh in names, not quotes
+# (gershayim between two letters is an abbreviation — עו״ד, ת״פ — not a quote mark)
+_QUOTED = re.compile(r"(?<![א-ת])[\"״“„](?=\S)(?:[^\"״“”„]|(?<=[א-ת])[\"״](?=[א-ת])){0,300}?(?<=\S)[\"״”“](?![א-ת])")
 FULL_TERM = "היענות חריגה לדרישות סיקור"
 
 # generated prose fields; never "quote", unit text, speaker labels or ids
@@ -24,7 +27,14 @@ TEXT_KEYS = frozenset({"text", "summary", "title", "label", "long", "short", "on
 def polish_text(s: str) -> str:
     if not s or "חריגה" not in s:
         return s
-    return _EXCEPTIONAL.sub(lambda m: m.group(1) + FULL_TERM, s)
+    quoted = [m.span() for m in _QUOTED.finditer(s)]
+
+    def repl(m: re.Match) -> str:
+        if any(a <= m.start() < b for a, b in quoted):
+            return m.group(0)
+        return m.group(1) + FULL_TERM
+
+    return _EXCEPTIONAL.sub(repl, s)
 
 
 def polish(obj: Any, *, _key: str | None = None) -> Any:

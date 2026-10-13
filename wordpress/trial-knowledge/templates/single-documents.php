@@ -12,12 +12,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 get_header();
 $tk_cur = TK_Public_Pages::$current;
 // phpcs:disable WordPress.Security.NonceVerification.Recommended -- read-only filters
-$tk_q = array(
-	'type' => isset( $_GET['tk_type_f'] ) ? sanitize_key( wp_unslash( $_GET['tk_type_f'] ) ) : '',
-	'year' => isset( $_GET['tk_year'] ) ? preg_replace( '/[^0-9]/', '', (string) wp_unslash( $_GET['tk_year'] ) ) : '',
-	'q'    => isset( $_GET['tk_q'] ) ? mb_substr( sanitize_text_field( wp_unslash( $_GET['tk_q'] ) ), 0, 80 ) : '',
-	'all'  => isset( $_GET['tk_all'] ) && '1' === (string) wp_unslash( $_GET['tk_all'] ), // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- compared to a literal
-	'p'    => isset( $_GET['tk_p'] ) ? absint( wp_unslash( $_GET['tk_p'] ) ) : 1,
+$tk_get = static function ( $k ) {
+	return isset( $_GET[ $k ] ) && is_string( $_GET[ $k ] ) ? wp_unslash( $_GET[ $k ] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- sanitized below
+};
+$tk_q   = array(
+	'type' => sanitize_key( $tk_get( 'tk_type_f' ) ),
+	'year' => preg_replace( '/[^0-9]/', '', $tk_get( 'tk_year' ) ),
+	'q'    => mb_substr( sanitize_text_field( $tk_get( 'tk_q' ) ), 0, 80 ),
+	'all'  => '1' === $tk_get( 'tk_all' ),
+	'p'    => max( 1, absint( $tk_get( 'tk_p' ) ) ),
 );
 // phpcs:enable
 ?>

@@ -1158,6 +1158,7 @@ class TK_Render_Guides {
 		'response'   => 'תגובות',
 		'notice'     => 'הודעות',
 		'indictment' => 'כתבי אישום',
+		'affidavit'  => 'תצהירים',
 		'exhibit'    => 'מוצגים',
 		'other'      => 'אחר',
 	);
@@ -1241,7 +1242,7 @@ class TK_Render_Guides {
 			( $hidden ? ' <span class="tk-muted">' . esc_html( sprintf( __( '(ועוד %d פרוצדורליים — מועדים, ארכות, העתקים — מוסתרים)', 'trial-knowledge' ), $hidden ) ) . '</span>' : '' ) . '</p>';
 		$out  .= TK_Render::documents( array( 'items' => array_slice( $shown, ( $page - 1 ) * self::DOCS_PER_PAGE, self::DOCS_PER_PAGE ) ), array( 'mode' => 'all' ) );
 		if ( $pages > 1 ) {
-			$args = array_filter( array( 'tk_type_f' => $type, 'tk_year' => $year, 'tk_q' => $words, 'tk_all' => $all ? '1' : '' ) );
+			$args = array_map( 'rawurlencode', array_filter( array( 'tk_type_f' => $type, 'tk_year' => $year, 'tk_q' => $words, 'tk_all' => $all ? '1' : '' ) ) ); // add_query_arg does not encode
 			$out .= '<nav class="tk-pager" aria-label="' . esc_attr__( 'עמודים', 'trial-knowledge' ) . '">';
 			if ( $page > 1 ) {
 				$out .= '<a class="tk-button" href="' . esc_url( add_query_arg( $args + array( 'tk_p' => $page - 1 ), $base ) ) . '">' . esc_html__( 'הקודמים', 'trial-knowledge' ) . '</a>';

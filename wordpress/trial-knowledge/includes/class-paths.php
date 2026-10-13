@@ -145,8 +145,11 @@ class TK_Paths {
 	 * @param int    $limit        1..200.
 	 * @param string $significance '' | substantive | procedural.
 	 */
-	public static function documents_list( $type, $limit, $significance = '' ) {
+	public static function documents_list( $type, $limit, $significance = '', $offset = 0 ) {
 		$params = array( 'limit' => max( 1, min( 200, (int) $limit ) ) );
+		if ( (int) $offset > 0 ) {
+			$params['offset'] = (int) $offset;
+		}
 		$type   = preg_replace( '/[^a-z_]/', '', (string) $type );
 		if ( $type ) {
 			$params['type'] = $type;

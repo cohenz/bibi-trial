@@ -360,3 +360,47 @@ def test_named_witness_is_answered_from_their_own_examination():
     assert [c.unit.id for c in ctx][:2] == [k_q, k_a]  # her own exchange first, though its search score was lower
     probes = {q for q, w, _ in seen if w == "הדס קליין"}
     assert probes == set(ADMISSION_PROBES)  # no topic in the question: what admissions sound like
+
+
+def test_witness_probes_include_each_topic_word():
+    """15.10.2026: in 'כימות טובות ההנאה' the common phrase drowned 'כימות' (Barnor's '700 אלף שקל' exchange)."""
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.search.base import SearchResponse
+
+    seen = []
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def published_witness_guides(self):
+            return [{"object_id": "w_b", "payload": {"title": "כורש ברנור", "source_version_ids": ["a"] * 5, "blocks": []}}]
+
+        def public_units(self, ids):
+            return {}
+
+        def exchange_partners(self, ids):
+            return {}
+
+    class Search:
+        def search(self, req):
+            seen.append((req.query, req.filters.witness, req.filters.phase))
+            return SearchResponse(req.query, [], {}, {}, "fake")
+
+    AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c"))._retrieve(
+        "מה העיד כורש ברנור על כימות טובות ההנאה?")
+    probes = {q for q, w, ph in seen if w == "כורש ברנור" and ph == "cross"}
+    assert "כימות" in probes and "כימות טובות ההנאה" in probes and not any("נכון שאמרת" in p for p in probes)
+
+
+def test_support_gate_waived_only_for_what_the_verifier_approved():
+    from ntk_common.ask import verifier_approved
+
+    v = {"assertions": [{"path": "sections/1", "supported": "yes", "attribution_ok": True},
+                        {"path": "sections/2", "supported": "yes", "attribution_ok": False},
+                        {"path": "sections/3", "supported": "partial", "attribution_ok": True},
+                        {"path": "sections/4", "supported": "yes", "attribution_ok": True, "judicial_overstatement": True}]}
+    assert verifier_approved(v) == {"sections/1"}

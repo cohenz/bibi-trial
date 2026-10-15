@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.8"
+ASK_ENGINE_VERSION = "ask-engine-1.9"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -454,8 +454,9 @@ class AskEngine:
         draft = dict(draft)
         draft["answer_short"], draft["answer_short_citation_ids"] = move_inline_ids(
             draft["answer_short"], draft.get("answer_short_citation_ids", []), allowed)
-        for sec in sections:
+        for i, sec in enumerate(sections):
             sec["text"], sec["citation_ids"] = move_inline_ids(sec["text"], sec["citation_ids"], allowed)
+            sec["_vpath"] = f"sections/{i}"  # the verifier's numbering, kept through pruning; removed before publishing
         # contradiction completeness: weakening context must be represented (a claim card's weakness is material
         # against the defense's claim, so under the defense lens it is the prosecution's side)
         weak_kind = "prosecution" if self._defense else "weakens"
@@ -495,9 +496,33 @@ class AskEngine:
                     for a in assertions:
                         flags.update(gates.risk_flags(a.text))
                     verdict = "pass"
+        support_waived: list[str] = []
+        if self._defense and self.cfg.verify_answers and verdict == "pass" and vrun_id:
+            approved = verifier_approved(vrun.output if vrun.ok else {})
+            weak = {d["path"] for d in gates.support_gate(assertions, facts).details}
+            by_path = {f"sections/{i}": sec for i, sec in enumerate(sections)}
+            drop = []
+            for path in sorted(weak):
+                vpath = "answer_short" if path == "answer_short" else (by_path.get(path) or {}).get("_vpath")
+                if vpath in approved:
+                    support_waived.append(path)  # the independent verifier read the passages and approved it
+                elif path != "answer_short":
+                    drop.append(path)
+            if drop:
+                kept = [sec for i, sec in enumerate(sections) if f"sections/{i}" not in drop or sec["kind"] == "limitation"]
+                if sum(1 for sec in kept if sec["kind"] == "defense") >= MIN_DEFENSE_POINTS_AFTER_PRUNING:
+                    pruned += [{"path": by_path[pth]["_vpath"], "kind": by_path[pth]["kind"], "text": by_path[pth]["text"],
+                                "note": "low lexical support, not approved by the verifier"} for pth in drop]
+                    sections = kept
+                    assertions = [a for a in assertions if not a.path.startswith("sections/")]
+                    assertions += [gates.Assertion(f"sections/{i}", sec["text"], sec["citation_ids"], kind=sec["kind"])
+                                   for i, sec in enumerate(sections)]
+                    support_waived = [p for p in support_waived if p == "answer_short"] + [
+                        f"sections/{i}" for i, sec in enumerate(sections) if sec["_vpath"] in approved
+                        and f"sections/{i}" in {d["path"] for d in gates.support_gate(assertions, facts).details}]
         results = [
             gates.citation_gate(assertions, facts, require_published=True),
-            gates.support_gate(assertions, facts),
+            gates.support_gate([a for a in assertions if a.path not in support_waived], facts),
             gates.judicial_wording_gate(assertions, facts),
             gates.absolute_wording_gate(assertions, status=None),
             gates.provenance_gate([run.model_family], env=self.cfg.env),
@@ -506,9 +531,10 @@ class AskEngine:
             results.append(gates.verifier_gate(verdict, independent_family=self.cfg.independent_verifier, sensitive=bool(flags)))
         decision = gates.decide(results, flags=flags)
         report = {**decision.report(), "retrieval": origins, "verifier_run_id": vrun_id, "context_hash": context_hash,
-                  "verifier_pruned": pruned}
+                  "verifier_pruned": pruned, "support_waived": support_waived}
         if decision.state != "machine_verified":
             return self._citations_only(base, context, ["requires_human_review"], sorted(flags), origins, run.id, report)
+        sections = [{k: v for k, v in sec.items() if not k.startswith("_")} for sec in sections]
         cited = [units[c] for s in sections for c in s["citation_ids"] if c in units]
         cited += [units[c] for c in draft.get("answer_short_citation_ids", []) if c in units]
         status = "false_premise_corrected" if draft["answer_status"] == "false_premise_corrected" else "answered"
@@ -704,32 +730,43 @@ class AskEngine:
         the direct examination of the defense's witnesses — on the question's topic, each Q/A exchange kept whole.
         A broad question ('the champagne and cigars') otherwise draws mostly the prosecution's direct examination,
         where the allegation is phrased in the question's own words."""
-        hits = []
         # a question that names a witness ("מה התברר בחקירה הנגדית של הדס קליין?") is answered from that witness's own
         # examination: their answers do not contain their name, so a plain search finds only places where counsel
-        # mentions them in other examinations (13.10.2026). Witness-filtered searches come first, on the question's
-        # topic and, when it has none, on what admissions sound like.
+        # mentions them in other examinations (13.10.2026). Witness-filtered probes: the question's topic, and each of
+        # its words alone (in "כימות טובות ההנאה" the common phrase drowns the word that matters, 15.10.2026); with no
+        # topic, what admissions sound like. Their results are interleaved (rank 1 of every probe, then rank 2 …),
+        # because scores of different searches do not compare; then the topic searches by score.
         guides_fn = getattr(self.store, "published_witness_guides", None)
         named = named_witnesses(q, guides_fn() if guides_fn else []) if guides_fn else []
+        witness_reqs: list[SearchRequest] = []
         for g in named[:2]:
             name = re.sub(r"\([^)]*\)", " ", g["payload"].get("title") or "").strip()
             if not name:
                 continue
             topic = topic_query(q, name)
-            probes = [topic] if topic else []
-            probes += [] if len(query_terms(topic or "")) >= 2 else list(ADMISSION_PROBES)
+            terms = query_terms(topic) if topic else []
+            probes = ([topic] if topic else []) + (terms[:3] if len(terms) > 1 else [])
+            if len(terms) < 2:
+                probes += list(ADMISSION_PROBES)
             for phase in ("cross", "direct"):
-                for pq in probes:
-                    r = self.search.search(SearchRequest(pq, SearchFilters(published_only=True, phase=phase, witness=name),
-                                                         limit=self.cfg.defense_context))
-                    # a witness-filtered hit is relevant by construction; the boost keeps it ahead of the topic search
-                    hits += [_boosted(h, 10.0) for h in r.hits]
-        for phase in ("cross", "direct"):
-            r = self.search.search(SearchRequest(q, SearchFilters(published_only=True, phase=phase),
-                                                 limit=self.cfg.defense_context * 2))
-            hits += [h for h in r.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+                witness_reqs += [SearchRequest(pq, SearchFilters(published_only=True, phase=phase, witness=name),
+                                               limit=self.cfg.defense_context) for pq in dict.fromkeys(probes)]
+        topic_reqs = [SearchRequest(q, SearchFilters(published_only=True, phase=phase), limit=self.cfg.defense_context * 2)
+                      for phase in ("cross", "direct")]
+        # each search takes a few seconds (n-gram and vector signals): run them side by side
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(8, len(witness_reqs) + len(topic_reqs))) as ex:
+            responses = list(ex.map(self.search.search, witness_reqs + topic_reqs))
+        w_lists = [r.hits for r in responses[:len(witness_reqs)]]
         cand: list[str] = []
-        for h in sorted(hits, key=lambda h: -h.score):
+        for rank in range(max((len(x) for x in w_lists), default=0)):
+            for lst in w_lists:
+                if rank < len(lst) and lst[rank].source_unit_id not in cand:
+                    cand.append(lst[rank].source_unit_id)
+        topic_hits = [h for r in responses[len(witness_reqs):] for h in r.hits
+                      if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+        for h in sorted(topic_hits, key=lambda h: -h.score):
             if h.source_unit_id not in cand:
                 cand.append(h.source_unit_id)
         partners_fn = getattr(self.store, "exchange_partners", None)
@@ -822,12 +859,6 @@ def topic_query(q: str, name: str) -> str:
     return rest if query_terms(rest) else ""
 
 
-def _boosted(hit, by: float):
-    import dataclasses
-
-    return dataclasses.replace(hit, score=hit.score + by)
-
-
 def move_inline_ids(text: str, citation_ids: list[str], allowed: set[str]) -> tuple[str, list[str]]:
     """Passage ids the writer put in the prose: known ones join the citations, all of them leave the text."""
     from .editorial import UNIT_ID, strip_unit_ids
@@ -836,6 +867,13 @@ def move_inline_ids(text: str, citation_ids: list[str], allowed: set[str]) -> tu
     ids_ = list(dict.fromkeys([*citation_ids, *found]))
     return strip_unit_ids(text), ids_
 MIN_DEFENSE_POINTS_AFTER_PRUNING = 2
+
+
+def verifier_approved(verifier: dict) -> set[str]:
+    """Paths the verifier fully approved: supported, correctly attributed, no overstatement, no false premise."""
+    return {x.get("path") for x in verifier.get("assertions", [])
+            if x.get("supported") == "yes" and x.get("attribution_ok", True)
+            and not x.get("judicial_overstatement") and not x.get("false_premise")}
 
 
 def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], list[dict]] | None:

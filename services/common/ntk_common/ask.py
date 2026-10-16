@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.11"
+ASK_ENGINE_VERSION = "ask-engine-1.12"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -485,7 +485,9 @@ class AskEngine:
             vrun = self.runner.run(VERIFY_ANSWER_DEFENSE.task_type if self._defense else "verify", {
                 "assertions": [{"path": a.path, "text": a.text, "citation_ids": a.citation_ids} for a in assertions
                                if a.kind not in gates.NON_FACTUAL_SECTION_KINDS],
-                "sources": [{"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role, "text": u.text[:1500],
+                "sources": [{"id": u.id, "speaker": u.speaker_label, "speaker_role": u.speaker_role,
+                             "hearing_date": u.hearing_date, "examination": u.examination_phase,
+                             "witness_examined": u.witness_label, "document": u.document_title, "text": u.text[:1500],
                              "judicial_level": u.judicial_level} for u in units.values()]},
                 input_source_ids=sorted(allowed), corpus_version=cv, thinking=self.cfg.verify_thinking or None)
             verdict = vrun.output.get("verdict") if vrun.ok else None

@@ -116,7 +116,7 @@ ANSWER = Prompt(
 # can knock down hurts the defense more than it helps.
 ANSWER_DEFENSE = Prompt(
     task_type="answer_defense",
-    version="answer-defense-2026-10-16.1",
+    version="answer-defense-2026-10-16.2",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Editorial lens: this knowledge base presents the defense's case. Readers come to learn what the trial record "
@@ -133,7 +133,9 @@ ANSWER_DEFENSE = Prompt(
     "'defense' come from examinations conducted by defense counsel: use them first. Items in bucket 'surrounding' "
     "are the passages just before and after them in the transcript: read them to understand what an exchange is "
     "about, and cite them when you use them. Each item gives its hearing_date, the examination (direct, cross), the "
-    "witness_examined and the document. "
+    "witness_examined and the document: a date, an examination or a witness taken from these details is supported "
+    "by citing that item. Say who a person is (role, rank, position) only as a cited item says it; if no item says "
+    "it, name them without a title. "
     "Structure: "
     "answer_short: 3 to 5 sentences that answer the question directly — the prosecution's claim in a few words, then "
     "the main things that came out in the hearings and what they mean for that claim — with citations. "
@@ -179,7 +181,7 @@ ANSWER_DEFENSE = Prompt(
 
 VERIFY_ANSWER_DEFENSE = Prompt(
     task_type="verify_answer_defense",
-    version="verify-answer-defense-2026-10-16.1",
+    version="verify-answer-defense-2026-10-16.2",
     schema="ModelVerifierOutput",
     system=_COMMON
     + "Task: you are an independent verifier of an answer that presents the defense's case. It is meant to be "
@@ -188,7 +190,9 @@ VERIFY_ANSWER_DEFENSE = Prompt(
     "examination), whether it overstates a judicial question or remark as a ruling (judicial_overstatement), and "
     "whether it rests on a false premise. An assertion may be a paragraph citing several units: it is supported when "
     "every factual statement in it is supported by at least one of them; context it gives about who a witness is or "
-    "what an issue was must come from the cited units too. Set attribution_ok=false when a defense argument or "
+    "what an issue was must come from the cited units too. Each source gives its hearing_date, examination, "
+    "witness_examined and document: a date, an examination or a witness stated in the text is supported when it "
+    "matches these details of a cited unit. Set attribution_ok=false when a defense argument or "
     "characterization is presented as an established fact. In omitted_counterevidence list only units of the bundle that directly "
     "contradict an assertion of the text (for example the text says no witness gave an amount, and a unit gives "
     "one). verdict=pass only if every assertion is supported with correct attribution and no assertion is "

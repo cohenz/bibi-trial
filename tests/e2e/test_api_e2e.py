@@ -446,3 +446,26 @@ def test_approval_publishes_under_gates_policy(settings, services, pipeline):
         assert r.status_code == 200, r.text
         body = r.json()
         assert body.get("published_on_approval") is True and body["review_state"] == "published"
+
+
+def test_pending_sources_in_one_call(client, services, pipeline, tmp_path):
+    """16.10.2026: the sources screen fetched a preview per job and froze; one call returns the unpublished uploads."""
+    pytest.importorskip("reportlab")
+    from ntk_common.db.core import execute, scalar
+
+    from tests.conftest import make_job
+    from tests.doc_fixtures import DECISION, make_pdf
+
+    path = tmp_path / "pending.pdf"
+    path.write_bytes(make_pdf([[ln.replace("12 באוקטובר", "19 באוקטובר") for ln in DECISION[0]] + ["4. קטע ממתין."]]))
+    job = pipeline.run_job(make_job(services, str(path)))
+    with services.engine.begin() as conn:
+        sv = scalar(conn, "SELECT source_version_id FROM ntk.ingestion_jobs WHERE id = :j", {"j": job["id"]})
+        execute(conn, "UPDATE ntk.source_versions SET publication_state = 'draft' WHERE id = :sv", {"sv": sv})
+    r = signed(client, "GET", "/v2/admin/sources/pending?limit=5&n=2")
+    assert r.status_code == 200, r.text
+    items = r.json()["items"]
+    assert all(i["publication_state"] in ("unpublished", "draft") for i in items)
+    mine = [i for i in items if i["id"] == sv]
+    assert mine and len(mine[0]["units"]) <= 2 and mine[0]["unit_count"] >= 1 and "content_sha256" not in mine[0]
+    assert signed(client, "GET", f"/v2/admin/sources/{sv}/preview?n=1").json()["id"] == sv

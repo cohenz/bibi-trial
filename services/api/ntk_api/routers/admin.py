@@ -677,27 +677,56 @@ def preview_source(source_version_id: str, st: AppState = Depends(get_state), n:
     """What a source is, before deciding what to do with it (16.10.2026): its type, title, owner, publication state,
     the hearing it was taken for, an exact duplicate already in the archive, and its opening passages."""
     with st.services.engine.connect() as conn:
-        sv = row(conn, """SELECT sv.id, sv.publication_state::text AS publication_state, sv.page_count, sv.content_sha256,
-                                 sv.metadata, d.source_type::text AS source_type, d.canonical_title AS title, d.source_owner,
-                                 (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_id,
-                                 (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1)
-                                     AS hearing_date
-                          FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
-                          WHERE sv.id = :sv""", {"sv": source_version_id})
-        if sv is None:
-            raise ApiError(404, "not_found", "source not found")
-        same = rows(conn, """SELECT o.id, o.publication_state::text AS publication_state, d.canonical_title AS title,
-                                    d.source_type::text AS source_type
-                             FROM ntk.source_versions o JOIN ntk.source_documents d ON d.id = o.document_id
-                             WHERE o.content_sha256 = :h AND o.id <> :sv""", {"h": sv["content_sha256"], "sv": source_version_id})
-        units = rows(conn, """SELECT page_no AS page, unit_type, speaker_label AS speaker, left(raw_text, 600) AS text
-                              FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
-                              ORDER BY page_no, line_start, unit_ordinal LIMIT :n""", {"sv": source_version_id, "n": n})
-        count = scalar(conn, "SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL",
-                       {"sv": source_version_id})
+        out = _source_preview(conn, source_version_id, n)
+    if out is None:
+        raise ApiError(404, "not_found", "source not found")
+    return _json(out, cache="no-store")
+
+
+def _source_preview(conn, source_version_id: str, n: int) -> dict | None:
+    sv = row(conn, """SELECT sv.id, sv.publication_state::text AS publication_state, sv.page_count, sv.content_sha256,
+                             sv.metadata, d.source_type::text AS source_type, d.canonical_title AS title, d.source_owner,
+                             (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_id,
+                             (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1)
+                                 AS hearing_date
+                      FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                      WHERE sv.id = :sv""", {"sv": source_version_id})
+    if sv is None:
+        return None
+    same = rows(conn, """SELECT o.id, o.publication_state::text AS publication_state, d.canonical_title AS title,
+                                d.source_type::text AS source_type
+                         FROM ntk.source_versions o JOIN ntk.source_documents d ON d.id = o.document_id
+                         WHERE o.content_sha256 = :h AND o.id <> :sv""", {"h": sv["content_sha256"], "sv": source_version_id})
+    units = rows(conn, """SELECT page_no AS page, unit_type, speaker_label AS speaker, left(raw_text, 600) AS text
+                          FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
+                          ORDER BY page_no, line_start, unit_ordinal LIMIT :n""", {"sv": source_version_id, "n": n})
+    count = scalar(conn, "SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL",
+                   {"sv": source_version_id})
     meta = sv.pop("metadata") or {}
-    return _json({**sv, "unit_count": count, "same_file": same, "units": units,
-                  "document_date": meta.get("document_date")}, cache="no-store")
+    sv.pop("content_sha256", None)
+    return {**sv, "unit_count": count, "same_file": same, "units": units, "document_date": meta.get("document_date")}
+
+
+@router.get("/sources/pending")
+def pending_sources(st: AppState = Depends(get_state), limit: int = Query(15, ge=1, le=50), n: int = Query(4, ge=1, le=20),
+                    p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """Uploads whose source is not published, newest first, each with its preview — in one call (16.10.2026: the
+    sources screen fetched a preview per job, up to a hundred requests, and froze for half a minute)."""
+    with st.services.engine.connect() as conn:
+        latest = rows(conn, """SELECT sv_id, created_at::text AS created_at, title FROM (
+                                   SELECT DISTINCT ON (j.source_version_id) j.source_version_id AS sv_id, j.created_at,
+                                          j.input->'document'->>'title' AS title
+                                   FROM ntk.ingestion_jobs j
+                                   JOIN ntk.source_versions sv ON sv.id = j.source_version_id
+                                   WHERE j.status = 'succeeded' AND sv.publication_state::text IN ('unpublished', 'draft')
+                                   ORDER BY j.source_version_id, j.created_at DESC) x
+                               ORDER BY created_at DESC LIMIT :lim""", {"lim": limit})
+        items = []
+        for r in latest:
+            pv = _source_preview(conn, r["sv_id"], n)
+            if pv is not None:
+                items.append({**pv, "job_title": r["title"] or "", "created_at": r["created_at"]})
+    return _json({"items": items}, cache="no-store")
 
 
 class ClassifySourceIn(BaseModel):

@@ -104,23 +104,10 @@ class TK_Admin_Sources {
 	 * An upload is published only by an action here (or by the inbox's policy).
 	 */
 	public static function pending_sources() {
-		$jobs = (array) ( tk_api()->get( '/v2/admin/ingestion-jobs?limit=100', true )['items'] ?? array() );
-		$out  = array();
-		$seen = array();
-		foreach ( $jobs as $j ) {
-			$sv = (string) ( $j['source_version_id'] ?? '' );
-			if ( 'succeeded' !== ( $j['status'] ?? '' ) || '' === $sv || isset( $seen[ $sv ] ) || count( $out ) >= 12 ) {
-				continue;
-			}
-			$seen[ $sv ] = true;
-			try {
-				$pv = (array) tk_api()->get( '/v2/admin/sources/' . rawurlencode( $sv ) . '/preview?n=4', true );
-			} catch ( TK_Api_Error $e ) {
-				continue;
-			}
-			if ( 'unpublished' === ( $pv['publication_state'] ?? '' ) || 'draft' === ( $pv['publication_state'] ?? '' ) ) {
-				$out[] = array_merge( $pv, array( 'job_title' => (string) ( $j['input']['document']['title'] ?? '' ), 'created_at' => (string) ( $j['created_at'] ?? '' ) ) );
-			}
+		// 2.7.15: one call (it was a preview request per job — up to a hundred — and the screen froze for half a minute)
+		$out = array();
+		foreach ( (array) ( tk_api()->get( '/v2/admin/sources/pending?limit=15&n=4', true )['items'] ?? array() ) as $pv ) {
+			$out[] = (array) $pv;
 		}
 		return $out;
 	}

@@ -469,3 +469,9 @@ def test_pending_sources_in_one_call(client, services, pipeline, tmp_path):
     mine = [i for i in items if i["id"] == sv]
     assert mine and len(mine[0]["units"]) <= 2 and mine[0]["unit_count"] >= 1 and "content_sha256" not in mine[0]
     assert signed(client, "GET", f"/v2/admin/sources/{sv}/preview?n=1").json()["id"] == sv
+
+
+def test_search_within_document_types(client):
+    hits = client.post("/v2/search", json={"query": "החלטה", "filters": {"source_types": ["decision"]}, "limit": 10}).json()["hits"]
+    assert all(h["hearing_id"] is None for h in hits)
+    assert client.post("/v2/search", json={"query": "x", "filters": {"source_types": ["bogus"]}}).status_code == 400

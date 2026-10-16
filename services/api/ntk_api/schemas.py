@@ -44,6 +44,9 @@ class SearchFiltersIn(BaseModel):
     court_record_status: list[Literal["filed", "admitted", "marked_for_identification", "referenced_in_court", "excluded",
                                       "not_filed", "external", "unknown"]] | None = None
     hearing_id: str | None = Field(default=None, max_length=40)
+    # 16.10.2026: search within document types (court decisions, the parties' filings…)
+    source_types: list[Literal["protocol", "decision", "motion", "response", "notice", "affidavit", "indictment",
+                               "exhibit", "other"]] | None = Field(default=None, max_length=9)
 
 
 class SearchRequestIn(BaseModel):

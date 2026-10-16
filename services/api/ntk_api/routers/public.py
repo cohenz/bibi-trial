@@ -242,7 +242,7 @@ def search(body: SearchRequestIn, st: AppState = Depends(get_state)) -> JSONResp
         case_id=None, date_from=f.date_from.isoformat() if f.date_from else None,
         date_to=f.date_to.isoformat() if f.date_to else None, witness=f.witness, phase=f.phase,
         court_record_status=list(f.court_record_status) if f.court_record_status else None, hearing_id=f.hearing_id,
-        published_only=True), limit=body.limit)
+        source_types=list(f.source_types) if f.source_types else None, published_only=True), limit=body.limit)
     resp = st.services.search_backend().search(req)
     return _json({
         "query": resp.query, "backend": resp.backend, "signal_counts": resp.signal_counts, "timings_ms": resp.timings_ms,

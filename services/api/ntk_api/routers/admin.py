@@ -867,6 +867,7 @@ def list_answers(st: AppState = Depends(get_state), limit: int = Query(30, ge=1,
         rs = rows(conn, f"""
             SELECT id::text AS answer_id, question, normalized_question, answer_status, prompt_version, created_at,
                    gate_report->>'state' AS gate_state, gate_report->'risk_flags' AS risk_flags,
+                   gate_report->'human_review'->>'decision' AS human_decision,
                    CASE WHEN client_request_id IS NULL THEN 'evaluation'
                         WHEN client_request_id LIKE 'wp-%' THEN 'website' ELSE 'api' END AS origin
                    {", envelope" if envelope else ""}
@@ -900,6 +901,74 @@ def get_answer(answer_id: str, st: AppState = Depends(get_state), p: Principal =
     vid = (a["gate_report"] or {}).get("verifier_run_id")
     a["verifier"] = by_id.get(vid) if vid else None
     return _json(a, cache="no-store")
+
+
+class AnswerReviewIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: str
+    omit: list[str] = []
+    notes: str | None = None
+
+
+@router.post("/answers/{answer_id}/review")
+def review_answer(answer_id: str, body: AnswerReviewIn, st: AppState = Depends(get_state),
+                  p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """A held Ask answer (requires_human_review), decided by the site's editor (16.10.2026). ``approve`` publishes the
+    writer's draft — without the sections listed in ``omit`` — as the answer to that question: whoever asks it again
+    gets it, and the questions page can show it. ``reject`` keeps the passages-only answer and takes it off the list."""
+    from ntk_common import contracts
+    from ntk_common.ask import move_inline_ids
+    from ntk_common.layers import citation_for
+
+    if body.decision not in {"approve", "reject"}:
+        raise ApiError(400, "invalid_request", "decision must be approve or reject")
+    with st.services.engine.begin() as conn:
+        a = row(conn, """SELECT id::text AS answer_id, answer_status, envelope, gate_report, retrieval_ids,
+                                model_run_id::text AS model_run_id
+                         FROM ntk.answers WHERE id::text = :i FOR UPDATE""", {"i": answer_id})
+        if a is None:
+            raise ApiError(404, "not_found", "answer not found")
+        if a["answer_status"] != "requires_human_review":
+            raise ApiError(409, "conflict", "only a held answer can be reviewed")
+        gr = dict(a["gate_report"] or {})
+        decided = {"decision": body.decision, "by": p.label, "at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
+                   "omit": body.omit, "notes": body.notes}
+        env = a["envelope"]
+        status = a["answer_status"]
+        if body.decision == "approve":
+            run = row(conn, "SELECT input, output FROM ntk.model_runs WHERE id::text = :r", {"r": a["model_run_id"] or ""})
+            draft = (run or {}).get("output") or {}
+            if not draft.get("sections") or draft.get("answer_status") not in {"answered", "false_premise_corrected"}:
+                raise ApiError(409, "conflict", "this answer has no written draft to approve")
+            # the passages the writer was given: only those may be cited
+            allowed = {c.get("id") for c in ((run or {}).get("input") or {}).get("context", [])} | set(a["retrieval_ids"] or [])
+            short, short_ids = move_inline_ids(draft["answer_short"], draft.get("answer_short_citation_ids") or [], allowed)
+            sections = []
+            for i, sec in enumerate(draft["sections"]):
+                if f"sections/{i}" in body.omit:
+                    continue
+                text, cids = move_inline_ids(sec["text"], sec.get("citation_ids") or [], allowed)
+                sections.append({"kind": sec["kind"], "text": text, "citation_ids": cids})
+            if not any(s["kind"] != "limitation" for s in sections):
+                raise ApiError(400, "invalid_request", "nothing would be left to publish")
+            want = list(dict.fromkeys([*short_ids, *(c for s in sections for c in s["citation_ids"])]))
+            units = units_by_ids(conn, want, published_only=True)
+            sections = [{**s, "citation_ids": [c for c in s["citation_ids"] if c in units]} for s in sections]
+            status = "false_premise_corrected" if draft["answer_status"] == "false_premise_corrected" else "answered"
+            env = {**env, "answer_status": status, "answer_short": short, "sections": sections,
+                   "citations": [citation_for(units[c], st.settings.citation_base) for c in want if c in units],
+                   "warnings": ["human_approved"] + [w for w in env.get("warnings", []) if w not in {"requires_human_review"}],
+                   "review": {**env.get("review", {}), "state": "approved", "reviewer": p.label, "reviewed_at": decided["at"]}}
+            contracts.validate("AnswerEnvelope", env)
+        gr["human_review"] = decided
+        execute(conn, """UPDATE ntk.answers SET answer_status = :s, envelope = CAST(:e AS jsonb), gate_report = CAST(:g AS jsonb)
+                         WHERE id::text = :i""", {"s": status, "e": json.dumps(env, ensure_ascii=False),
+                                                  "g": json.dumps(gr, ensure_ascii=False), "i": answer_id})
+        ops.audit(conn, actor=p.label, action=f"ask.answer.{body.decision}", object_type="answer", object_id=answer_id,
+                  details={"omit": body.omit, "notes": body.notes})
+    from ntk_common import editorial
+
+    return _json({"answer_id": answer_id, "answer_status": status, "envelope": editorial.polish(env)}, cache="no-store")
 
 
 @router.get("/whoami")

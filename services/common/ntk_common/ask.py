@@ -547,11 +547,18 @@ class AskEngine:
     def _citations_only(self, base: dict, context: list[ContextItem], warnings: list[str], flags: list[str],
                         origins: dict, run_id: str | None = None, report: dict | None = None) -> AskResult:
         units = [c.unit for c in context[:6]]
-        env = self._envelope(**base, status="requires_human_review",
-                             short="לשאלה זו אין עדיין תשובה כתובה שעברה בדיקה. אלה הקטעים הרלוונטיים במקור, בלי פרשנות:",
-                             sections=[{"kind": "limitation", "text": "תשובה מנוסחת לנושא זה מחייבת בדיקה אנושית לפני פרסום.", "citation_ids": []}],
+        if "requires_human_review" in warnings:
+            short = ("התשובה לשאלה הזו נכתבה ומחכה לבדיקה של עורך האתר; אחרי האישור היא תופיע כאן ובעמוד \"שאלות ותשובות\". "
+                     "בינתיים, אלה הקטעים הרלוונטיים מהפרוטוקולים:")
+            note = "הבדיקה האוטומטית לא אישרה את כל המשפטים בתשובה, ולכן היא מחכה לעורך."
+        else:
+            short = "לא הצלחנו לנסח תשובה כרגע. אלה הקטעים הרלוונטיים מהפרוטוקולים, בלי פרשנות:"
+            note = "אפשר לנסות לשאול שוב מאוחר יותר."
+        env = self._envelope(**base, status="requires_human_review", short=short,
+                             sections=[{"kind": "limitation", "text": note, "citation_ids": []}],
                              cited=units, warnings=warnings, review_state="human_review_required", flags=flags)
-        return AskResult(env, False, {**(report or {}), "retrieval": origins}, [u.id for u in units], run_id)
+        # every passage the writer was given (not only the six shown): an editor's approval may cite any of them
+        return AskResult(env, False, {**(report or {}), "retrieval": origins}, [c.unit.id for c in context], run_id)
 
     def _outcome_correction(self, base: dict, false: list[str], as_of: dt.datetime) -> AskResult:
         process = self.store.process_events(as_of)

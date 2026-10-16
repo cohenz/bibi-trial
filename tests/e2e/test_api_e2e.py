@@ -172,6 +172,25 @@ def test_full_flow(client, fixture_pdf, services):
     assert sync.status_code == 200 and all(x["answer_status"] in {"answered", "false_premise_corrected"} and x["envelope"]["answer_id"]
                                            for x in sync.json()["items"]), sync.text
 
+    # an answer held for review is decided by the editor (16.10.2026): approve publishes the writer's draft
+    import sqlalchemy as sa
+    with services.engine.begin() as conn:
+        conn.execute(sa.text("UPDATE ntk.answers SET answer_status = 'requires_human_review' WHERE id = CAST(:i AS uuid)"),
+                     {"i": a1["answer_id"]})
+    held = signed(client, "GET", "/v2/admin/answers?status=requires_human_review&visitors=true").json()["items"]
+    assert any(x["answer_id"] == a1["answer_id"] and x["human_decision"] is None for x in held)
+    draft = signed(client, "GET", f"/v2/admin/answers/{a1['answer_id']}").json()["writer"]["output"]
+    n = len(draft["sections"])
+    ok = signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "approve", "omit": ["sections/0"]})
+    assert ok.status_code == 200, ok.text
+    env = ok.json()["envelope"]
+    assert env["answer_status"] == "answered" and env["review"]["state"] == "approved" and len(env["sections"]) == n - 1
+    assert all(c["source_unit_id"] for c in env["citations"]) and "human_approved" in env["warnings"]
+    assert client.get(f"/v2/answers/{a1['answer_id']}").json()["answer_status"] == "answered"
+    again = signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "reject"})
+    assert again.status_code == 409  # only a held answer can be reviewed
+    assert signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "maybe"}).status_code in (400, 409)
+
     # the admin sets the caps from WordPress; null goes back to the Railway value
     lim = signed(client, "POST", "/v2/admin/ask/limits", {"per_visitor_daily": 5, "per_minute": 7})
     assert lim.status_code == 200 and lim.json()["per_visitor_daily"] == 5 and lim.json()["source"]["per_minute"] == "admin", lim.text

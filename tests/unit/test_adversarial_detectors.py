@@ -557,3 +557,11 @@ def test_documents_layer_takes_court_decisions_and_party_filings():
     got = [(c.unit.id, c.bucket, c.attribution) for c in ctx]
     assert got == [(dec, "court", "court"), (pardon, "party", "party_document")]
     assert origins["court"] == 1 and origins["party"] == 1
+
+
+def test_focus_query_drops_the_framing():
+    from ntk_common.ask import focus_query
+
+    assert focus_query("מה המשמעות של הקשיים הראייתיים שעליהם הצביעו השופטים ביחס לאישום השוחד בתיק 4000?") == \
+        "הקשיים הראייתיים השופטים לאישום השוחד"
+    assert focus_query("מה?") == ""

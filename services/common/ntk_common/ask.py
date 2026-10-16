@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.14"
+ASK_ENGINE_VERSION = "ask-engine-1.15"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -234,7 +234,7 @@ class AskConfig:
     defense_context: int = 16  # passages from examinations by defense counsel (each Q/A exchange kept whole)
     surround_exchanges: int = 10  # of those, how many come with the two passages before and after them
     prosecution_context: int = 4  # indictment passages, and exchanges of the prosecution's direct examination
-    documents_context: int = 4  # court decisions on the topic, and as many passages from documents the parties filed
+    documents_context: int = 5  # court decisions on the topic, and as many passages from documents the parties filed
 
 
 class AskLimited(Exception):
@@ -801,17 +801,28 @@ class AskEngine:
         from concurrent.futures import ThreadPoolExecutor
 
         n = self.cfg.documents_context
-        reqs = [SearchRequest(q, SearchFilters(published_only=True, source_types=list(t)), limit=n * 2)
-                for t in (DECISION_TYPES, PARTY_DOCUMENT_TYPES)]
+        # the question as asked, and its subject alone: the decision of 29.6.2023 speaks of "קשיים בביסוס עבירת השוחד
+        # שבאישום הראשון" — "מה המשמעות", "בתיק 4000" pushed it out of the first ten
+        queries = list(dict.fromkeys(x for x in (q, focus_query(q)) if x))
+        kinds = (DECISION_TYPES, PARTY_DOCUMENT_TYPES)
+        reqs = [SearchRequest(x, SearchFilters(published_only=True, source_types=list(t)), limit=n * 2)
+                for t in kinds for x in queries]
         with ThreadPoolExecutor(max_workers=len(reqs)) as ex:
-            court, party = ex.map(self.search.search, reqs)
+            res = list(ex.map(self.search.search, reqs))
 
-        def rel(resp) -> list[str]:
-            return [h.source_unit_id for h in resp.hits if {"exact", "terms", "graph"} & set(h.signals)
-                    or len(h.signals) >= 2][:n]
+        def rel(group: list) -> list[str]:
+            lists = [[h.source_unit_id for h in r.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+                     for r in group]
+            out: list[str] = []
+            for rank in range(max((len(x) for x in lists), default=0)):  # interleaved: scores of searches do not compare
+                for x in lists:
+                    if rank < len(x) and x[rank] not in out:
+                        out.append(x[rank])
+            return out[:n]
 
-        return (add(rel(court), "court", "court_decision", attribution="court"),
-                add(rel(party), "party", "party_document", attribution="party_document"))
+        k = len(queries)
+        return (add(rel(res[:k]), "court", "court_decision", attribution="court"),
+                add(rel(res[k:]), "party", "party_document", attribution="party_document"))
 
     def _defense_layer(self, q: str, add) -> int:
         """Passages from examinations conducted by defense counsel — the cross-examination of prosecution witnesses and
@@ -949,6 +960,20 @@ META_WORDS = frozenset({"התברר", "התבררו", "עלה", "עלו", "הע�
                         "אמרה", "סיפר", "סיפרה", "נאמר", "קרה", "מה", "על"})
 
 
+# words that frame a question rather than name its subject, and case numbers, which documents rarely repeat
+FRAME_WORDS = frozenset({"מה", "מהי", "מהו", "המשמעות", "משמעות", "של", "על", "האם", "איך", "כיצד", "למה", "מדוע", "מי",
+                         "שעליהם", "שעליהן", "שעליו", "שעליה", "עליהם", "הצביעו", "הצביע", "הצביעה", "ביחס", "לגבי",
+                         "בנוגע", "בעניין", "בתיק", "תיק", "בפרשת", "פרשת", "אמרו", "אמר", "אמרה", "היה", "היו", "יש"})
+
+
+def focus_query(q: str) -> str:
+    """The subject of a question without its framing ("מה המשמעות של…", "בתיק 4000"), for searching documents."""
+    words = [w for w in re.findall(r"[א-ת0-9\"]+", hebrew.normalize(q).replace("'", "").replace("׳", ""))
+             if w not in FRAME_WORDS and not re.fullmatch(r"\d{4}", w)]
+    rest = " ".join(words)
+    return rest if len(words) >= 2 and query_terms(rest) else ""
+
+
 def topic_query(q: str, name: str) -> str:
     """The question without the witness's name and the words that only ask about the examination."""
     t = hebrew.normalize(q).replace("'", "").replace("׳", "")
@@ -1030,7 +1055,7 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
 
 DECISION_TYPES = ("decision",)
 PARTY_DOCUMENT_TYPES = ("motion", "response", "notice", "affidavit", "other")
-MAX_CONTEXT_DEFENSE = 116  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
+MAX_CONTEXT_DEFENSE = 118  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

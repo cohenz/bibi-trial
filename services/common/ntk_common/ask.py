@@ -536,7 +536,7 @@ class AskEngine:
             gates.citation_gate(assertions, facts, require_published=True),
             gates.support_gate([a for a in assertions if a.path not in support_waived], facts),
             gates.judicial_wording_gate(assertions, facts),
-            gates.absolute_wording_gate(assertions, status=None),
+            gates.absolute_wording_gate([a for a in assertions if not attributed_argument(a)], status=None),
             gates.provenance_gate([run.model_family], env=self.cfg.env),
         ]
         if self.cfg.verify_answers:
@@ -898,7 +898,20 @@ def move_inline_ids(text: str, citation_ids: list[str], allowed: set[str]) -> tu
     found = [x for x in re.findall(UNIT_ID, text or "") if x in allowed]
     ids_ = list(dict.fromkeys([*citation_ids, *found]))
     return strip_unit_ids(text), ids_
-MIN_DEFENSE_POINTS_AFTER_PRUNING = 2
+# 16.10.2026: the findings are paragraphs now (2-5 of them), not 4-10 one-line points: one approved paragraph, with
+# the summary and the significance, still answers the question
+MIN_DEFENSE_POINTS_AFTER_PRUNING = 1
+
+_ATTRIBUTED = re.compile(
+    r"(?:לטענת|לשיטת|לדברי|לגישת|לעמדת)\s+(?:ה)?(?:הגנה|סנגור|סנגוריה|תביעה|מאשימה|פרקליטות)"
+    r"|(?:ה)?(?:הגנה|סנגוריה|תביעה|מאשימה|פרקליטות)\s+(?:טוענ|טען|סבור|מבקש|הדגיש|ציינ|הציג)"
+    r"|עו\"?ד\s+\S+\s+\S*\s*(?:טען|הדגיש|ציין|הציג|הטיח)")
+
+
+def attributed_argument(a) -> bool:
+    """A section that is a party's argument by construction (significance) or says whose argument it is: 'proof' or
+    'proven' there is that party's word, not the site's (16.10.2026: 'ההגנה סבורה כי בהיעדר הוכחה…' was rejected)."""
+    return a.kind == "significance" or bool(_ATTRIBUTED.search(a.text or ""))
 
 
 def verifier_approved(verifier: dict) -> set[str]:

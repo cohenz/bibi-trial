@@ -243,12 +243,13 @@ def test_prune_unapproved_publishes_what_is_right():
     v4 = {**v, "assertions": v["assertions"] + [{"path": "answer_short", "supported": "partial", "attribution_ok": False}]}
     kept, dropped, short = prune_unapproved(secs4, v4)
     assert short["text"] == "d1" and [s["text"] for s in kept] == ["d3", "d4", "l"] and dropped[-1]["path"] == "answer_short"
-    # held: the short answer failed and too few points would remain / contradicting material / too few points left
-    assert prune_unapproved(secs, v4) is None
+    # held: the short answer failed and no point would remain / contradicting material
+    two = [secs[0], secs[1], secs[4]]
+    assert prune_unapproved(two, {**v, "assertions": [{"path": "answer_short", "supported": "no"}]}) is None
     assert prune_unapproved(secs, {**v, "omitted_counterevidence": [{"source_unit_ids": ["y"]}]}) is None
-    few = {**v, "assertions": [{"path": "answer_short", **ok}, {"path": "sections/1", "supported": "no"},
-                               {"path": "sections/2", "supported": "no"}]}
-    assert prune_unapproved(secs, few) is None
+    none_left = {**v, "assertions": [{"path": "answer_short", **ok}, {"path": "sections/1", "supported": "no"},
+                                     {"path": "sections/2", "supported": "no"}, {"path": "sections/3", "supported": "no"}]}
+    assert prune_unapproved(secs, none_left) is None
 
 
 def test_ask_limits_overrides(monkeypatch):
@@ -453,3 +454,13 @@ def test_top_exchanges_come_with_their_surrounding_passages():
     got = [(c.unit.id, c.bucket) for c in ctx]
     assert got[:6] == [(ids_[0], "surrounding"), (ids_[1], "surrounding"), (q, "defense"), (a, "defense"),
                        (ids_[4], "surrounding"), (ids_[5], "surrounding")]
+
+
+
+def test_attributed_argument_is_not_absolute_wording():
+    from ntk_common.ask import attributed_argument
+    from ntk_common.gates import Assertion
+
+    assert attributed_argument(Assertion("s/1", "ההגנה סבורה כי בהיעדר הוכחה לסיכום…", [], kind="defense"))
+    assert attributed_argument(Assertion("s/2", "כל דבר", [], kind="significance"))
+    assert not attributed_argument(Assertion("s/3", "הוכח כי נתניהו…", [], kind="defense"))

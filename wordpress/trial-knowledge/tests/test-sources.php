@@ -16,3 +16,16 @@ $html = TK_Admin_Sources::render_pending( array( array( 'id' => $sv, 'title' => 
 	'same_file' => array( array( 'title' => 'החלטה — 2025-11-30', 'source_type' => 'decision', 'publication_state' => 'published' ) ), 'units' => array( array( 'page' => 1, 'speaker' => null, 'text' => 'כבוד <script>' ) ) ) ) );
 TK_T::ok( false === strpos( $html, '<b>' ) && false === strpos( $html, '<script>' ) && false !== strpos( $html, 'נקלט כדיון מיום 2025-11-30' ) && false !== strpos( $html, 'אותו קובץ בדיוק כבר במאגר' ), 'pending: escaped, hearing and duplicate shown' );
 TK_T::ok( false !== strpos( $html, 'value="withdraw"' ) && false !== strpos( $html, 'name="tk_sv"' ), 'pending: withdraw offered; a published document can be re-typed' );
+// --- 2.7.14: an unpublished source opened by id gets full actions; hearings without a digest
+$fixu = array( 'id' => $sv, 'title' => 'x', 'source_type' => 'protocol', 'publication_state' => 'unpublished', 'units' => array() );
+TK_T::ok( false !== strpos( TK_Admin_Sources::render_pending( array(), $fixu ), 'value="withdraw"' ), 'opened by id, unpublished: withdraw offered' );
+$fixp = array_merge( $fixu, array( 'publication_state' => 'published' ) );
+TK_T::ok( false === strpos( TK_Admin_Sources::render_pending( array(), $fixp ), 'value="withdraw"' ), 'opened by id, published: only re-typing' );
+$hs = TK_Admin_Sources::hearings_without_digest( array(
+	array( 'id' => 'hr_' . str_repeat( '1', 26 ), 'hearing_date' => '2026-10-04', 'has_digest' => false, 'witnesses' => array( 'איתן כבל' ) ),
+	array( 'id' => 'hr_' . str_repeat( '2', 26 ), 'hearing_date' => '2026-09-22', 'has_digest' => true ),
+	array( 'id' => 'hr_' . str_repeat( '3', 26 ), 'hearing_date' => '2026-10-08', 'has_digest' => false ),
+) );
+TK_T::eq( array( '2026-10-08', '2026-10-04' ), array_column( $hs, 'hearing_date' ), 'hearings without a digest, latest first' );
+$html = TK_Admin_Sources::render_digests( $hs );
+TK_T::ok( false !== strpos( $html, 'name="hearings[]"' ) && false !== strpos( $html, 'איתן כבל' ), 'digests: a checkbox per hearing' );

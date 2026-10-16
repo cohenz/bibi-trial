@@ -132,7 +132,12 @@ class TK_Admin_Costs {
 		}
 		$out .= ( $failed ? '' : '<li>אין</li>' ) . '</ul>';
 		$ret  = (array) ( $g['retrieval'] ?? array() );
-		$out .= '<p class="description">' . esc_html( sprintf( 'שליפה: הגנה %1$s · חיפוש %2$s · סקירות עדים %3$s · תקצירים %4$s', (string) ( $ret['defense'] ?? 0 ), (string) ( $ret['search_relevant'] ?? $ret['search'] ?? 0 ), count( (array) ( $ret['witness_guides'] ?? array() ) ), count( (array) ( $ret['digests'] ?? array() ) ) ) ) . '</p>';
+		$out .= '<p class="description">' . esc_html( sprintf( 'שליפה: תביעה %5$s · החלטות בית המשפט %6$s · מסמכי צדדים %7$s · הגנה %1$s · חיפוש %2$s · סקירות עדים %3$s · תקצירים %4$s', (string) ( $ret['defense'] ?? 0 ), (string) ( $ret['search_relevant'] ?? $ret['search'] ?? 0 ), count( (array) ( $ret['witness_guides'] ?? array() ) ), count( (array) ( $ret['digests'] ?? array() ) ), (string) ( $ret['prosecution'] ?? 0 ), (string) ( $ret['court'] ?? 0 ), (string) ( $ret['party'] ?? 0 ) ) ) . '</p>';
+		// 2.7.14: which passages the writer had, to tell "not found" from "not used"
+		$rids = (array) ( $a['retrieval_ids'] ?? array() );
+		if ( $rids ) {
+			$out .= '<details><summary>' . esc_html( sprintf( 'הקטעים שהכותב קיבל (%d)', count( $rids ) ) ) . '</summary><p style="font-family:monospace;font-size:12px">' . esc_html( implode( ' ', $rids ) ) . '</p></details>';
+		}
 		$v = (array) ( $a['verifier']['output'] ?? array() );
 		if ( $v ) {
 			$out .= '<h3>' . esc_html( sprintf( 'הבודק: %s', (string) ( $v['verdict'] ?? '' ) ) ) . '</h3><table class="widefat striped"><thead><tr><th>משפט</th><th>נתמך</th><th>ייחוס תקין</th><th>הערה</th></tr></thead><tbody>';

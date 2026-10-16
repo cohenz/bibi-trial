@@ -42,6 +42,59 @@ class TK_Admin_Sources {
 		add_action( 'wp_ajax_tk_job', array( __CLASS__, 'ajax_job' ) );
 		add_action( 'wp_ajax_tk_retry_job', array( __CLASS__, 'ajax_retry' ) );
 		add_action( 'admin_post_tk_source_action', array( __CLASS__, 'source_action' ) );
+		add_action( 'admin_post_tk_build_digests', array( __CLASS__, 'build_digests' ) );
+	}
+
+	/** 2.7.14: published hearings that have no digest yet (digests are built on request), latest first. @param array $hearings /v2/hearings items. */
+	public static function hearings_without_digest( array $hearings, $max = 12 ) {
+		$out = array();
+		foreach ( $hearings as $h ) {
+			if ( empty( $h['has_digest'] ) && ! empty( $h['id'] ) ) {
+				$out[] = $h;
+			}
+		}
+		usort( $out, function ( $a, $b ) {
+			return strcmp( (string) ( $b['hearing_date'] ?? '' ), (string) ( $a['hearing_date'] ?? '' ) );
+		} );
+		return array_slice( $out, 0, $max );
+	}
+
+	public static function render_digests( array $hearings ) {
+		$out = '<div class="tk-card" id="tk-digests"><h2>' . esc_html__( 'דיונים בלי סיכום', 'trial-knowledge' ) . '</h2>';
+		$out .= '<p class="description">' . esc_html__( 'סיכום דיון נבנה במודל (כמה סנטים לדיון ארוך) ומתפרסם רק אם עבר את הבדיקות. מסמנים ובונים.', 'trial-knowledge' ) . '</p>';
+		if ( ! $hearings ) {
+			return $out . '<p>' . esc_html__( 'לכל הדיונים שפורסמו יש סיכום.', 'trial-knowledge' ) . '</p></div>';
+		}
+		$out .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">' . wp_nonce_field( 'tk_build_digests', '_wpnonce', true, false ) .
+			'<input type="hidden" name="action" value="tk_build_digests"><ul>';
+		foreach ( $hearings as $h ) {
+			$out .= '<li><label><input type="checkbox" name="hearings[]" value="' . esc_attr( (string) $h['id'] ) . '"> ' .
+				esc_html( (string) ( $h['hearing_date'] ?? '' ) . ' · ' . implode( ', ', (array) ( $h['witnesses'] ?? array() ) ) ) . '</label></li>';
+		}
+		return $out . '</ul><p><button class="button">' . esc_html__( 'בניית סיכום לדיונים המסומנים', 'trial-knowledge' ) . '</button></p></form></div>';
+	}
+
+	public static function build_digests() {
+		if ( ! current_user_can( TK_Permissions::CAP_SOURCES ) ) {
+			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ), 403 );
+		}
+		check_admin_referer( 'tk_build_digests' );
+		$ids  = array_values( array_filter( array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['hearings'] ?? array() ) ), function ( $i ) {
+			return (bool) preg_match( '/^hr_[0-9a-f]{26}$/', $i );
+		} ) );
+		$back = admin_url( 'admin.php?page=trial-knowledge-sources' );
+		if ( ! $ids ) {
+			wp_safe_redirect( add_query_arg( 'tk_msg', rawurlencode( __( 'לא סומנו דיונים.', 'trial-knowledge' ) ), $back ) );
+			exit;
+		}
+		try {
+			tk_api()->post( '/v2/admin/digests/build', array( 'hearing_ids' => $ids, 'limit' => count( $ids ) ), true );
+			$msg = sprintf( 'נשלחה בניית סיכום ל־%d דיונים. הסיכום יופיע אחרי שיעבור את הבדיקות.', count( $ids ) );
+		} catch ( TK_Api_Error $e ) {
+			$msg = $e->getMessage();
+		}
+		wp_safe_redirect( add_query_arg( 'tk_msg', rawurlencode( $msg ), $back ) );
+		exit;
 	}
 
 	const OWNERS = array( 'הרשות השופטת', 'באי כוח נאשם 1 (נתניהו)', 'באי כוח נאשמים 2–3 (אלוביץ\')', 'באי כוח נאשם 4 (מוזס)', 'המאשימה (הפרקליטות)', 'צד שלישי / תקשורת' );
@@ -51,7 +104,7 @@ class TK_Admin_Sources {
 	 * An upload is published only by an action here (or by the inbox's policy).
 	 */
 	public static function pending_sources() {
-		$jobs = (array) ( tk_api()->get( '/v2/admin/ingestion-jobs?limit=40', true )['items'] ?? array() );
+		$jobs = (array) ( tk_api()->get( '/v2/admin/ingestion-jobs?limit=100', true )['items'] ?? array() );
 		$out  = array();
 		$seen = array();
 		foreach ( $jobs as $j ) {
@@ -87,7 +140,8 @@ class TK_Admin_Sources {
 			'<label for="tk-fix-sv">' . esc_html__( 'מזהה המקור (sv_… מכתובת עמוד המסמך)', 'trial-knowledge' ) . '</label> ' .
 			'<input type="text" id="tk-fix-sv" name="tk_sv" pattern="sv_[0-9a-f]{26}" size="34"> <button class="button">' . esc_html__( 'הצגה', 'trial-knowledge' ) . '</button></form>';
 		if ( $fix ) {
-			$out .= self::source_form( $fix, false );
+			// 2.7.14: an unpublished source opened by its id gets the full actions (publish / withdraw)
+			$out .= self::source_form( $fix, 'published' !== ( $fix['publication_state'] ?? '' ) );
 		}
 		return $out . '</div>';
 	}
@@ -234,6 +288,7 @@ class TK_Admin_Sources {
 						$tk_fix = (array) tk_api()->get( '/v2/admin/sources/' . $tk_sv . '/preview?n=4', true );
 					}
 					echo self::render_pending( self::pending_sources(), $tk_fix ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in render_pending()
+					echo self::render_digests( self::hearings_without_digest( (array) ( tk_api()->get( '/v2/hearings' )['items'] ?? array() ) ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in render_digests()
 				} catch ( TK_Api_Error $e ) {
 					echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
 				}

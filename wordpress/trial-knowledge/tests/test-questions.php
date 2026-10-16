@@ -91,3 +91,12 @@ $nod = $held;
 $nod[0]['writer'] = array( 'output' => array() );
 TK_T::ok( false === strpos( TK_Admin_Questions::render_held( $nod ), 'value="approve"' ), 'held: no draft → only reject' );
 TK_T::ok( false !== strpos( TK_Admin_Questions::tabs( array( 'pending' => 2, 'held' => 3 ), 'held' ), 'שנעצרו לבדיקה <span class="count">(3)' ), 'tabs: the held count' );
+// 2.7.11: only the latest answer to each question is held for the editor
+$lh = TK_Admin_Questions::latest_held( array(
+	array( 'answer_id' => 'k1', 'normalized_question' => 'קליין', 'answer_status' => 'requires_human_review', 'created_at' => '2026-10-13T18:10:00Z' ),
+	array( 'answer_id' => 'k3', 'normalized_question' => 'קליין', 'answer_status' => 'requires_human_review', 'created_at' => '2026-10-16T07:51:00Z' ),
+	array( 'answer_id' => 'b1', 'normalized_question' => 'ברנור', 'answer_status' => 'requires_human_review', 'created_at' => '2026-10-13T18:09:00Z' ),
+	array( 'answer_id' => 'b2', 'normalized_question' => 'ברנור', 'answer_status' => 'answered', 'created_at' => '2026-10-16T07:51:00Z' ),
+	array( 'answer_id' => 'q1', 'normalized_question' => 'קשיים', 'answer_status' => 'requires_human_review', 'created_at' => '2026-10-16T05:50:00Z', 'human_decision' => 'reject' ),
+) );
+TK_T::eq( array( 'k3' ), array_column( $lh, 'answer_id' ), 'held: only the latest per question; none once published or decided' );

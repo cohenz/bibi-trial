@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.9"
+ASK_ENGINE_VERSION = "ask-engine-1.10"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -476,6 +476,7 @@ class AskEngine:
         verdict = None
         vrun_id = None
         pruned: list[dict] = []
+        short_vpath = "answer_short"  # the verifier's path for the text now in answer_short
         if self.cfg.verify_answers:
             vrun = self.runner.run(VERIFY_ANSWER_DEFENSE.task_type if self._defense else "verify", {
                 "assertions": [{"path": a.path, "text": a.text, "citation_ids": a.citation_ids} for a in assertions
@@ -488,7 +489,12 @@ class AskEngine:
             if verdict == "fail" and vrun.ok and self._defense:
                 kept = prune_unapproved(sections, vrun.output)
                 if kept is not None:
-                    sections, pruned = kept
+                    sections, pruned, short = kept
+                    if short is not None:
+                        draft["answer_short"], draft["answer_short_citation_ids"] = short["text"], short["citation_ids"]
+                        short_vpath = short.get("_vpath") or "answer_short"
+                        assertions = [gates.Assertion("answer_short", short["text"], short["citation_ids"], kind="fact")] + [
+                            a for a in assertions if a.path != "answer_short"]
                     assertions = [a for a in assertions if not a.path.startswith("sections/")]
                     assertions += [gates.Assertion(f"sections/{i}", s["text"], s["citation_ids"], kind=s["kind"])
                                    for i, s in enumerate(sections)]
@@ -503,7 +509,7 @@ class AskEngine:
             by_path = {f"sections/{i}": sec for i, sec in enumerate(sections)}
             drop = []
             for path in sorted(weak):
-                vpath = "answer_short" if path == "answer_short" else (by_path.get(path) or {}).get("_vpath")
+                vpath = short_vpath if path == "answer_short" else (by_path.get(path) or {}).get("_vpath")
                 if vpath in approved:
                     support_waived.append(path)  # the independent verifier read the passages and approved it
                 elif path != "answer_short":
@@ -883,18 +889,20 @@ def verifier_approved(verifier: dict) -> set[str]:
             and not x.get("judicial_overstatement") and not x.get("false_premise")}
 
 
-def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], list[dict]] | None:
+def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], list[dict], dict | None] | None:
     """13.10.2026, the same policy as the witness guides ('publish what is right, hold only what is not'): when the
-    verifier fails an answer only because of some of its sections (not fully supported, misattributed, a judicial
-    overstatement, a false premise), those sections are dropped and the rest is published. The answer is held when
-    the short answer itself failed, when the verifier found material in the bundle that contradicts the text, or when
-    fewer than two of the defense's points would remain. Returns (kept sections, what was dropped) or None."""
+    verifier fails some of an answer's sections (not fully supported, misattributed, a judicial overstatement, a false
+    premise), those sections are dropped and the rest is published. When it fails the short answer (16.10.2026: a
+    summary saying 'it came out that…' where counsel had only put it to the witness), the strongest approved defense
+    point — the first — becomes the short answer. Held: when the verifier found material in the bundle that
+    contradicts the text, or when fewer than two of the defense's points would remain. Returns (kept sections, what
+    was dropped, the new short answer or None) or None."""
     if verifier.get("omitted_counterevidence"):
         return None
     bad = {x.get("path"): x for x in verifier.get("assertions", [])
            if x.get("supported") != "yes" or not x.get("attribution_ok", True)
            or x.get("judicial_overstatement") or x.get("false_premise")}
-    if not bad or "answer_short" in bad:
+    if not bad:
         return None
     kept, dropped = [], []
     for i, s in enumerate(sections):
@@ -904,9 +912,21 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
                             "supported": x.get("supported"), "attribution_ok": x.get("attribution_ok", True)})
         else:
             kept.append(s)
+    short = None
+    if "answer_short" in bad:
+        x = bad["answer_short"]
+        first = next((s for s in kept if s["kind"] == "defense"), None)
+        if first is None:
+            return None
+        kept = [s for s in kept if s is not first]
+        short = {"text": first["text"], "citation_ids": list(first["citation_ids"]), "_vpath": first.get("_vpath")}
+        dropped.append({"path": "answer_short", "kind": "answer_short", "text": None, "note": x.get("note"),
+                        "supported": x.get("supported"), "attribution_ok": x.get("attribution_ok", True)})
     if sum(1 for s in kept if s["kind"] == "defense") < MIN_DEFENSE_POINTS_AFTER_PRUNING:
         return None
-    return kept, dropped
+    return kept, dropped, short
+
+
 MAX_CONTEXT_DEFENSE = 52  # the defense layer adds up to 2 × defense_context units ahead of the general search
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 

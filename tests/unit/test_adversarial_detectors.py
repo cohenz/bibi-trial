@@ -235,10 +235,16 @@ def test_prune_unapproved_publishes_what_is_right():
     v = {"verdict": "fail", "omitted_counterevidence": [], "assertions": [
         {"path": "answer_short", **ok}, {"path": "sections/0", "supported": "partial", "attribution_ok": True, "note": "n"},
         {"path": "sections/1", **ok}, {"path": "sections/2", "supported": "yes", "attribution_ok": False}, {"path": "sections/3", **ok}]}
-    kept, dropped = prune_unapproved(secs, v)
+    kept, dropped, short = prune_unapproved(secs, v)
     assert [s["text"] for s in kept] == ["d1", "d3", "l"] and [d["path"] for d in dropped] == ["sections/0", "sections/2"]
-    # held: the short answer failed / contradicting material / too few points left
-    assert prune_unapproved(secs, {**v, "assertions": v["assertions"] + [{"path": "answer_short", "supported": "no"}]}) is None
+    assert short is None
+    # the short answer failed (16.10.2026): the strongest approved point becomes the short answer
+    secs4 = secs[:4] + [{"kind": "defense", "text": "d4", "citation_ids": ["y"]}] + secs[4:]
+    v4 = {**v, "assertions": v["assertions"] + [{"path": "answer_short", "supported": "partial", "attribution_ok": False}]}
+    kept, dropped, short = prune_unapproved(secs4, v4)
+    assert short["text"] == "d1" and [s["text"] for s in kept] == ["d3", "d4", "l"] and dropped[-1]["path"] == "answer_short"
+    # held: the short answer failed and too few points would remain / contradicting material / too few points left
+    assert prune_unapproved(secs, v4) is None
     assert prune_unapproved(secs, {**v, "omitted_counterevidence": [{"source_unit_ids": ["y"]}]}) is None
     few = {**v, "assertions": [{"path": "answer_short", **ok}, {"path": "sections/1", "supported": "no"},
                                {"path": "sections/2", "supported": "no"}]}

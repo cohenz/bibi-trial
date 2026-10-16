@@ -21,17 +21,37 @@ class TK_Admin_Questions {
 		add_action( 'admin_post_' . self::HELD_ACTION, array( __CLASS__, 'handle_held' ) );
 	}
 
-	/** 2.7.10: answers the automatic checks held, still undecided — from the API (nothing is stored for them here). */
+	/**
+	 * 2.7.10: answers the automatic checks held, still undecided — from the API (nothing is stored for them here).
+	 * Only the latest answer to each question: an older held one, or one a newer published answer replaced, is left out.
+	 */
 	public static function held_items() {
-		$res = tk_api()->get( '/v2/admin/answers?status=requires_human_review&visitors=true&limit=50', true );
-		return array_values(
-			array_filter(
-				(array) ( $res['items'] ?? array() ),
-				static function ( $it ) {
-					return empty( $it['human_decision'] );
-				}
-			)
+		$res = tk_api()->get( '/v2/admin/answers?status=requires_human_review,answered,false_premise_corrected&visitors=true&limit=300', true );
+		return self::latest_held( (array) ( $res['items'] ?? array() ) );
+	}
+
+	/** Pure, for tests. @param array $items /v2/admin/answers items, any order. */
+	public static function latest_held( array $items ) {
+		$latest = array();
+		foreach ( $items as $it ) {
+			$k = (string) ( $it['normalized_question'] ?? ( $it['question'] ?? '' ) );
+			if ( ! isset( $latest[ $k ] ) || strcmp( (string) ( $it['created_at'] ?? '' ), (string) ( $latest[ $k ]['created_at'] ?? '' ) ) > 0 ) {
+				$latest[ $k ] = $it;
+			}
+		}
+		$out = array();
+		foreach ( $latest as $it ) {
+			if ( 'requires_human_review' === ( $it['answer_status'] ?? '' ) && empty( $it['human_decision'] ) ) {
+				$out[] = $it;
+			}
+		}
+		usort(
+			$out,
+			static function ( $a, $b ) {
+				return strcmp( (string) ( $b['created_at'] ?? '' ), (string) ( $a['created_at'] ?? '' ) );
+			}
 		);
+		return $out;
 	}
 
 	public static function page() {

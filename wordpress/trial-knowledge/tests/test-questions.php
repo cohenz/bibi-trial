@@ -68,3 +68,26 @@ TK_Questions::put( array_merge( $row, array( 'qkey' => str_repeat( 'e', 64 ), 's
 TK_Questions::maybe_upgrade();
 TK_T::ok( null === TK_Questions::get( str_repeat( 'd', 64 ) ) && null !== TK_Questions::get( str_repeat( 'e', 64 ) ) && false === get_option( TK_Questions::OPT_SINCE ), 'upgrade 2: untouched pending rows dropped, approved kept, sync restarts' );
 tk_test_reset_store();
+// 2.7.10: answers held for the editor
+$held = array( array(
+	'answer_id' => '11111111-2222-5333-8444-555555555555', 'question' => 'מה המשמעות של <b>הקשיים</b>?', 'created_at' => '2026-10-16T05:50:00Z',
+	'gate_report' => array( 'gates' => array( array( 'gate' => 'support', 'passed' => false, 'details' => array( array( 'path' => 'sections/1', 'problem' => 'low_lexical_support' ) ) ), array( 'gate' => 'verifier', 'passed' => true ) ), 'risk_flags' => array() ),
+	'writer'      => array( 'output' => array( 'answer_short' => 'קצר', 'sections' => array(
+		array( 'kind' => 'allegation', 'text' => 'כתב האישום טוען', 'citation_ids' => array() ),
+		array( 'kind' => 'defense', 'text' => 'נקודה <script>א</script>', 'citation_ids' => array() ),
+		array( 'kind' => 'defense', 'text' => 'נקודה ב', 'citation_ids' => array() ),
+	) ) ),
+	'verifier'    => array( 'output' => array( 'assertions' => array(
+		array( 'path' => 'answer_short', 'supported' => 'yes', 'attribution_ok' => true ),
+		array( 'path' => 'sections/1', 'supported' => 'yes', 'attribution_ok' => true ),
+		array( 'path' => 'sections/2', 'supported' => 'partial', 'attribution_ok' => false, 'note' => 'ייחוס' ),
+	) ) ),
+) );
+$hh = TK_Admin_Questions::render_held( $held );
+TK_T::ok( false === strpos( $hh, '<script>' ) && false === strpos( $hh, '<b>' ) && false !== strpos( $hh, 'value="approve"' ), 'held: escaped, approve offered' );
+TK_T::ok( false !== strpos( $hh, 'value="sections/2" checked' ) && false === strpos( $hh, 'value="sections/1" checked' ), 'held: what the verifier did not approve is ticked to omit; a mechanical-only flag is not' );
+TK_T::ok( false !== strpos( $hh, 'מעט מילים משותפות' ) && false !== strpos( $hh, 'בדיקה מכנית' ), 'held: the reason in plain words' );
+$nod = $held;
+$nod[0]['writer'] = array( 'output' => array() );
+TK_T::ok( false === strpos( TK_Admin_Questions::render_held( $nod ), 'value="approve"' ), 'held: no draft → only reject' );
+TK_T::ok( false !== strpos( TK_Admin_Questions::tabs( array( 'pending' => 2, 'held' => 3 ), 'held' ), 'שנעצרו לבדיקה <span class="count">(3)' ), 'tabs: the held count' );

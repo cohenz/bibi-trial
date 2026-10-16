@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.13"
+ASK_ENGINE_VERSION = "ask-engine-1.14"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -234,6 +234,7 @@ class AskConfig:
     defense_context: int = 16  # passages from examinations by defense counsel (each Q/A exchange kept whole)
     surround_exchanges: int = 10  # of those, how many come with the two passages before and after them
     prosecution_context: int = 4  # indictment passages, and exchanges of the prosecution's direct examination
+    documents_context: int = 4  # court decisions on the topic, and as many passages from documents the parties filed
 
 
 class AskLimited(Exception):
@@ -672,8 +673,8 @@ class AskEngine:
         terms = set(query_terms(q))
         items: list[ContextItem] = []
         seen: set[str] = set()
-        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "prosecution": 0, "defense": 0,
-                                   "search": 0}
+        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "prosecution": 0, "court": 0,
+                                   "party": 0, "defense": 0, "search": 0}
 
         def add(uid_list: list[str], bucket: str, origin: str, attribution: str | None = None, cap: int | None = None) -> int:
             units = self.store.public_units([u for u in uid_list if u not in seen])
@@ -726,6 +727,8 @@ class AskEngine:
                     room -= add(sent["citation_ids"][:1], "context", "digest", cap=min(room, 1))
         if self._defense and self.cfg.prosecution_context > 0:
             origins["prosecution"] = self._prosecution_layer(q, add)
+        if self._defense and self.cfg.documents_context > 0:
+            origins["court"], origins["party"] = self._documents_layer(q, add)
         if self._defense and self.cfg.defense_context > 0:
             origins["defense"] = self._defense_layer(q, add)
         resp = self.search.search(SearchRequest(q, SearchFilters(published_only=True), limit=self.cfg.max_context))
@@ -790,6 +793,25 @@ class AskEngine:
                 exchanges += 1
             total += add(out, "prosecution", "prosecution", attribution="prosecution_direct_examination")
         return total
+
+    def _documents_layer(self, q: str, add) -> tuple[int, int]:
+        """Court decisions and the parties' filings on the question's topic (16.10.2026: the answer on the judges' call
+        to drop the bribery charge cited counsel's description of it, not the court's decision of 29.6.2023, which ranked
+        below the protocols in a plain search; the request for a pardon holds the defense's arguments in full)."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        n = self.cfg.documents_context
+        reqs = [SearchRequest(q, SearchFilters(published_only=True, source_types=list(t)), limit=n * 2)
+                for t in (DECISION_TYPES, PARTY_DOCUMENT_TYPES)]
+        with ThreadPoolExecutor(max_workers=len(reqs)) as ex:
+            court, party = ex.map(self.search.search, reqs)
+
+        def rel(resp) -> list[str]:
+            return [h.source_unit_id for h in resp.hits if {"exact", "terms", "graph"} & set(h.signals)
+                    or len(h.signals) >= 2][:n]
+
+        return (add(rel(court), "court", "court_decision", attribution="court"),
+                add(rel(party), "party", "party_document", attribution="party_document"))
 
     def _defense_layer(self, q: str, add) -> int:
         """Passages from examinations conducted by defense counsel — the cross-examination of prosecution witnesses and
@@ -1006,7 +1028,9 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
     return kept, dropped, short
 
 
-MAX_CONTEXT_DEFENSE = 108  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
+DECISION_TYPES = ("decision",)
+PARTY_DOCUMENT_TYPES = ("motion", "response", "notice", "affidavit", "other")
+MAX_CONTEXT_DEFENSE = 116  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

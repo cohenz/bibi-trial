@@ -101,7 +101,7 @@ def test_retrieval_keeps_question_and_answer_together():
                     SearchHit(a2, 0.8, {"terms": 3}, unit_type="answer")]
             return SearchResponse(req.query, hits, {}, {}, "fake")
 
-    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0))
+    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0, documents_context=0))
     ctx, origins = eng._retrieve("האם העד ידע על הפגישות בחניונים")
     assert [c.unit.id for c in ctx] == [q1, a1, other, q2, a2]
     assert origins["exchange_partners_added"] == 2
@@ -143,7 +143,7 @@ def test_retrieval_uses_named_witness_guides_and_long_question_digests():
         def search(self, req):
             return SearchResponse(req.query, [SearchHit(ids_[35], 1.0, {"terms": 1})], {}, {}, "fake")
 
-    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0))
+    eng = AskEngine(Store(), Search(), None, AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0, documents_context=0))
     q = ("מדוע ההגנה טוענת שהלחץ בחקירה של שלמה פילבר הוביל לגיוסו כעד מדינה, ומה אמרו על כך השופטים "
          "בדיונים הרבים שהתקיימו בתיק 4000 לאורך השנים האחרונות?")
     ctx, origins = eng._retrieve(q)
@@ -202,7 +202,7 @@ def test_defense_lens_brings_examinations_by_defense_counsel_first():
                 hits = [SearchHit(general, 1.0, {"terms": 1}, unit_type="answer"), SearchHit(p_q, 0.8, {"terms": 1})]
             return SearchResponse(req.query, hits, {}, {}, "fake")
 
-    cfg = AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0)
+    cfg = AskConfig(answer_base="https://x/a/", citation_base="https://x/c/", prosecution_context=0, documents_context=0)
     ctx, origins = AskEngine(Store(), Search(), None, cfg)._retrieve("מה עלה על השמפניות")
     assert [(c.unit.id, c.bucket) for c in ctx][:3] == [(d_q, "defense"), (d_a, "defense"), (d_speech, "defense")]
     assert {c.unit.id: c.bucket for c in ctx}[p_q] == "context"  # the prosecution's question comes only from search
@@ -362,7 +362,7 @@ def test_named_witness_is_answered_from_their_own_examination():
                 return SearchResponse(req.query, [SearchHit(other_q, 0.9, {"terms": 1}, unit_type="question")], {}, {}, "fake")
             return SearchResponse(req.query, [], {}, {}, "fake")
 
-    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0))._retrieve(
+    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0, documents_context=0))._retrieve(
         "מה התברר בחקירה הנגדית של הדס קליין?")
     assert [c.unit.id for c in ctx][:2] == [k_q, k_a]  # her own exchange first, though its search score was lower
     probes = {q for q, w, _ in seen if w == "הדס קליין"}
@@ -397,7 +397,7 @@ def test_witness_probes_include_each_topic_word():
             seen.append((req.query, req.filters.witness, req.filters.phase))
             return SearchResponse(req.query, [], {}, {}, "fake")
 
-    AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0))._retrieve(
+    AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0, documents_context=0))._retrieve(
         "מה העיד כורש ברנור על כימות טובות ההנאה?")
     probes = {q for q, w, ph in seen if w == "כורש ברנור" and ph == "cross"}
     assert "כימות" in probes and "כימות טובות ההנאה" in probes and not any("נכון שאמרת" in p for p in probes)
@@ -450,7 +450,7 @@ def test_top_exchanges_come_with_their_surrounding_passages():
             hits = [SearchHit(a, 1.0, {"terms": 1}, unit_type="answer")] if req.filters.phase == "cross" else []
             return SearchResponse(req.query, hits, {}, {}, "fake")
 
-    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0))._retrieve("מה עם הטלפונים")
+    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0, documents_context=0))._retrieve("מה עם הטלפונים")
     got = [(c.unit.id, c.bucket) for c in ctx]
     assert got[:6] == [(ids_[0], "surrounding"), (ids_[1], "surrounding"), (q, "defense"), (a, "defense"),
                        (ids_[4], "surrounding"), (ids_[5], "surrounding")]
@@ -514,3 +514,46 @@ def test_prosecution_layer_takes_the_indictment_and_the_prosecutions_direct_exam
     pros = [(c.unit.id, c.attribution) for c in ctx if c.bucket == "prosecution"]
     assert pros == [(ind, "indictment"), (pq, "prosecution_direct_examination"), (pa, "prosecution_direct_examination")]
     assert origins["prosecution"] == 3 and (["indictment"], None, None) in seen
+
+
+def test_documents_layer_takes_court_decisions_and_party_filings():
+    """16.10.2026: the answer on the judges' call to drop the bribery charge cited counsel's description of it, not the
+    court's decision of 29.6.2023; the request for a pardon holds the defense's arguments."""
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, role):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=role, speaker_role=role, unit_type=utype, text=f"קטע {i}", published=True)
+
+    units = {u.id: u for u in [uv(1, "decision", "court"), uv(2, "other", None), uv(3, "other", None)]}
+    dec, pardon, weak = list(units)
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+    class Search:
+        def search(self, req):
+            st = req.filters.source_types
+            if st == ["decision"]:
+                return SearchResponse(req.query, [SearchHit(dec, 1.0, {"terms": 2})], {}, {}, "fake")
+            if st and "other" in st:
+                # a fuzzy-only hit is not relevant enough
+                return SearchResponse(req.query, [SearchHit(pardon, 0.9, {"terms": 1, "vector": 2}),
+                                                  SearchHit(weak, 0.5, {"vector": 9})], {}, {}, "fake")
+            return SearchResponse(req.query, [], {}, {}, "fake")
+
+    ctx, origins = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0,
+                                                                defense_context=0))._retrieve(
+        "מה אמרו השופטים על הקשיים בעבירת השוחד?")
+    got = [(c.unit.id, c.bucket, c.attribution) for c in ctx]
+    assert got == [(dec, "court", "court"), (pardon, "party", "party_document")]
+    assert origins["court"] == 1 and origins["party"] == 1

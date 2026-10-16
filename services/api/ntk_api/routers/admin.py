@@ -123,7 +123,10 @@ def create_ingestion_job(body: IngestionJobRequest, request: Request, st: AppSta
     if body.url:
         entry["url"] = body.url
     inp = doc_input_from_manifest({"name": "api", "case_id": st.settings.case_id,
-                                   "court_record_status": doc["court_record_status"]}, entry)
+                                   "court_record_status": doc["court_record_status"],
+                                   "source_owner": doc["source_owner"]}, entry)
+    if doc.get("auto_kind"):
+        inp["document"]["auto_kind"] = True
     if body.upload_id:
         with st.services.engine.connect() as conn:
             up = ops.get_upload(conn, body.upload_id)

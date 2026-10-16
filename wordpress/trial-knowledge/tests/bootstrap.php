@@ -102,6 +102,7 @@ require TK_DIR . 'includes/class-p315.php';
 require TK_DIR . 'includes/class-rest-proxy.php';
 require TK_DIR . 'includes/class-blocks.php';
 require TK_DIR . 'includes/class-admin-costs.php';
+require TK_DIR . 'includes/class-admin-sources.php';
 require TK_DIR . 'includes/class-questions.php';
 require TK_DIR . 'includes/class-admin-questions.php';
 

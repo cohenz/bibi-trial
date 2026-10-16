@@ -87,8 +87,11 @@ class DocumentIn(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     hearing_date: dt.date | None = None
     url: str | None = Field(default=None, max_length=1000)
-    source_type: Literal["indictment", "protocol", "decision", "motion", "exhibit", "article", "recording", "regulatory",
-                         "project315", "other"] = "protocol"
+    source_type: Literal["indictment", "protocol", "decision", "motion", "response", "notice", "affidavit", "exhibit",
+                         "article", "recording", "regulatory", "project315", "other"] = "protocol"
+    # 16.10.2026: the type was left to the system — a "protocol" without speaker turns or an attendance list becomes
+    # a document of the kind its opening names (as for the inbox)
+    auto_kind: bool = False
     authority_tier: int = Field(default=1, ge=1, le=5)
     source_owner: str = Field(default="הרשות השופטת", max_length=200)
     court_record_status: Literal["filed", "admitted", "marked_for_identification", "referenced_in_court", "excluded",

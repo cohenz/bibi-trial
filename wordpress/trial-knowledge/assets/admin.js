@@ -56,14 +56,16 @@
 			var files = document.getElementById('tk-files').files;
 			var date = document.getElementById('tk-date').value;
 			var crs = document.getElementById('tk-crs').value;
+			var kindSel = document.getElementById('tk-kind');
+			var kind = kindSel ? kindSel.value : 'auto';
 			var log = document.getElementById('tk-upload-log');
 			Array.prototype.reduce.call(files, function (p, file) {
-				return p.then(function () { return uploadOne(file, date, crs, log); });
+				return p.then(function () { return uploadOne(file, date, crs, log, kind); });
 			}, Promise.resolve()).then(loadJobs);
 		});
 	}
 
-	function uploadOne(file, date, crs, log) {
+	function uploadOne(file, date, crs, log, kind) {
 		var line = logLine(log, file.name + ': ' + A.i18n.hashing);
 		if (file.type && file.type !== 'application/pdf') {
 			line.textContent = file.name + ': ' + A.i18n.failed + ' (PDF)';
@@ -85,7 +87,7 @@
 			});
 		}).then(function (up) {
 			line.textContent = file.name + ': ' + A.i18n.creating;
-			return post('tk_create_job', A.nonces.upload, { upload_id: up.upload_id, title: file.name.replace(/\.pdf$/i, ''), hearing_date: date, crs: crs });
+			return post('tk_create_job', A.nonces.upload, { upload_id: up.upload_id, title: file.name.replace(/\.pdf$/i, ''), hearing_date: date, crs: crs, kind: kind || 'auto' });
 		}).then(function (r) {
 			if (!r.ok) { throw new Error((r.data && r.data.message) || 'job failed'); }
 			line.textContent = file.name + ': ' + A.i18n.done + ' — job ' + r.data.job_id;

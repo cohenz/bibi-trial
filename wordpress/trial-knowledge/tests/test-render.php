@@ -28,8 +28,8 @@ $envd = array_merge( $env, array( 'answer_status' => 'answered', 'citations' => 
 	array( 'kind' => 'prosecution', 'text' => 'התביעה נשענת על…', 'citation_ids' => array( $sid ) ),
 ) ) );
 $ad = TK_Render::answer( $envd );
-TK_T::ok( 1 === substr_count( $ad, 'מה עלה בבית המשפט לטובת ההגנה' ) && 2 === substr_count( $ad, '<li>' ) && false !== strpos( $ad, 'tk-answer__points' ), 'answer (2.7.5): defense points grouped in one numbered list' );
-TK_T::ok( false !== strpos( $ad, 'מה טוען כתב האישום?' ) && false !== strpos( $ad, 'על מה נשענת התביעה' ) && false === strpos( $ad, '<b>' ), 'answer (2.7.5): allegation and prosecution labelled, text escaped' );
+TK_T::ok( 1 === substr_count( $ad, 'מה התגלה בדיונים' ) && 2 === substr_count( $ad, 'class="tk-answer__para"' ) && false === strpos( $ad, '<li>' ), 'answer (2.7.12): findings grouped under one neutral heading, as paragraphs' );
+TK_T::ok( false !== strpos( $ad, 'טענת התביעה' ) && false !== strpos( $ad, 'תשובת התביעה' ) && false === strpos( $ad, 'לטובת ההגנה' ) && false === strpos( $ad, '<b>' ), 'answer (2.7.12): neutral labels, text escaped' );
 
 // 2.2: full transcript and documents
 $su = 'su_' . str_repeat( 'c', 26 );

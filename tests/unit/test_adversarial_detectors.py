@@ -410,3 +410,46 @@ def test_support_gate_waived_only_for_what_the_verifier_approved():
                         {"path": "sections/3", "supported": "partial", "attribution_ok": True},
                         {"path": "sections/4", "supported": "yes", "attribution_ok": True, "judicial_overstatement": True}]}
     assert verifier_approved(v) == {"sections/1"}
+
+
+def test_top_exchanges_come_with_their_surrounding_passages():
+    """16.10.2026: 'she left the phones at home' meant nothing without the question that led to it."""
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, role):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=role, speaker_role=role, unit_type=utype, text=f"קטע {i}", published=True)
+
+    units = {u.id: u for u in [uv(1, "speech_turn", "judge"), uv(2, "answer", "witness"), uv(3, "question", "defense"),
+                               uv(4, "answer", "witness"), uv(5, "question", "defense"), uv(6, "answer", "witness")]}
+    ids_ = list(units)
+    q, a = ids_[2], ids_[3]
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+        def exchange_partners(self, ids):
+            m = {q: a, a: q}
+            return {i: m[i] for i in ids if i in m}
+
+        def surrounding(self, ids, before=2, after=2):
+            return {q: ([ids_[0], ids_[1]], []), a: ([], [ids_[4], ids_[5]])}
+
+    class Search:
+        def search(self, req):
+            hits = [SearchHit(a, 1.0, {"terms": 1}, unit_type="answer")] if req.filters.phase == "cross" else []
+            return SearchResponse(req.query, hits, {}, {}, "fake")
+
+    ctx, _ = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c"))._retrieve("מה עם הטלפונים")
+    got = [(c.unit.id, c.bucket) for c in ctx]
+    assert got[:6] == [(ids_[0], "surrounding"), (ids_[1], "surrounding"), (q, "defense"), (a, "defense"),
+                       (ids_[4], "surrounding"), (ids_[5], "surrounding")]

@@ -767,8 +767,9 @@ html :where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), html a:wher
 .tk-answer__points { margin: .25rem 0 0; padding-inline-start: 1.4rem; }
 .tk-answer__points > li { margin-block: 0 .75rem; }
 .tk-answer__points > li > p { margin-block: 0 .2rem; }
-.tk-answer__sec--defense { border-inline-start: 4px solid var(--tk-accent); padding-inline-start: .85rem; }
-.tk-answer__sec--allegation h3, .tk-answer__sec--prosecution h3 { color: var(--tk-muted); }
+.tk-answer__para { margin-block: 0 1rem; }
+.tk-answer__para > p { margin-block: 0 .25rem; }
+.tk-answer__sec--significance { background: var(--tk-soft); border-radius: 8px; padding: .6rem .9rem; }
 
 /* ------------------------------------------------------------------ 2.7.8: visitors' questions */
 .tk-ask__more { margin-block: .6rem 0; font-size: .95rem; }

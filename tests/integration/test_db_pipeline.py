@@ -435,3 +435,21 @@ def test_repair_keeps_same_pair_when_exchange_id_changes(services, pipeline, ing
     with services.engine.connect() as conn:
         after = scalar(conn, "SELECT count(*) FROM ntk.qa_exchanges WHERE hearing_id = :h AND superseded_at IS NULL", {"h": hid})
     assert after == before
+
+
+def test_surrounding_passages_in_reading_order(ingested, services):
+    """16.10.2026: the Ask writer gets the passages around an exchange (PgAskStore.surrounding)."""
+    import sqlalchemy as sa
+    from ntk_common.db.public import PgAskStore
+
+    with services.engine.begin() as conn:
+        sv = conn.execute(sa.text("SELECT source_version_id FROM ntk.source_units GROUP BY 1 ORDER BY count(*) DESC LIMIT 1")).scalar()
+        conn.execute(sa.text("UPDATE ntk.source_versions SET publication_state = 'published' WHERE id = :sv"), {"sv": sv})
+        order = [r[0] for r in conn.execute(sa.text(
+            "SELECT id FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL "
+            "ORDER BY page_no, line_start, unit_ordinal"), {"sv": sv})]
+    assert len(order) >= 6
+    mid = order[3]
+    got = PgAskStore(services.engine, case_id="x").surrounding([mid, order[0]], before=2, after=2)
+    assert got[mid] == (order[1:3], order[4:6])
+    assert got[order[0]] == ([], order[1:3])

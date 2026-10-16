@@ -27,7 +27,9 @@ def unit_view(r: dict, *, published: bool, jl: tuple[str, bool] | None = None) -
                     line_end=r["line_end"], speaker_label=r["speaker_label"], speaker_role=r["speaker_role"],
                     unit_type=r["unit_type"], text=r["raw_text"], court_record_status=r["crs"], published=published,
                     hearing_id=r["hearing_id"], examination_phase=r["phase"],
-                    judicial_level=jl[0] if jl else None, judicial_human_approved=bool(jl and jl[1]))
+                    judicial_level=jl[0] if jl else None, judicial_human_approved=bool(jl and jl[1]),
+                    hearing_date=r.get("hearing_date"), witness_label=r.get("witness_label"),
+                    document_title=r.get("document_title"))
 
 
 def judicial_map(conn: Connection, unit_ids: list[str]) -> dict[str, tuple[str, bool]]:
@@ -41,8 +43,11 @@ def units_by_ids(conn: Connection, unit_ids: list[str], *, published_only: bool)
         return {}
     pub = "AND sv.publication_state = 'published'" if published_only else ""
     data = rows(conn, f"""
-        SELECT {UNIT_COLS}, (sv.publication_state = 'published') AS published
+        SELECT {UNIT_COLS}, (sv.publication_state = 'published') AS published, h.hearing_date::text AS hearing_date,
+               d.canonical_title AS document_title
         FROM ntk.source_units su JOIN ntk.source_versions sv ON sv.id = su.source_version_id
+        LEFT JOIN ntk.hearings h ON h.id = su.hearing_id
+        LEFT JOIN ntk.source_documents d ON d.id = sv.document_id
         WHERE su.id = ANY(:ids) {pub}
     """, {"ids": list(unit_ids)})
     jm = judicial_map(conn, [r["id"] for r in data])
@@ -228,6 +233,34 @@ class PgAskStore:
     def public_units(self, unit_ids: list[str]) -> dict[str, UnitView]:
         with self.engine.connect() as conn:
             return units_by_ids(conn, unit_ids, published_only=True)
+
+    def surrounding(self, unit_ids: list[str], *, before: int = 2, after: int = 2) -> dict[str, tuple[list[str], list[str]]]:
+        """For each unit, the ids of the units just before and just after it in the same published transcript, in reading
+        order (16.10.2026: a Q/A exchange alone often does not say what it is about)."""
+        if not unit_ids:
+            return {}
+        with self.engine.connect() as conn:
+            rs = rows(conn, """
+                WITH a AS (SELECT su.id, su.source_version_id AS sv, su.page_no AS p, su.line_start AS l, su.unit_ordinal AS o
+                           FROM ntk.source_units su JOIN ntk.source_versions v ON v.id = su.source_version_id
+                           WHERE su.id = ANY(:ids) AND v.publication_state = 'published')
+                SELECT a.id AS anchor, 'b' AS side, x.id, x.k FROM a CROSS JOIN LATERAL (
+                    SELECT s.id, row_number() OVER (ORDER BY s.page_no DESC, s.line_start DESC, s.unit_ordinal DESC) AS k
+                    FROM ntk.source_units s WHERE s.source_version_id = a.sv AND s.superseded_at IS NULL
+                      AND (s.page_no, s.line_start, s.unit_ordinal) < (a.p, a.l, a.o)
+                    ORDER BY s.page_no DESC, s.line_start DESC, s.unit_ordinal DESC LIMIT :b) x
+                UNION ALL
+                SELECT a.id, 'a', x.id, x.k FROM a CROSS JOIN LATERAL (
+                    SELECT s.id, row_number() OVER (ORDER BY s.page_no, s.line_start, s.unit_ordinal) AS k
+                    FROM ntk.source_units s WHERE s.source_version_id = a.sv AND s.superseded_at IS NULL
+                      AND (s.page_no, s.line_start, s.unit_ordinal) > (a.p, a.l, a.o)
+                    ORDER BY s.page_no, s.line_start, s.unit_ordinal LIMIT :af) x
+            """, {"ids": unit_ids, "b": before, "af": after})
+        out: dict[str, tuple[list[str], list[str]]] = {}
+        for r in sorted(rs, key=lambda r: (r["anchor"], r["side"], -r["k"] if r["side"] == "b" else r["k"])):
+            b, a = out.setdefault(r["anchor"], ([], []))
+            (b if r["side"] == "b" else a).append(r["id"])
+        return out
 
     def exchange_partners(self, unit_ids: list[str]) -> dict[str, str]:
         """For question/answer units, the unit on the other side of their Q/A exchange (question→answer, answer→question)."""

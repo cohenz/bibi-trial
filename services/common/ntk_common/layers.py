@@ -37,6 +37,10 @@ class UnitView:
     examination_phase: str = "unknown"
     judicial_level: str | None = None
     judicial_human_approved: bool = False
+    # where the passage sits (16.10.2026: the writer named neither the hearing date nor whose examination it was)
+    hearing_date: str | None = None
+    witness_label: str | None = None
+    document_title: str | None = None
 
     def facts(self) -> gates.UnitFacts:
         return gates.UnitFacts(self.id, self.text, self.speaker_role, self.unit_type, self.published,

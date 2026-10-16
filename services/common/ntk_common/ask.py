@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.10"
+ASK_ENGINE_VERSION = "ask-engine-1.11"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -232,6 +232,7 @@ class AskConfig:
     # earlier balanced answer
     lens: str = "defense"
     defense_context: int = 16  # passages from examinations by defense counsel (each Q/A exchange kept whole)
+    surround_exchanges: int = 10  # of those, how many come with the two passages before and after them
 
 
 class AskLimited(Exception):
@@ -413,7 +414,10 @@ class AskEngine:
 
         payload = {"question": q, "as_of": as_of.date().isoformat(), "context": [
             {"id": c.unit.id, "bucket": c.bucket, "attribution": c.attribution, "speaker": c.unit.speaker_label,
-             "speaker_role": c.unit.speaker_role, "unit_type": c.unit.unit_type, "text": c.unit.text[:1500],
+             "speaker_role": c.unit.speaker_role, "unit_type": c.unit.unit_type,
+             "hearing_date": c.unit.hearing_date, "examination": c.unit.examination_phase,
+             "witness_examined": c.unit.witness_label, "document": c.unit.document_title,
+             "text": c.unit.text[:700 if c.bucket == "surrounding" else 1500],
              "judicial_level": c.unit.judicial_level} for c in context]}
         allowed = {c.unit.id for c in context}
         # everything the model would see about the evidence: passages, their roles, speakers, rulings and text
@@ -795,19 +799,32 @@ class AskEngine:
             p = views.get(partners.get(uid) or "")
             return p is not None and p.unit_type == "question" and p.speaker_role in DEFENSE_ROLES
 
-        ordered: list[str] = []
-        exchanges = 0
+        pairs: list[list[str]] = []
+        taken: set[str] = set()
         for uid in cand:
-            if exchanges >= self.cfg.defense_context:
+            if len(pairs) >= self.cfg.defense_context:
                 break
-            if not asked_by_defense(uid) or uid in ordered:
+            if not asked_by_defense(uid) or uid in taken:
                 continue
             p = partners.get(uid)
             u = views[uid]
             pair = ([uid, p] if u.unit_type == "question" else [p, uid]) if p and p in views else [uid]
-            ordered.extend(x for x in pair if x not in ordered)
-            exchanges += 1
-        return add(ordered, "defense", "defense", attribution="defense_examination")
+            pair = [x for x in pair if x not in taken]
+            taken.update(pair)
+            pairs.append(pair)
+        # the passages just before and after the strongest exchanges, so the writer knows what each one is about
+        # (16.10.2026: "she left the phones at home" meant nothing without the question that led to it)
+        around_fn = getattr(self.store, "surrounding", None)
+        top = pairs[:self.cfg.surround_exchanges]
+        around = around_fn([x for pr in top for x in (pr[0], pr[-1])], before=2, after=2) if around_fn and top else {}
+        n = 0
+        for i, pair in enumerate(pairs):
+            if i < len(top):
+                n += add(around.get(pair[0], ([], []))[0], "surrounding", "defense", attribution="surrounding_passage")
+            n += add(pair, "defense", "defense", attribution="defense_examination")
+            if i < len(top):
+                n += add(around.get(pair[-1], ([], []))[1], "surrounding", "defense", attribution="surrounding_passage")
+        return n
 
 
 # witnesses who are also defendants are named in almost every question: their guide enters only by full name
@@ -927,7 +944,7 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
     return kept, dropped, short
 
 
-MAX_CONTEXT_DEFENSE = 52  # the defense layer adds up to 2 × defense_context units ahead of the general search
+MAX_CONTEXT_DEFENSE = 96  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

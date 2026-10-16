@@ -625,7 +625,8 @@
                   "limitation",
                   "allegation",
                   "defense",
-                  "prosecution"
+                  "prosecution",
+                  "significance"
                 ]
               },
               "text": {
@@ -2839,7 +2840,8 @@
                   "limitation",
                   "allegation",
                   "defense",
-                  "prosecution"
+                  "prosecution",
+                  "significance"
                 ]
               },
               "text": {

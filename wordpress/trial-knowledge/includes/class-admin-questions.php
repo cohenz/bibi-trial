@@ -197,7 +197,7 @@ class TK_Admin_Questions {
 		if ( ! $items ) {
 			return $out . '<p>' . esc_html__( 'אין תשובות שמחכות לבדיקה.', 'trial-knowledge' ) . '</p>';
 		}
-		$kinds = array( 'allegation' => 'מה טוען כתב האישום', 'defense' => 'לטובת ההגנה', 'prosecution' => 'התביעה', 'court_position' => 'בית המשפט', 'why' => 'הסבר', 'supports' => 'מחזק', 'weakens' => 'מחליש', 'status' => 'סטטוס', 'limitation' => 'הסתייגות' );
+		$kinds = array( 'allegation' => 'טענת התביעה', 'defense' => 'מה התגלה בדיונים', 'significance' => 'המשמעות', 'prosecution' => 'תשובת התביעה', 'court_position' => 'בית המשפט', 'why' => 'הסבר', 'supports' => 'מחזק', 'weakens' => 'מחליש', 'status' => 'סטטוס', 'limitation' => 'הסתייגות' );
 		foreach ( $items as $a ) {
 			$id    = (string) ( $a['answer_id'] ?? '' );
 			$draft = (array) ( $a['writer']['output'] ?? array() );

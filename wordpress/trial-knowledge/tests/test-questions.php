@@ -84,7 +84,7 @@ $held = array( array(
 	) ) ),
 ) );
 $hh = TK_Admin_Questions::render_held( $held );
-TK_T::ok( false === strpos( $hh, '<script>' ) && false === strpos( $hh, '<b>' ) && false !== strpos( $hh, 'value="approve"' ), 'held: escaped, approve offered' );
+TK_T::ok( false === strpos( $hh, 'לטובת ההגנה' ) && false === strpos( $hh, '<script>' ) && false === strpos( $hh, '<b>' ) && false !== strpos( $hh, 'value="approve"' ), 'held: escaped, approve offered' );
 TK_T::ok( false !== strpos( $hh, 'value="sections/2" checked' ) && false === strpos( $hh, 'value="sections/1" checked' ), 'held: what the verifier did not approve is ticked to omit; a mechanical-only flag is not' );
 TK_T::ok( false !== strpos( $hh, 'מעט מילים משותפות' ) && false !== strpos( $hh, 'בדיקה מכנית' ), 'held: the reason in plain words' );
 $nod = $held;

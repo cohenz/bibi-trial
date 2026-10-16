@@ -23,20 +23,28 @@ def is_hearing_record(unit_types: list[str], text: str) -> bool:
     return bool(SPEECH_TYPES & set(unit_types)) or "נוכחים" in (text or "")[:4000]
 
 
+_KINDS = (  # the document's own heading words; the earliest one in the opening wins (16.10.2026)
+    ("motion", re.compile(r"(?<![א-ת])(?:בקשה|בקשת|עתירה|עתירת|מתבקש|מתבקשת)(?![א-ת])")),
+    ("response", re.compile(r"(?<![א-ת])(?:תגובה|תגובת|תשובה|תשובת)(?![א-ת])")),
+    ("notice", re.compile(r"(?<![א-ת])(?:הודעה|הודעת|עדכון)(?![א-ת])")),
+    ("decision", re.compile(r"(?<![א-ת])(?:החלטה|החלטת|הכרעת\s*דין|גזר\s*דין|פסק\s*דין|ניתנה\s*היום)(?![א-ת])")),
+)
+
+
 def guess_kind(text: str, filename: str = "") -> str:
+    """The kind of a document taken for a protocol. 16.10.2026: the default was "decision" and any mention of a
+    decision in the opening made a document one — so the request for a pardon (which cites decisions) became a court
+    decision whose every paragraph was spoken by "בית המשפט". Now the filename's label, then the kind word that comes
+    first in the opening; "other" when none does. A court decision is the riskiest wrong guess, never the default."""
     from .inbox import filename_meta
 
-    label = filename_meta(filename).get("type_label") or ""
-    if "החלטה" in label:
-        return "decision"
-    if "הודעה" in label:
-        return "notice"
+    label = (filename_meta(filename).get("type_label") or "") + " " + (filename or "")
+    for kind, rx in _KINDS:
+        if rx.search(label):
+            return kind
     head = (text or "")[:1500]
-    if _DECISION.search(head):
-        return "decision"
-    if _NOTICE.search(head):
-        return "notice"
-    return "decision"
+    first = sorted((m.start(), kind) for kind, rx in _KINDS if (m := rx.search(head)))
+    return first[0][1] if first else "other"
 
 
 def new_title(kind: str, original_filename: str, date: str | None) -> str:
@@ -125,3 +133,51 @@ def demote(conn, *, hearing_id: str, kind: str, actor: str) -> dict:
                        "withdrawn_artifacts": [a["id"] for a in arts]})
     ops.enqueue_webhook(conn, "source_version.published", {"source_version_id": svid, "reclassified": kind})
     return {"hearing_id": hearing_id, "demoted": True, "source_version_id": svid, "kind": kind, "title": title, "date": date}
+
+
+def retype(conn, *, source_version_id: str, kind: str, actor: str, title: str | None = None,
+           source_owner: str | None = None) -> dict:
+    """Give a document its proper kind (16.10.2026), published or not. A document still taken for a hearing is first
+    turned back into a document (``demote``). Leaving "decision" removes the court speaker that ``demote`` gave its
+    paragraphs; becoming one adds it."""
+    from .db import ops
+
+    sv = row(conn, """SELECT sv.id, sv.document_id, sv.publication_state::text AS state, d.source_type::text AS kind,
+                             d.canonical_title AS title, (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id
+                                                          LIMIT 1) AS hearing_id
+                      FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                      WHERE sv.id = :sv""", {"sv": source_version_id})
+    if sv is None:
+        return {"source_version_id": source_version_id, "changed": False, "reason": "not_found"}
+    demoted = None
+    if sv["hearing_id"]:
+        demoted = demote(conn, hearing_id=sv["hearing_id"], kind=kind, actor=actor)
+        if not demoted.get("demoted"):
+            return {"source_version_id": source_version_id, "changed": False, "reason": demoted.get("reason")}
+    if kind != "decision":
+        execute(conn, """UPDATE ntk.source_units SET unit_type = 'other', speaker_label = NULL, speaker_role = NULL
+                         WHERE source_version_id = :sv AND unit_type = 'decision' AND speaker_role = 'court'
+                           AND speaker_label = 'בית המשפט'""", {"sv": source_version_id})
+    else:
+        execute(conn, """UPDATE ntk.source_units SET unit_type = CASE WHEN unit_type IN ('other', 'caption') THEN 'decision'
+                                                                      ELSE unit_type END,
+                                                    speaker_label = COALESCE(speaker_label, 'בית המשפט'),
+                                                    speaker_role = COALESCE(speaker_role, 'court')
+                         WHERE source_version_id = :sv""", {"sv": source_version_id})
+    sets = ["source_type = CAST(:t AS ntk.source_type)"]
+    params = {"t": kind, "d": sv["document_id"]}
+    if title:
+        sets.append("canonical_title = :ti")
+        params["ti"] = title
+    if source_owner:
+        sets.append("source_owner = :o")
+        params["o"] = source_owner
+    execute(conn, f"UPDATE ntk.source_documents SET {', '.join(sets)} WHERE id = :d", params)
+    ops.audit(conn, actor=actor, action="document.retyped", object_type="source_version", object_id=source_version_id,
+              details={"from": sv["kind"], "to": kind, "title": title, "source_owner": source_owner,
+                       "demoted_hearing": sv["hearing_id"]})
+    if sv["state"] == "published":
+        ops.bump_corpus_version(conn, reason=f"document {source_version_id} retyped as {kind}", actor=actor)
+        ops.enqueue_webhook(conn, "source_version.published", {"source_version_id": source_version_id, "reclassified": kind})
+    return {"source_version_id": source_version_id, "changed": True, "from": sv["kind"], "to": kind,
+            "published": sv["state"] == "published", "demoted_hearing": sv["hearing_id"]}

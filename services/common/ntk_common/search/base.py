@@ -32,6 +32,7 @@ class SearchFilters:
     court_record_status: list[str] | None = None
     hearing_id: str | None = None
     published_only: bool = True
+    source_types: list[str] | None = None  # e.g. ["indictment"] (16.10.2026: the prosecution's claim from its source)
 
 
 @dataclass

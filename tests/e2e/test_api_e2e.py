@@ -191,6 +191,14 @@ def test_full_flow(client, fixture_pdf, services):
     assert again.status_code == 409  # only a held answer can be reviewed
     assert signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "maybe"}).status_code in (400, 409)
 
+    # a source before deciding what to do with it; its type corrected (16.10.2026)
+    sv0 = client.get("/v2/hearings").json()["items"][0]["source_version_id"]
+    pv = signed(client, "GET", f"/v2/admin/sources/{sv0}/preview?n=3")
+    assert pv.status_code == 200 and pv.json()["units"] and pv.json()["hearing_id"] and pv.json()["unit_count"] >= 3, pv.text
+    assert signed(client, "POST", f"/v2/admin/sources/{sv0}/classify", {"kind": "bogus"}).status_code == 400
+    assert signed(client, "POST", f"/v2/admin/sources/{sv0}/classify", {"kind": "other"}).status_code == 409  # has Q/A
+    assert signed(client, "GET", "/v2/admin/sources/sv_00000000000000000000000000/preview").status_code == 404
+
     # the admin sets the caps from WordPress; null goes back to the Railway value
     lim = signed(client, "POST", "/v2/admin/ask/limits", {"per_visitor_daily": 5, "per_minute": 7})
     assert lim.status_code == 200 and lim.json()["per_visitor_daily"] == 5 and lim.json()["source"]["per_minute"] == "admin", lim.text

@@ -14,7 +14,7 @@ from ntk_common import ids
 from ntk_common import inbox as inboxmod
 from ntk_common.db import knowledge as kdb
 from ntk_common.db import ops
-from ntk_common.db.core import execute, row, rows
+from ntk_common.db.core import execute, row, rows, scalar
 from ntk_common.db.public import units_by_ids
 from ntk_common.evaluation import SuiteNotFound, resolve_suite
 from ntk_common.jobs import (
@@ -666,6 +666,68 @@ def withdraw_source(source_version_id: str, body: UnpublishRequest, request: Req
     except kdb.PublicationError as exc:
         raise _pub_error(exc) from exc
     return _json({"source_version_id": source_version_id, "publication_state": "withdrawn", "corpus_version": cv}, cache="no-store")
+
+
+@router.get("/sources/{source_version_id}/preview")
+def preview_source(source_version_id: str, st: AppState = Depends(get_state), n: int = Query(14, ge=1, le=60),
+                   p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """What a source is, before deciding what to do with it (16.10.2026): its type, title, owner, publication state,
+    the hearing it was taken for, an exact duplicate already in the archive, and its opening passages."""
+    with st.services.engine.connect() as conn:
+        sv = row(conn, """SELECT sv.id, sv.publication_state::text AS publication_state, sv.page_count, sv.content_sha256,
+                                 sv.metadata, d.source_type::text AS source_type, d.canonical_title AS title, d.source_owner,
+                                 (SELECT h.id FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1) AS hearing_id,
+                                 (SELECT h.hearing_date::text FROM ntk.hearings h WHERE h.source_version_id = sv.id LIMIT 1)
+                                     AS hearing_date
+                          FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                          WHERE sv.id = :sv""", {"sv": source_version_id})
+        if sv is None:
+            raise ApiError(404, "not_found", "source not found")
+        same = rows(conn, """SELECT o.id, o.publication_state::text AS publication_state, d.canonical_title AS title,
+                                    d.source_type::text AS source_type
+                             FROM ntk.source_versions o JOIN ntk.source_documents d ON d.id = o.document_id
+                             WHERE o.content_sha256 = :h AND o.id <> :sv""", {"h": sv["content_sha256"], "sv": source_version_id})
+        units = rows(conn, """SELECT page_no AS page, unit_type, speaker_label AS speaker, left(raw_text, 600) AS text
+                              FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL
+                              ORDER BY page_no, line_start, unit_ordinal LIMIT :n""", {"sv": source_version_id, "n": n})
+        count = scalar(conn, "SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND superseded_at IS NULL",
+                       {"sv": source_version_id})
+    meta = sv.pop("metadata") or {}
+    return _json({**sv, "unit_count": count, "same_file": same, "units": units,
+                  "document_date": meta.get("document_date")}, cache="no-store")
+
+
+class ClassifySourceIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: str
+    title: str | None = None
+    source_owner: str | None = None
+    publish: bool = False
+
+
+@router.post("/sources/{source_version_id}/classify")
+def classify_source(source_version_id: str, body: ClassifySourceIn, request: Request, st: AppState = Depends(get_state),
+                    p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """Give a document its proper type (16.10.2026) — published or not, and also one taken for a hearing (it is turned
+    back into a document). ``publish`` publishes it afterwards."""
+    from ntk_common import reclassify
+
+    kinds = {"decision", "motion", "response", "notice", "affidavit", "exhibit", "indictment", "other"}
+    if body.kind not in kinds:
+        raise ApiError(400, "invalid_request", f"kind must be one of {sorted(kinds)}")
+    with st.services.engine.begin() as conn:
+        out = reclassify.retype(conn, source_version_id=source_version_id, kind=body.kind, actor=p.label,
+                                title=(body.title or "").strip() or None, source_owner=(body.source_owner or "").strip() or None)
+    if not out.get("changed"):
+        raise ApiError(404 if out.get("reason") == "not_found" else 409, "conflict", f"not changed: {out.get('reason')}")
+    if body.publish and not out.get("published"):
+        try:
+            with st.services.engine.begin() as conn:
+                out["corpus_version"] = kdb.publish_source_version(conn, source_version_id, actor=p.label, request_id=_rid(request))
+                out["published"] = True
+        except kdb.PublicationError as exc:
+            raise _pub_error(exc) from exc
+    return _json(out, cache="no-store")
 
 
 # ------------------------------------------------------------------ claims

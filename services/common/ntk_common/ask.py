@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.12"
+ASK_ENGINE_VERSION = "ask-engine-1.13"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -194,7 +194,7 @@ def normalize_question(question: str) -> str:
 @dataclass
 class ContextItem:
     unit: UnitView
-    bucket: str  # supports | weakens | court | context | defense
+    bucket: str  # supports | weakens | court | context | defense | surrounding | prosecution
     attribution: str | None = None
     origin: str = "search"  # claim_card | witness_guide | digest | defense | search
 
@@ -233,6 +233,7 @@ class AskConfig:
     lens: str = "defense"
     defense_context: int = 16  # passages from examinations by defense counsel (each Q/A exchange kept whole)
     surround_exchanges: int = 10  # of those, how many come with the two passages before and after them
+    prosecution_context: int = 4  # indictment passages, and exchanges of the prosecution's direct examination
 
 
 class AskLimited(Exception):
@@ -671,7 +672,8 @@ class AskEngine:
         terms = set(query_terms(q))
         items: list[ContextItem] = []
         seen: set[str] = set()
-        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "defense": 0, "search": 0}
+        origins: dict[str, Any] = {"claim_cards": [], "witness_guides": [], "digests": [], "prosecution": 0, "defense": 0,
+                                   "search": 0}
 
         def add(uid_list: list[str], bucket: str, origin: str, attribution: str | None = None, cap: int | None = None) -> int:
             units = self.store.public_units([u for u in uid_list if u not in seen])
@@ -722,6 +724,8 @@ class AskEngine:
                 origins["digests"].append(hid)
                 for sent in p.get("summary_sentences", []):
                     room -= add(sent["citation_ids"][:1], "context", "digest", cap=min(room, 1))
+        if self._defense and self.cfg.prosecution_context > 0:
+            origins["prosecution"] = self._prosecution_layer(q, add)
         if self._defense and self.cfg.defense_context > 0:
             origins["defense"] = self._defense_layer(q, add)
         resp = self.search.search(SearchRequest(q, SearchFilters(published_only=True), limit=self.cfg.max_context))
@@ -743,6 +747,49 @@ class AskEngine:
         origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
         add(ordered, "context", "search")
         return items[:MAX_CONTEXT_DEFENSE if self._defense else MAX_CONTEXT_WITH_PAIRS], origins
+
+    def _prosecution_layer(self, q: str, add) -> int:
+        """The prosecution's claim from its own sources (16.10.2026: the "טענת התביעה" section was written from defense
+        counsel's questions, failed the verifier and was dropped): the indictment's passages on the question's topic,
+        and — when the question names a witness — the exchanges where the prosecution examined that witness."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        n = self.cfg.prosecution_context
+        reqs = [SearchRequest(q, SearchFilters(published_only=True, source_types=["indictment"]), limit=n)]
+        guides_fn = getattr(self.store, "published_witness_guides", None)
+        named = named_witnesses(q, guides_fn() if guides_fn else []) if guides_fn else []
+        for g in named[:1]:
+            name = re.sub(r"\([^)]*\)", " ", g["payload"].get("title") or "").strip()
+            if name:
+                topic = topic_query(q, name)
+                reqs.append(SearchRequest(topic or name, SearchFilters(published_only=True, phase="direct", witness=name),
+                                          limit=n * 3))
+        with ThreadPoolExecutor(max_workers=len(reqs)) as ex:
+            res = list(ex.map(self.search.search, reqs))
+        indictment = [h.source_unit_id for h in res[0].hits
+                      if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2][:n]
+        total = add(indictment, "prosecution", "prosecution", attribution="indictment")
+        if len(res) > 1:
+            cand = [h.source_unit_id for h in res[1].hits]
+            partners_fn = getattr(self.store, "exchange_partners", None)
+            partners = partners_fn(cand) if partners_fn else {}
+            views = self.store.public_units(list(dict.fromkeys([*cand, *partners.values()])))
+            out: list[str] = []
+            exchanges = 0
+            for uid in cand:
+                if exchanges >= n:
+                    break
+                u, p = views.get(uid), views.get(partners.get(uid) or "")
+                if u is None or uid in out:
+                    continue
+                question = u if u.unit_type == "question" else p
+                if question is None or question.speaker_role != "prosecution":
+                    continue
+                pair = [x.id for x in ([u, p] if u.unit_type == "question" else [p, u]) if x is not None]
+                out.extend(x for x in pair if x not in out)
+                exchanges += 1
+            total += add(out, "prosecution", "prosecution", attribution="prosecution_direct_examination")
+        return total
 
     def _defense_layer(self, q: str, add) -> int:
         """Passages from examinations conducted by defense counsel — the cross-examination of prosecution witnesses and
@@ -959,7 +1006,7 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
     return kept, dropped, short
 
 
-MAX_CONTEXT_DEFENSE = 96  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
+MAX_CONTEXT_DEFENSE = 108  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

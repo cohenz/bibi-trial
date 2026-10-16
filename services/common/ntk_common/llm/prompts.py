@@ -116,7 +116,7 @@ ANSWER = Prompt(
 # can knock down hurts the defense more than it helps.
 ANSWER_DEFENSE = Prompt(
     task_type="answer_defense",
-    version="answer-defense-2026-10-16.2",
+    version="answer-defense-2026-10-16.3",
     schema="ModelAnswerDraft",
     system=_COMMON
     + "Editorial lens: this knowledge base presents the defense's case. Readers come to learn what the trial record "
@@ -130,7 +130,11 @@ ANSWER_DEFENSE = Prompt(
     "questions and answers in court; what a witness said about their own relationship with, attitude towards or "
     "interest regarding a defendant; other explanations that came out (for example that purchases were the giver's "
     "own habit or for other people); the defendants' own testimony; and the defense's arguments. Items in bucket "
-    "'defense' come from examinations conducted by defense counsel: use them first. Items in bucket 'surrounding' "
+    "'defense' come from examinations conducted by defense counsel: use them first. Items in bucket 'prosecution' are "
+    "the indictment's passages on the topic and the prosecution's own direct examination: write the allegation "
+    "section from them. A document a party filed (a motion, a response, the request for a pardon sent to the "
+    "President) states that party's position, never a fact or a ruling: attribute it ('בבקשת החנינה טענו באי כוחו "
+    "של נתניהו כי…'). Items in bucket 'surrounding' "
     "are the passages just before and after them in the transcript: read them to understand what an exchange is "
     "about, and cite them when you use them. Each item gives its hearing_date, the examination (direct, cross), the "
     "witness_examined and the document: a date, an examination or a witness taken from these details is supported "

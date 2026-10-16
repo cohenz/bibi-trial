@@ -408,10 +408,12 @@ class Pipeline:
         from .db.core import execute, j
 
         doc = dict(inp["document"])
-        kind = reclassify.guess_kind(text, doc.get("original_filename") or "")
+        kind = reclassify.guess_kind(text, doc.get("original_filename") or doc.get("title") or "")
         date = doc.get("document_date") or doc.get("hearing_date_hint")
         doc.update({"source_type": kind, "document_date": date, "hearing_date": None,
-                    "title": reclassify.new_title(kind, doc.get("original_filename") or "", date),
+                    # a title the uploader gave in WordPress is kept; the inbox's names are built from the filename
+                    "title": (doc.get("title") if inp.get("manifest") != "inbox" and doc.get("title")
+                              else reclassify.new_title(kind, doc.get("original_filename") or "", date)),
                     "reclassified_from": "protocol"})
         new_inp = {**inp, "document": doc}
         with self.s.engine.begin() as conn:
@@ -435,7 +437,9 @@ class Pipeline:
         from . import reclassify
 
         text = "\n".join(u.raw_text for u in parsed.units[:80])
-        if inp.get("manifest") == "inbox" and not reclassify.is_hearing_record([u.unit_type for u in parsed.units], text):
+        # an upload whose type was left to the system (the inbox; WordPress with "זיהוי אוטומטי", 16.10.2026)
+        auto = inp.get("manifest") == "inbox" or bool(inp["document"].get("auto_kind"))
+        if auto and not reclassify.is_hearing_record([u.unit_type for u in parsed.units], text):
             # no speaker turns and no attendance list: a court decision or notice that mentions a protocol, not a hearing
             return self._segment_document(job_id, self._demote_input(job_id, inp, svid, text))
         reg = self._cp(job_id, "register") or {}

@@ -100,3 +100,55 @@ def test_operator_names_a_record_the_rule_misses(services, pipeline, tmp_path):
         assert scalar(conn, "SELECT d.source_type::text FROM ntk.source_versions sv JOIN ntk.source_documents d "
                             "ON d.id = sv.document_id WHERE sv.id = :sv", {"sv": sv}) == "motion"
         assert reclassify.named(conn, [hid]) == []
+
+
+def test_guess_kind_never_defaults_to_a_court_decision():
+    """16.10.2026: the request for a pardon cites decisions; it was taken for a court decision."""
+    assert reclassify.guess_kind("בקשת חנינה לנשיא המדינה … כפי שנקבע בהחלטה בדנג\"ץ", "בקשת חנינה-30.11.25") == "motion"
+    assert reclassify.guess_kind("מכתב לצדדים", "x.pdf") == "other"
+    assert reclassify.guess_kind("תגובת המאשימה לבקשה", "y.pdf") == "response"
+
+
+def test_wordpress_upload_left_on_automatic_is_not_made_a_hearing(services, pipeline, tmp_path):
+    from ntk_common.db import ops
+    from ntk_common.orchestrator import doc_input_from_manifest, job_idempotency_key
+
+    path = tmp_path / "wp.pdf"
+    path.write_bytes(make_pdf([[ln.replace("26 ביולי", "29 ביולי") for ln in COURT_DECISION[0]]]))
+    inp = doc_input_from_manifest({"name": "wordpress", "case_id": services.settings.case_id},
+                                  {"local_path": str(path), "title": "החלטה שהועלתה מהאתר"})
+    inp["document"]["auto_kind"] = True
+    with services.engine.begin() as conn:
+        job, _ = ops.create_job(conn, idempotency_key=job_idempotency_key(inp), input_=inp, requested_by="pytest")
+    done = pipeline.run_job(str(job["id"]))
+    assert done["status"] == "succeeded", done.get("error")
+    with services.engine.connect() as conn:
+        sv = scalar(conn, "SELECT source_version_id FROM ntk.ingestion_jobs WHERE id = :j", {"j": str(job["id"])})
+        assert scalar(conn, "SELECT count(*) FROM ntk.hearings WHERE source_version_id = :sv", {"sv": sv}) == 0
+        d = row(conn, "SELECT d.source_type::text AS st, d.canonical_title AS t FROM ntk.source_versions sv "
+                      "JOIN ntk.source_documents d ON d.id = sv.document_id WHERE sv.id = :sv", {"sv": sv})
+        assert d["st"] == "decision" and d["t"] == "החלטה שהועלתה מהאתר"
+
+
+def test_retype_a_document_and_its_speakers(services, pipeline, tmp_path):
+    """A document taken for a hearing is demoted; leaving "decision" removes the court speaker demote gave it."""
+    path = tmp_path / "pardon.pdf"
+    path.write_bytes(make_pdf([[ln.replace("26 ביולי", "30 ביולי") for ln in COURT_DECISION[0]]]))
+    job = pipeline.run_job(make_job(services, str(path), hearing_date="2026-07-30"))
+    with services.engine.begin() as conn:
+        sv = scalar(conn, "SELECT source_version_id FROM ntk.ingestion_jobs WHERE id = :j", {"j": job["id"]})
+        hid = scalar(conn, "SELECT id FROM ntk.hearings WHERE source_version_id = :sv", {"sv": sv})
+        assert hid
+        res = reclassify.retype(conn, source_version_id=sv, kind="decision", actor="test")
+        assert res["changed"] and res["demoted_hearing"] == hid
+        assert scalar(conn, "SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND speaker_role = 'court'",
+                      {"sv": sv}) > 0
+        res = reclassify.retype(conn, source_version_id=sv, kind="motion", actor="test", title="בקשת חנינה",
+                                source_owner="באי כוח נאשם 1")
+        assert res["changed"] and res["from"] == "decision"
+        assert scalar(conn, "SELECT count(*) FROM ntk.source_units WHERE source_version_id = :sv AND speaker_role = 'court'",
+                      {"sv": sv}) == 0
+        d = row(conn, "SELECT d.source_type::text AS st, d.canonical_title AS t, d.source_owner AS o FROM ntk.source_versions sv "
+                      "JOIN ntk.source_documents d ON d.id = sv.document_id WHERE sv.id = :sv", {"sv": sv})
+        assert (d["st"], d["t"], d["o"]) == ("motion", "בקשת חנינה", "באי כוח נאשם 1")
+        assert reclassify.retype(conn, source_version_id="sv_" + "0" * 26, kind="other", actor="t")["reason"] == "not_found"

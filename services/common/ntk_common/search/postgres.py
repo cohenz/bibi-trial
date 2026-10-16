@@ -53,6 +53,11 @@ def _filter_sql(req: SearchRequest, alias: str = "su") -> tuple[str, dict]:
     if f.court_record_status:
         clauses.append(f"{alias}.court_record_status = ANY(CAST(:f_crs AS ntk.court_record_status[]))")
         params["f_crs"] = f.court_record_status
+    if f.source_types:
+        clauses.append(f"""{alias}.source_version_id IN (SELECT fsv.id FROM ntk.source_versions fsv
+                         JOIN ntk.source_documents fsd ON fsd.id = fsv.document_id
+                         WHERE fsd.source_type::text = ANY(CAST(:f_st AS text[])))""")
+        params["f_st"] = list(f.source_types)
     return (" AND ".join(clauses) or "true"), params
 
 

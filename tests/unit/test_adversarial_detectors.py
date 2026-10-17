@@ -624,3 +624,22 @@ def test_roles_layer_adds_who_a_witness_is():
                                                                 defense_context=0, documents_context=0, guide_context=0))._retrieve(
         "מה בדקה המשטרה לגבי השמפניות?")
     assert (role, "role") in [(c.unit.id, c.bucket) for c in ctx] and origins["roles"] == 1
+
+
+def test_a_question_that_names_a_document():
+    from ntk_common.ask import named_documents
+
+    docs = [{"id": "p", "title": "בקשת חנינה לנשיא המדינה", "source_type": "other"}] + [
+        {"id": f"m{i}", "title": f"בקשה לגילוי ראיות {i}", "source_type": "motion"} for i in range(5)]
+    assert [d["id"] for d in named_documents("מה טוענת ההגנה בבקשת החנינה לגבי חולשת הראיות?", docs)] == ["p"]
+    assert named_documents("מה העיד כורש ברנור על כימות טובות ההנאה?", docs) == []
+
+
+def test_court_words_in_a_published_decision_are_a_ruling():
+    from ntk_common.db.public import decision_level
+
+    base = {"published": True, "source_type": "decision", "speaker_role": "court", "unit_type": "decision", "hearing_id": None}
+    assert decision_level(base) == ("procedural_decision", True)
+    assert decision_level({**base, "source_type": "other"}) is None
+    assert decision_level({**base, "hearing_id": "hr_x"}) is None
+    assert decision_level({**base, "speaker_role": None}) is None

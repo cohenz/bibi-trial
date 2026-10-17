@@ -44,14 +44,24 @@ def units_by_ids(conn: Connection, unit_ids: list[str], *, published_only: bool)
     pub = "AND sv.publication_state = 'published'" if published_only else ""
     data = rows(conn, f"""
         SELECT {UNIT_COLS}, (sv.publication_state = 'published') AS published, h.hearing_date::text AS hearing_date,
-               d.canonical_title AS document_title
+               d.canonical_title AS document_title, d.source_type::text AS source_type
         FROM ntk.source_units su JOIN ntk.source_versions sv ON sv.id = su.source_version_id
         LEFT JOIN ntk.hearings h ON h.id = su.hearing_id
         LEFT JOIN ntk.source_documents d ON d.id = sv.document_id
         WHERE su.id = ANY(:ids) {pub}
     """, {"ids": list(unit_ids)})
     jm = judicial_map(conn, [r["id"] for r in data])
-    return {r["id"]: unit_view(r, published=r["published"], jl=jm.get(r["id"])) for r in data}
+    return {r["id"]: unit_view(r, published=r["published"], jl=jm.get(r["id"]) or decision_level(r)) for r in data}
+
+
+def decision_level(r: dict) -> tuple[str, bool] | None:
+    """The court's own words in a published court decision (17.10.2026): the editor published the document as a decision
+    (its type is set on the sources screen), so "בית המשפט קבע" may cite it — the verifier still checks the sentence.
+    Not a hearing transcript (rulings there go through the judicial-statement review)."""
+    if (r.get("published") and r.get("source_type") == "decision" and r.get("speaker_role") == "court"
+            and r.get("unit_type") == "decision" and not r.get("hearing_id")):
+        return ("procedural_decision", True)
+    return None
 
 
 # ------------------------------------------------------------------ public endpoints
@@ -258,6 +268,14 @@ class PgAskStore:
                                   CROSS JOIN LATERAL unnest(h.witnesses) w
                                   WHERE sv.publication_state = 'published' GROUP BY w""")
         return guides_ + bare_witnesses(guides_, heard)
+
+    def published_documents(self) -> list[dict]:
+        """Published documents that are not transcripts: id, type and title (for questions that name one)."""
+        with self.engine.connect() as conn:
+            return rows(conn, """SELECT sv.id, d.source_type::text AS source_type, d.canonical_title AS title
+                                 FROM ntk.source_versions sv JOIN ntk.source_documents d ON d.id = sv.document_id
+                                 WHERE sv.publication_state = 'published' AND d.source_type::text <> 'protocol'
+                                   AND NOT EXISTS (SELECT 1 FROM ntk.hearings h WHERE h.source_version_id = sv.id)""")
 
     def public_units(self, unit_ids: list[str]) -> dict[str, UnitView]:
         with self.engine.connect() as conn:

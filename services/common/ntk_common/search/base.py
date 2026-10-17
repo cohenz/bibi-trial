@@ -33,6 +33,7 @@ class SearchFilters:
     hearing_id: str | None = None
     published_only: bool = True
     source_types: list[str] | None = None  # e.g. ["indictment"] (16.10.2026: the prosecution's claim from its source)
+    source_version_ids: list[str] | None = None  # within named documents (17.10.2026: "בקשת החנינה")
 
 
 @dataclass

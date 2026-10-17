@@ -58,6 +58,9 @@ def _filter_sql(req: SearchRequest, alias: str = "su") -> tuple[str, dict]:
                          JOIN ntk.source_documents fsd ON fsd.id = fsv.document_id
                          WHERE fsd.source_type::text = ANY(CAST(:f_st AS text[])))""")
         params["f_st"] = list(f.source_types)
+    if f.source_version_ids:
+        clauses.append(f"{alias}.source_version_id = ANY(CAST(:f_svs AS text[]))")
+        params["f_svs"] = list(f.source_version_ids)
     return (" AND ".join(clauses) or "true"), params
 
 
@@ -164,6 +167,8 @@ class PostgresSearchBackend:
             clauses.append("h.hearing_date <= CAST(:f_to AS date)")
         if f.hearing_id:
             clauses.append("rc.hearing_id = :f_hid")
+        if f.source_version_ids:
+            clauses.append("rc.source_version_id = ANY(CAST(:f_svs AS text[]))")
         return " AND ".join(clauses) or "true"
 
     def _vector(self, conn, req, where, params) -> list[str]:

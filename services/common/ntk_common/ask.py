@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.16"
+ASK_ENGINE_VERSION = "ask-engine-1.17"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -840,8 +840,23 @@ class AskEngine:
             return out[:n]
 
         k = len(queries)
-        return (add(rel(res[:k]), "court", "court_decision", attribution="court"),
-                add(rel(res[k:]), "party", "party_document", attribution="party_document"))
+        court = add(rel(res[:k]), "court", "court_decision", attribution="court")
+        party = add(rel(res[k:]), "party", "party_document", attribution="party_document")
+        # a document the question names ("בקשת החנינה"): its own passages on the question's subject (17.10.2026: "מה
+        # טוענת ההגנה בבקשת החנינה…" got five passages on the President's powers and found no argument)
+        docs_fn = getattr(self.store, "published_documents", None)
+        for d in named_documents(q, docs_fn() if docs_fn else [])[:2]:
+            r = self.search.search(SearchRequest(focus_query(q) or q, SearchFilters(published_only=True,
+                                                                                     source_version_ids=[d["id"]]),
+                                                 limit=NAMED_DOCUMENT_CONTEXT * 2))
+            hits = [h.source_unit_id for h in r.hits if {"exact", "terms", "graph"} & set(h.signals) or len(h.signals) >= 2]
+            n_ = add(hits[:NAMED_DOCUMENT_CONTEXT], "court" if d.get("source_type") == "decision" else "party",
+                     "named_document", attribution="court" if d.get("source_type") == "decision" else "party_document")
+            if d.get("source_type") == "decision":
+                court += n_
+            else:
+                party += n_
+        return court, party
 
     def _defense_layer(self, q: str, add) -> int:
         """Passages from examinations conducted by defense counsel — the cross-examination of prosecution witnesses and
@@ -985,6 +1000,32 @@ FRAME_WORDS = frozenset({"מה", "מהי", "מהו", "המשמעות", "משמע
                          "בנוגע", "בעניין", "בתיק", "תיק", "בפרשת", "פרשת", "אמרו", "אמר", "אמרה", "היה", "היו", "יש"})
 
 
+# words too common in document titles to name one
+TITLE_STOP = frozenset({"החלטה", "החלטת", "בקשה", "בקשת", "תגובה", "תגובת", "הודעה", "הודעת", "מסמך", "עתירה", "מטעם",
+                        "נאשם", "נאשמים", "המאשימה", "מאשימה", "בית", "משפט", "המשפט", "תיק", "דיון", "פרוטוקול", "לפי",
+                        "סעיף", "בעניין", "על", "של", "את", "עם", "לא", "כי", "גם", "או", "בין"})
+
+
+def named_documents(q: str, docs: list[dict]) -> list[dict]:
+    """Documents the question names by a word of their title that few titles share ("בקשת החנינה" → the request for a
+    pardon), most matching words first."""
+    qt = set(query_terms(q))
+    if not qt or not docs:
+        return []
+    titles = [(d, {t for t in hebrew.search_terms(d.get("title") or "") if len(t) > 2 and t not in TITLE_STOP
+                   and not t.isdigit()}) for d in docs]
+    freq: dict[str, int] = {}
+    for _d, ts in titles:
+        for t in ts:
+            freq[t] = freq.get(t, 0) + 1
+    scored = []
+    for d, ts in titles:
+        rare = {t for t in ts & qt if freq.get(t, 0) <= 2}
+        if rare:
+            scored.append((-len(ts & qt), -len(rare), d.get("id") or "", d))
+    return [x[3] for x in sorted(scored, key=lambda x: x[:3])]
+
+
 def focus_query(q: str) -> str:
     """The subject of a question without its framing ("מה המשמעות של…", "בתיק 4000"), for searching documents."""
     words = [w for w in re.findall(r"[א-ת0-9\"]+", hebrew.normalize(q).replace("'", "").replace("׳", ""))
@@ -1088,9 +1129,10 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
 
 
 ROLE_CONTEXT = 8
+NAMED_DOCUMENT_CONTEXT = 10
 DECISION_TYPES = ("decision",)
 PARTY_DOCUMENT_TYPES = ("motion", "response", "notice", "affidavit", "other")
-MAX_CONTEXT_DEFENSE = 126  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
+MAX_CONTEXT_DEFENSE = 140  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

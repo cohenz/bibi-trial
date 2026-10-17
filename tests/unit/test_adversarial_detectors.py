@@ -565,3 +565,62 @@ def test_focus_query_drops_the_framing():
     assert focus_query("מה המשמעות של הקשיים הראייתיים שעליהם הצביעו השופטים ביחס לאישום השוחד בתיק 4000?") == \
         "הקשיים הראייתיים השופטים לאישום השוחד"
     assert focus_query("מה?") == ""
+
+
+def test_legal_conclusion_in_an_attributed_allegation_is_not_flagged():
+    from ntk_common.ask import answer_flags
+    from ntk_common.gates import Assertion
+
+    assert not answer_flags(Assertion("answer_short", 'כתב האישום טוען כי נתניהו קיבל שוחד בדמות "היענות חריגה".', []))
+    assert not answer_flags(Assertion("s/0", "נתניהו קיבל שוחד", [], kind="allegation"))
+    assert "final_legal_conclusion" in answer_flags(Assertion("s/1", "נתניהו קיבל שוחד מאלוביץ'.", [], kind="defense"))
+
+
+def test_witnesses_without_a_guide_are_named():
+    from ntk_common.ask import named_witnesses
+    from ntk_common.db.public import bare_witnesses
+
+    guides_ = [{"object_id": "w1", "payload": {"title": "הדס קליין", "blocks": []}}]
+    heard = [{"name": "איתן כבל", "svs": ["sv_a", "sv_b"]}, {"name": "הדס קליין", "svs": ["sv_c"]},
+             {"name": "נאשם 1 — בנימין נתניהו", "svs": ["sv_d"]}, {"name": "ע\"ה 31", "svs": []}]
+    bare = bare_witnesses(guides_, heard)
+    assert [b["payload"]["title"] for b in bare] == ["איתן כבל"]
+    assert [g["payload"]["title"] for g in named_witnesses('מה העיד איתן כבל על חוק "ישראל היום"?', guides_ + bare)] == ["איתן כבל"]
+
+
+def test_roles_layer_adds_who_a_witness_is():
+    from ntk_common.ask import AskConfig, AskEngine
+    from ntk_common.layers import UnitView
+    from ntk_common.search.base import SearchHit, SearchResponse
+
+    def uv(i, utype, role, witness=None):
+        return UnitView(id=f"su_{i:026x}", source_version_id="sv_" + "a" * 26, page=1, line_start=i, line_end=i,
+                        speaker_label=role, speaker_role=role, unit_type=utype, text=f"קטע {i}", published=True,
+                        witness_label=witness)
+
+    units = {u.id: u for u in [uv(1, "answer", "witness", "שלמה משולם"), uv(2, "other", None)]}
+    ans, role = list(units)
+
+    class Store:
+        def published_claim_cards(self):
+            return []
+
+        def published_digests(self):
+            return []
+
+        def published_witness_guides(self):
+            return [{"object_id": "w_m", "payload": {"title": "שלמה משולם", "blocks": [
+                {"block": "role", "items": [{"text": "ראש צוות החקירה", "citation_ids": [role]}]}]}}]
+
+        def public_units(self, ids):
+            return {i: units[i] for i in ids if i in units}
+
+    class Search:
+        def search(self, req):
+            hits = [SearchHit(ans, 1.0, {"terms": 1}, unit_type="answer")] if not req.filters.source_types else []
+            return SearchResponse(req.query, hits, {}, {}, "fake")
+
+    ctx, origins = AskEngine(Store(), Search(), None, AskConfig(answer_base="a", citation_base="c", prosecution_context=0,
+                                                                defense_context=0, documents_context=0, guide_context=0))._retrieve(
+        "מה בדקה המשטרה לגבי השמפניות?")
+    assert (role, "role") in [(c.unit.id, c.bucket) for c in ctx] and origins["roles"] == 1

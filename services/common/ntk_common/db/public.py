@@ -156,6 +156,28 @@ def public_hearing(conn: Connection, hearing_id: str) -> dict | None:
             "digest_artifact_id": str(digest["id"]) if digest else None, "stats": stats}
 
 
+def bare_witnesses(guides_: list[dict], heard: list[dict]) -> list[dict]:
+    """Witnesses of published hearings with no guide, shaped like a guide with only a title. Labels that are not a plain
+    name (a defendant, "נאשם 1 — …", a long description) are left out."""
+    import re as _re
+
+    def key(name: str) -> str:
+        return _re.sub(r"\([^)]*\)", " ", name or "").replace("'", "").replace("׳", "").strip()
+
+    have = {key(g["payload"].get("title") or "") for g in guides_}
+    out = []
+    for h in heard:
+        name = (h.get("name") or "").strip()
+        if not name or key(name) in have or len(name) > 30 or _re.search(r"נאשם|ע\"ת|ע\"ה|עד |\d", name):
+            continue
+        if len(name.split()) < 2:
+            continue
+        have.add(key(name))
+        out.append({"object_id": None, "payload": {"title": name, "source_version_ids": list(h.get("svs") or []),
+                                                   "blocks": []}})
+    return out
+
+
 def public_hearings(conn: Connection) -> list[dict]:
     return [{**h, "judges": people.clean_judges(h["judges"])} for h in rows(conn, """
         SELECT h.id, h.hearing_date::text AS hearing_date, h.witnesses, h.judges, sv.document_id, h.source_version_id,
@@ -226,9 +248,16 @@ class PgAskStore:
                                  WHERE ga.artifact_type = 'summary' AND ga.object_type = 'hearing'""")
 
     def published_witness_guides(self) -> list[dict]:
+        """Published witness guides, and — for witnesses of published hearings who have no guide yet — a bare entry with
+        their name (17.10.2026: "מה העיד איתן כבל…" found nothing; his hearings of 4–5.10 had no guide)."""
         with self.engine.connect() as conn:
-            return rows(conn, """SELECT ga.object_id, ga.payload FROM ntk.public_artifacts ga
-                                 WHERE ga.artifact_type = 'guide' AND ga.object_type = 'witness'""")
+            guides_ = rows(conn, """SELECT ga.object_id, ga.payload FROM ntk.public_artifacts ga
+                                    WHERE ga.artifact_type = 'guide' AND ga.object_type = 'witness'""")
+            heard = rows(conn, """SELECT w AS name, array_agg(DISTINCT h.source_version_id) AS svs
+                                  FROM ntk.hearings h JOIN ntk.source_versions sv ON sv.id = h.source_version_id
+                                  CROSS JOIN LATERAL unnest(h.witnesses) w
+                                  WHERE sv.publication_state = 'published' GROUP BY w""")
+        return guides_ + bare_witnesses(guides_, heard)
 
     def public_units(self, unit_ids: list[str]) -> dict[str, UnitView]:
         with self.engine.connect() as conn:

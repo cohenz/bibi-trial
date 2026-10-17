@@ -31,7 +31,7 @@ from .llm.prompts import ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE
 from .llm.runner import ModelRunner, unknown_ids_check
 from .search.base import SearchBackend, SearchFilters, SearchRequest, query_terms
 
-ASK_ENGINE_VERSION = "ask-engine-1.15"
+ASK_ENGINE_VERSION = "ask-engine-1.16"
 
 # ---------------------------------------------------------------------------
 # deterministic detectors
@@ -478,7 +478,7 @@ class AskEngine:
         facts = {u.id: u.facts() for u in units.values()}
         flags = set(flags_q)
         for a in assertions:
-            flags.update(gates.risk_flags(a.text))
+            flags.update(answer_flags(a))
         verdict = None
         vrun_id = None
         pruned: list[dict] = []
@@ -508,7 +508,7 @@ class AskEngine:
                                    for i, s in enumerate(sections)]
                     flags = set(flags_q)
                     for a in assertions:
-                        flags.update(gates.risk_flags(a.text))
+                        flags.update(answer_flags(a))
                     verdict = "pass"
         support_waived: list[str] = []
         if self._defense and self.cfg.verify_answers and verdict == "pass" and vrun_id:
@@ -749,7 +749,26 @@ class AskEngine:
             ordered.extend(x for x in pair if x not in ordered)
         origins["exchange_partners_added"] = len([x for x in ordered if x not in hit_ids])
         add(ordered, "context", "search")
+        origins["roles"] = self._roles_layer(q, items, add) if self._defense else 0
         return items[:MAX_CONTEXT_DEFENSE if self._defense else MAX_CONTEXT_WITH_PAIRS], origins
+
+    def _roles_layer(self, q: str, items: list, add) -> int:
+        """Who the people in the answer are (17.10.2026: the verifier rejected "ראש צוות החקירה נצ"מ שלמה משולם" and
+        "העוזרת האישית של מילצ'ן" because no cited passage said so): for witnesses named in the question or speaking in
+        the context, the passage behind the first line of their guide's role block."""
+        guides_fn = getattr(self.store, "published_witness_guides", None)
+        if not guides_fn:
+            return 0
+        text = " ".join([q, *(c.unit.speaker_label or "" for c in items), *(c.unit.witness_label or "" for c in items)])
+        cids: list[str] = []
+        for g in named_witnesses(text, [g for g in guides_fn() if g.get("object_id")]):
+            for b in g["payload"].get("blocks", []):
+                if b.get("block") == "role" and b.get("items"):
+                    cids.extend(b["items"][0].get("citation_ids", [])[:1])
+                    break
+            if len(cids) >= ROLE_CONTEXT:
+                break
+        return add(cids, "role", "witness_role", attribution="role")
 
     def _prosecution_layer(self, q: str, add) -> int:
         """The prosecution's claim from its own sources (16.10.2026: the "טענת התביעה" section was written from defense
@@ -1002,6 +1021,21 @@ _ATTRIBUTED = re.compile(
     r"|עו\"?ד\s+\S+\s+\S*\s*(?:טען|הדגיש|ציין|הציג|הטיח)")
 
 
+_ALLEGED = re.compile(r"(?:כתב\s*ה?אישום|התביעה|המאשימה|הפרקליטות)\s*(?:טוע|טען|מייחס|ייחס|גורס)|לפי\s*כתב\s*ה?אישום"
+                      r"|לפי\s*הנטען|נטען\s*כי|לטענת\s*(?:ה)?(?:תביעה|מאשימה|פרקליטות)|מיוחס(?:ת)?\s*ל")
+
+
+def answer_flags(a) -> set[str]:
+    """Risk flags of one sentence. "קיבל שוחד" or "הרשעה" in the indictment's allegation or in a party's argument is
+    that party's claim, not the site's conclusion (17.10.2026: "כתב האישום טוען כי נתניהו קיבל שוחד…" held an answer
+    the verifier fully approved)."""
+    flags = set(gates.risk_flags(a.text))
+    if "final_legal_conclusion" in flags and (getattr(a, "kind", None) in {"allegation", "prosecution"}
+                                              or attributed_argument(a) or _ALLEGED.search(a.text or "")):
+        flags.discard("final_legal_conclusion")
+    return flags
+
+
 def attributed_argument(a) -> bool:
     """A section that is a party's argument by construction (significance) or says whose argument it is: 'proof' or
     'proven' there is that party's word, not the site's (16.10.2026: 'ההגנה סבורה כי בהיעדר הוכחה…' was rejected)."""
@@ -1053,9 +1087,10 @@ def prune_unapproved(sections: list[dict], verifier: dict) -> tuple[list[dict], 
     return kept, dropped, short
 
 
+ROLE_CONTEXT = 8
 DECISION_TYPES = ("decision",)
 PARTY_DOCUMENT_TYPES = ("motion", "response", "notice", "affidavit", "other")
-MAX_CONTEXT_DEFENSE = 118  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
+MAX_CONTEXT_DEFENSE = 126  # the defense layer: up to 2 × defense_context units, 4 around each of the top exchanges
 DEFENSE_ROLES = frozenset({"defense", "defendant"})
 
 

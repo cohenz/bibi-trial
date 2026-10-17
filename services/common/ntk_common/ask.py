@@ -1003,14 +1003,24 @@ FRAME_WORDS = frozenset({"מה", "מהי", "מהו", "המשמעות", "משמע
 # words too common in document titles to name one
 TITLE_STOP = frozenset({"החלטה", "החלטת", "בקשה", "בקשת", "תגובה", "תגובת", "הודעה", "הודעת", "מסמך", "עתירה", "מטעם",
                         "נאשם", "נאשמים", "המאשימה", "מאשימה", "בית", "משפט", "המשפט", "תיק", "דיון", "פרוטוקול", "לפי",
-                        "סעיף", "בעניין", "על", "של", "את", "עם", "לא", "כי", "גם", "או", "בין"})
+                        "סעיף", "בעניין", "על", "של", "את", "עם", "לא", "כי", "גם", "או", "בין", "תיקימ", "התיקימ",
+                        "תיקים", "התיקים", "ראיות", "הראיות", "הגנה", "ההגנה", "תביעה", "התביעה", "שופט",
+                        "השופט", "השופטת", "שופטים", "השופטים", "שופטימ", "השופטימ"})
+
+
+DOC_NOUNS = re.compile(r"(?<![א-ת])[ובלמה]?(?:בקשת|בקשה|החלטת|החלטה|תגובת|תגובה|הודעת|הודעה|מכתב|עתירת|עתירה|מזכר|תצהיר|חוות\s+דעת)"
+                       r"\s+([א-ת\"']+)(?:\s+([א-ת\"']+))?")
 
 
 def named_documents(q: str, docs: list[dict]) -> list[dict]:
-    """Documents the question names by a word of their title that few titles share ("בקשת החנינה" → the request for a
-    pardon), most matching words first."""
-    qt = set(query_terms(q))
-    if not qt or not docs:
+    """Documents the question names: a document word and what follows it ("בבקשת החנינה", "החלטת השופטים"), matched to a
+    word of a title that at most two titles share."""
+    named: set[str] = set()
+    for m in DOC_NOUNS.finditer(hebrew.normalize(q)):
+        for w in m.groups():
+            if w:
+                named |= {t for t in hebrew.search_terms(w) if len(t) > 2 and t not in TITLE_STOP}
+    if not named or not docs:
         return []
     titles = [(d, {t for t in hebrew.search_terms(d.get("title") or "") if len(t) > 2 and t not in TITLE_STOP
                    and not t.isdigit()}) for d in docs]
@@ -1020,10 +1030,10 @@ def named_documents(q: str, docs: list[dict]) -> list[dict]:
             freq[t] = freq.get(t, 0) + 1
     scored = []
     for d, ts in titles:
-        rare = {t for t in ts & qt if freq.get(t, 0) <= 2}
-        if rare:
-            scored.append((-len(ts & qt), -len(rare), d.get("id") or "", d))
-    return [x[3] for x in sorted(scored, key=lambda x: x[:3])]
+        weight = sum(1 / freq[t] for t in ts & named if freq.get(t, 0) <= 2)
+        if weight >= 0.5:
+            scored.append((-weight, d.get("id") or "", d))
+    return [x[2] for x in sorted(scored, key=lambda x: x[:2])]
 
 
 def focus_query(q: str) -> str:

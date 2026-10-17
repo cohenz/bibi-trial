@@ -216,6 +216,18 @@ QA_RELATION = Prompt(
     "affirms only what the question clearly asserted; any hedge makes it qualified_affirmation.",
 )
 
+QUESTION_MATCH = Prompt(
+    task_type="question_match",
+    version="question-match-2026-10-17.1",
+    schema="ModelQuestionMatch",
+    system=_COMMON
+    + "Task: a visitor asked a question about the trial. Below are questions the site's editor already answered. Say "
+    "whether one of them asks the same thing in other words, so that its answer fully answers the visitor. match: the "
+    "number of that question, or null. The same thing means: the same people, case, event and aspect; a question that "
+    "is broader, narrower, about another witness, another case or another period is not the same (\"מה העיד ישועה?\" "
+    "is not \"מה אמר ישועה על פניות של פוליטיקאים אחרים?\"). When unsure, null. confidence: how sure you are.",
+)
+
 CLASSIFY_DOCUMENT = Prompt(
     task_type="classify_document",
     version="classify-document-2026-10-11.1",
@@ -312,7 +324,7 @@ DOCUMENT_BRIEF = Prompt(
 )
 
 ALL = {p.task_type: p for p in (DIGEST, JUDICIAL, MAP_CLAIM, VERIFY, ANSWER, ANSWER_DEFENSE, VERIFY_ANSWER_DEFENSE,
-                                QA_RELATION, CLASSIFY_DOCUMENT, INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE,
+                                QA_RELATION, QUESTION_MATCH, CLASSIFY_DOCUMENT, INDICTMENT_OVERVIEW, CASE_GUIDE, WITNESS_GUIDE,
                                 DOCUMENT_BRIEF)}
 ROLE_FOR_TASK = {
     "digest": "extractor",
@@ -323,6 +335,7 @@ ROLE_FOR_TASK = {
     "answer_defense": "writer",
     "verify_answer_defense": "verifier",
     "qa_relation": "qa_relation",
+    "question_match": "qa_relation",
     "classify_document": "extractor",
     "indictment_overview": "writer",
     "case_guide": "writer",

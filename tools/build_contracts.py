@@ -737,6 +737,16 @@ defs["ModelQARelationOutput"] = obj(
         ),
     },
 )
+defs["ModelQuestionMatch"] = obj(
+    ["schema_version", "match", "confidence"],
+    {
+        "schema_version": {"const": SV},
+        # the number of the candidate that asks the same thing (1-based), or null
+        "match": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+        "confidence": CONF,
+        "reason": nullable("string"),
+    },
+)
 defs["ModelDocumentClassification"] = obj(
     ["schema_version", "source_type", "title", "confidence"],
     {

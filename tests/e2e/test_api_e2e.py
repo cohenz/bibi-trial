@@ -486,3 +486,30 @@ def test_search_within_document_types(client):
     hits = client.post("/v2/search", json={"query": "החלטה", "filters": {"source_types": ["decision"]}, "limit": 10}).json()["hits"]
     assert all(h["hearing_id"] is None for h in hits)
     assert client.post("/v2/search", json={"query": "x", "filters": {"source_types": ["bogus"]}}).status_code == 400
+
+
+def test_an_approved_question_in_other_words_gets_the_approved_answer(client, services):
+    """17.10.2026: a visitor asking an approved question — word for word or reworded — gets the approved answer."""
+    import sqlalchemy as sa
+
+    a = client.post("/v2/ask", json={"question": "מה אמרה העדה על המיילים שנשלחו?"}).json()
+    with services.engine.begin() as conn:
+        conn.execute(sa.text("UPDATE ntk.answers SET answer_status = 'answered', envelope = jsonb_set(envelope, '{answer_status}', "
+                             "'\"answered\"') WHERE id = CAST(:i AS uuid)"), {"i": a["answer_id"]})
+    r = signed(client, "PUT", "/v2/admin/curated", {"items": [{"answer_id": a["answer_id"], "question": "מה אמרה העדה על המיילים שנשלחו?"}]})
+    assert r.status_code == 200 and r.json()["approved"] == 1 and r.json()["embedded"] == 1, r.text
+    same = client.post("/v2/ask", json={"question": "מה אמרה העדה על המיילים שנשלחו?"}).json()
+    assert same["answer_id"] == a["answer_id"] and "matched_question" in same["warnings"] and same["match"]["how"] == "exact"
+    other = client.post("/v2/ask", json={"question": "על המיילים שנשלחו מה אמרה העדה?"}).json()
+    assert other["answer_id"] == a["answer_id"] and other["match"]["how"] == "model", other
+    again = client.post("/v2/ask", json={"question": "על המיילים שנשלחו מה אמרה העדה?"}).json()
+    assert again["match"]["how"] == "remembered"
+    unrelated = client.post("/v2/ask", json={"question": "מתי התחילה עדותו של אילן ישועה?"}).json()
+    assert unrelated.get("answer_id") != a["answer_id"] and "match" not in unrelated
+    ms = signed(client, "GET", "/v2/admin/curated/matches").json()["items"]
+    mine = [m for m in ms if m["question"] == "על המיילים שנשלחו מה אמרה העדה?" and m["decision"] == "same"]
+    assert mine and mine[0]["approved_question"] == "מה אמרה העדה על המיילים שנשלחו?"
+    assert signed(client, "POST", f"/v2/admin/curated/matches/{mine[0]['id']}/reject").status_code == 200
+    after = client.post("/v2/ask", json={"question": "על המיילים שנשלחו מה אמרה העדה?"}).json()
+    assert after.get("answer_id") != a["answer_id"] and "match" not in after
+    assert signed(client, "PUT", "/v2/admin/curated", {"items": []}).json()["removed"] == 1

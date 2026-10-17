@@ -1086,6 +1086,61 @@ def review_answer(answer_id: str, body: AnswerReviewIn, st: AppState = Depends(g
     return _json({"answer_id": answer_id, "answer_status": status, "envelope": editorial.polish(env)}, cache="no-store")
 
 
+class CuratedItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    answer_id: str = Field(min_length=36, max_length=36)
+    question: str = Field(min_length=1, max_length=500)
+
+
+class CuratedIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[CuratedItem] = Field(default_factory=list, max_length=2000)
+
+
+@router.put("/curated")
+def put_curated(body: CuratedIn, request: Request, st: AppState = Depends(get_state),
+                p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """The questions shown on the site's questions page (17.10.2026): a visitor asking one of them, in these or other
+    words, gets its approved answer. The whole set each time; questions that are new or reworded are embedded."""
+    from ntk_common import curated
+
+    with st.services.engine.begin() as conn:
+        out = curated.sync(conn, [i.model_dump() for i in body.items], st.services.embedder)
+        ops.audit(conn, actor=p.label, action="curated.synced", object_type="curated", object_id="set",
+                  request_id=_rid(request), details=out)
+    if getattr(st, "curated", None) is not None:
+        st.curated.invalidate()
+    return _json(out, cache="no-store")
+
+
+@router.get("/curated/matches")
+def curated_matches(st: AppState = Depends(get_state), limit: int = Query(200, ge=1, le=1000),
+                    p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
+    """Other wordings and the approved question each was matched to (same) or suggested with (related)."""
+    from ntk_common import curated
+
+    with st.services.engine.connect() as conn:
+        return _json({"items": curated.matches(conn, limit)}, cache="no-store")
+
+
+@router.post("/curated/matches/{match_id}/reject")
+def reject_curated_match(match_id: str, request: Request, st: AppState = Depends(get_state),
+                         p: Principal = Depends(admin("admin:publish"))) -> JSONResponse:
+    """The editor says this wording does not ask the approved question: it is answered on its own from now on."""
+    from ntk_common import curated
+
+    if not re.fullmatch(r"[0-9a-f-]{36}", match_id):
+        raise ApiError(400, "invalid_request", "invalid match id")
+    with st.services.engine.begin() as conn:
+        if not curated.reject(conn, match_id, p.label):
+            raise ApiError(404, "not_found", "match not found")
+        ops.audit(conn, actor=p.label, action="curated.match.rejected", object_type="question_match", object_id=match_id,
+                  request_id=_rid(request))
+    if getattr(st, "curated", None) is not None:
+        st.curated.invalidate()
+    return _json({"rejected": match_id}, cache="no-store")
+
+
 @router.get("/whoami")
 def whoami(p: Principal = Depends(admin("admin:read"))) -> JSONResponse:
     return _json({"key_id": p.key_id, "actor": p.actor, "scopes": sorted(p.scopes),

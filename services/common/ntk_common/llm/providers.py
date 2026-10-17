@@ -290,6 +290,17 @@ class MockProvider:
 
     # -- tasks ---------------------------------------------------------------
     @staticmethod
+    def _task_question_match(p: dict) -> dict:
+        """The same question only when its words are the same (order aside)."""
+        def words(t: str) -> set[str]:
+            return {w for w in hebrew.tokens(t or "") if hebrew.is_hebrew_word(w)}
+        q = words(p.get("question", ""))
+        for c in p.get("candidates", []):
+            if q and words(c.get("question", "")) == q:
+                return {"schema_version": "2.0", "match": c["n"], "confidence": 0.9, "reason": "same words"}
+        return {"schema_version": "2.0", "match": None, "confidence": 0.6, "reason": None}
+
+    @staticmethod
     def _first_words(text: str, n: int = 18) -> str:
         words = text.replace("\n", " ").split()
         return " ".join(words[:n]) + ("…" if len(words) > n else "")

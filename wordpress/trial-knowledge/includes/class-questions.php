@@ -23,6 +23,7 @@ class TK_Questions {
 	const OPT_DB     = 'tk_questions_db_version';
 	const OPT_SINCE  = 'tk_questions_since';
 	const OPT_LAST   = 'tk_questions_last_sync';
+	const OPT_CURATED = 'tk_questions_curated_push';
 	const HOOK       = 'tk_questions_sync';
 	const STATES     = array( 'pending', 'shown', 'hidden' );
 
@@ -323,6 +324,40 @@ class TK_Questions {
 		} catch ( TK_Api_Error $e ) {
 			update_option( self::OPT_LAST, array( 'at' => gmdate( 'Y-m-d H:i:s' ), 'error' => $e->getMessage() ), false );
 		}
+		self::push_curated();
+	}
+
+	/** 2.7.17: the questions shown on the questions page, as the API's approved set. Pure, for tests. */
+	public static function curated_items( array $rows ) {
+		$out = array();
+		foreach ( $rows as $r ) {
+			if ( 'shown' === ( $r['state'] ?? '' ) && preg_match( '/^[0-9a-f-]{36}$/', (string) ( $r['answer_id'] ?? '' ) ) ) {
+				$out[] = array( 'answer_id' => (string) $r['answer_id'], 'question' => mb_substr( self::label( $r ), 0, 500 ) );
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Tell the API which questions are shown: a visitor asking one of them, in these or other words, gets its
+	 * approved answer. Sent whenever the shown set may have changed, and hourly. Best effort.
+	 */
+	public static function push_curated() {
+		try {
+			$res = (array) tk_api()->request( 'PUT', '/v2/admin/curated', array( 'items' => self::curated_items( self::rows( 'shown' ) ) ), true );
+			update_option( self::OPT_CURATED, array( 'at' => gmdate( 'Y-m-d H:i:s' ), 'result' => $res ), false );
+			return $res;
+		} catch ( TK_Api_Error $e ) {
+			update_option( self::OPT_CURATED, array( 'at' => gmdate( 'Y-m-d H:i:s' ), 'error' => $e->getMessage() ), false );
+			return null;
+		}
+	}
+
+	/** The shown question that answer belongs to (for links to the questions page), or null. */
+	public static function by_answer( $answer_id ) {
+		global $wpdb;
+		$t = self::table();
+		return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$t} WHERE answer_id = %s AND state = 'shown' LIMIT 1", (string) $answer_id ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery
 	}
 
 	// ------------------------------------------------------------------ open counter (public)

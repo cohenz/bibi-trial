@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -16,6 +17,8 @@ from .. import inflight
 from ..app import ApiError, AppState
 from ..deps import get_state, rate_limit
 from ..schemas import AskRequest, SearchRequestIn
+
+log = logging.getLogger("ntk.api.public")
 
 router = APIRouter(prefix="/v2", tags=["public"])
 
@@ -266,6 +269,20 @@ def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -
 
     budget = AskBudget.from_settings(st.redis, st.settings)
     visitor = getattr(request.state, "ip_hash", None)
+    # an approved question, in these or other words: its approved answer (17.10.2026)
+    m = _curated_match(st, body)
+    if m is not None and m.answer_id:
+        with st.services.engine.connect() as conn:
+            env = pub.answer_by_id(conn, m.answer_id)
+        if env and env.get("answer_status") in {"answered", "false_premise_corrected"}:
+            budget.count("total")
+            budget.count("cached")
+            env.pop("_historical", None)
+            env["latest_permalink"] = None
+            env = {**env, "warnings": [*env.get("warnings", []), "matched_question"], "asked_question": body.question,
+                   "match": {"how": m.how, "similarity": m.similarity}}
+            return _json(env, cache="no-store")
+    related = _related(st, m)
     # the same question is being answered right now (a visitor asking again, or two visitors): wait for that answer
     # rather than paying for a second run
     lock = st.ask.inflight_key(body.question, body.locale) if body.as_of is None else None
@@ -290,7 +307,28 @@ def ask(body: AskRequest, request: Request, st: AppState = Depends(get_state)) -
     budget.count("total")
     if res.cached or not res.model_run_id:  # a new answer was counted by reserve()
         budget.count("cached" if res.cached else "free")
-    return _json(editorial.polish(res.envelope), cache="no-store")
+    out = editorial.polish(res.envelope)
+    if related:
+        out = {**out, "related_answers": related}
+    return _json(out, cache="no-store")
+
+
+def _curated_match(st: AppState, body):
+    """The approved question this one asks, if any; a failure here never stops the answer."""
+    if body.as_of is not None or getattr(st, "curated", None) is None:
+        return None
+    try:
+        return st.curated.match(body.question)
+    except Exception:  # noqa: BLE001 - matching is an optimisation
+        log.exception("curated question match failed")
+        return None
+
+
+def _related(st: AppState, m) -> list[dict]:
+    if m is None or not m.related:
+        return []
+    by_id = {i["answer_id"]: i["question"] for i in st.curated.approved()}
+    return [{"answer_id": a, "question": by_id[a]} for a in m.related if a in by_id][:3]
 
 
 @router.get("/answers/{answer_id}", dependencies=[Depends(rate_limit("public"))])

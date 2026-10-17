@@ -523,6 +523,43 @@ class TK_Render {
 	/**
 	 * @param array $env AnswerEnvelope.
 	 */
+	/** 2.7.17: where an approved question lives on the questions page. */
+	private static function question_link( $answer_id ) {
+		if ( ! class_exists( 'TK_Questions' ) || ! class_exists( 'TK_Public_Pages' ) ) {
+			return '';
+		}
+		$r = TK_Questions::by_answer( (string) $answer_id );
+		return $r ? TK_Public_Pages::section_url( 'questions' ) . '#q-' . TK_Questions::short_id( $r['qkey'] ) : '';
+	}
+
+	/** An approved answer given to a question asked in other words: say which question it answers. */
+	public static function matched_note( array $env ) {
+		if ( ! in_array( 'matched_question', (array) ( $env['warnings'] ?? array() ), true ) ) {
+			return '';
+		}
+		$asked = trim( (string) ( $env['asked_question'] ?? '' ) );
+		$q     = trim( (string) ( $env['question'] ?? '' ) );
+		if ( '' === $q || $asked === $q ) {
+			return '';
+		}
+		$url = self::question_link( (string) ( $env['answer_id'] ?? '' ) );
+		$lbl = '' !== $url ? '<a href="' . esc_url( $url ) . '">' . esc_html( $q ) . '</a>' : esc_html( $q );
+		return '<p class="tk-answer__matched">' . esc_html__( 'שאלה דומה כבר נענתה:', 'trial-knowledge' ) . ' ' . $lbl . '</p>';
+	}
+
+	/** Approved questions near this one, under a new answer. */
+	public static function related_block( array $env ) {
+		$items = (array) ( $env['related_answers'] ?? array() );
+		$li    = '';
+		foreach ( array_slice( $items, 0, 3 ) as $it ) {
+			$url = self::question_link( (string) ( $it['answer_id'] ?? '' ) );
+			if ( '' !== $url ) {
+				$li .= '<li><a href="' . esc_url( $url ) . '">' . esc_html( (string) ( $it['question'] ?? '' ) ) . '</a></li>';
+			}
+		}
+		return '' !== $li ? '<aside class="tk-answer__related"><p>' . esc_html__( 'אולי יעניין אותך גם:', 'trial-knowledge' ) . '</p><ul>' . $li . '</ul></aside>' : '';
+	}
+
 	public static function answer( array $env ) {
 		$cits = array();
 		foreach ( $env['citations'] as $c ) {
@@ -540,7 +577,7 @@ class TK_Render {
 			'significance'   => 'המשמעות',
 			'prosecution'    => 'תשובת התביעה',
 		);
-		$out = '<article class="tk-answer tk-answer--' . esc_attr( $env['answer_status'] ) . '" dir="rtl" lang="he"><p class="tk-answer__short">' . esc_html( $env['answer_short'] ) . '</p>';
+		$out = '<article class="tk-answer tk-answer--' . esc_attr( $env['answer_status'] ) . '" dir="rtl" lang="he">' . self::matched_note( $env ) . '<p class="tk-answer__short">' . esc_html( $env['answer_short'] ) . '</p>';
 		// consecutive sections of kind defense form one section "מה התגלה בדיונים" (2.7.5); 2.7.12: as paragraphs,
 		// each with its sources — a numbered list of fragments read as a list of talking points
 		$groups = array();
@@ -577,6 +614,7 @@ class TK_Render {
 				$out .= '</ul>';
 			}
 		}
+		$out .= self::related_block( $env );
 		$out .= '<p class="tk-answer__meta tk-muted">' . esc_html( sprintf( __( 'נכון ל־%1$s · גרסת מאגר %2$s', 'trial-knowledge' ), substr( $env['as_of'], 0, 10 ), $env['corpus_version'] ) ) .
 			' · <a href="' . esc_url( TK_Public_Pages::url( 'answer', $env['answer_id'] ) ) . '">' . esc_html__( 'קישור קבוע', 'trial-knowledge' ) . '</a></p>';
 		if ( ! empty( $env['latest_permalink'] ) ) {

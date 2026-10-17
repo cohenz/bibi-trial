@@ -796,3 +796,11 @@ html :where([class*="tk-"], [class*="tk315-"]) a:is(:hover, :focus), html a:wher
 .tk-qadmin td { vertical-align: top; }
 .tk-qadmin details { margin-block-start: .4rem; }
 .tk-qadmin__next summary { color: #8a4b00; }
+
+/* 2.7.17: an approved answer given to a question asked in other words; approved questions near a new answer */
+html .tk-answer__matched { margin: 0 0 .6em; padding: .45em .7em; border-inline-start: 3px solid var(--tk-accent, #1f4e79); background: var(--tk-soft, #f3f6fb); color: var(--tk-ink, #1f2937); font-size: .95em; }
+html .tk-answer__matched a { color: var(--tk-accent, #1f4e79); text-decoration: underline; }
+html .tk-answer__related { margin-top: 1em; padding-top: .6em; border-top: 1px solid var(--tk-line, #e5e7eb); }
+html .tk-answer__related p { margin: 0 0 .3em; font-weight: 600; color: var(--tk-ink, #1f2937); }
+html .tk-answer__related ul { margin: 0; padding-inline-start: 1.2em; }
+html .tk-answer__related a { color: var(--tk-accent, #1f4e79); text-decoration: underline; }

@@ -19,6 +19,7 @@ class TK_Admin_Questions {
 	public static function init() {
 		add_action( 'admin_post_' . self::ACTION, array( __CLASS__, 'handle' ) );
 		add_action( 'admin_post_' . self::HELD_ACTION, array( __CLASS__, 'handle_held' ) );
+		add_action( 'admin_post_' . self::MATCH_ACTION, array( __CLASS__, 'handle_match' ) );
 	}
 
 	/**
@@ -60,7 +61,7 @@ class TK_Admin_Questions {
 		}
 		TK_Questions::maybe_upgrade();
 		$state = isset( $_GET['tk_state'] ) ? sanitize_key( wp_unslash( $_GET['tk_state'] ) ) : 'pending'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only filter
-		if ( ! in_array( $state, array( 'all', 'held' ), true ) && ! in_array( $state, TK_Questions::STATES, true ) ) {
+		if ( ! in_array( $state, array( 'all', 'held', 'matches' ), true ) && ! in_array( $state, TK_Questions::STATES, true ) ) {
 			$state = 'pending';
 		}
 		echo '<div class="wrap tk-admin" dir="rtl"><h1>' . esc_html__( 'שאלות מבקרים', 'trial-knowledge' ) . '</h1>';
@@ -84,6 +85,16 @@ class TK_Admin_Questions {
 				$env = (array) ( $a['envelope'] ?? array() );
 				echo '<p>' . esc_html__( 'עריכת תשובה שפורסמה: אפשר לשנות נוסח של כל משפט או להשמיט אותו. הציטוטים של המשפט נשארים כמו שהם — שנו נוסח, לא עובדות.', 'trial-knowledge' ) . '</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				echo self::editor( $edit, (string) ( $a['question'] ?? '' ), (string) ( $env['answer_short'] ?? '' ), (array) ( $env['sections'] ?? array() ), array(), array(), 'edit' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in editor()
+			} catch ( TK_Api_Error $e ) {
+				echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
+			}
+			echo '</div>';
+			return;
+		}
+		if ( 'matches' === $state ) {
+			echo self::tabs( $counts, $state ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped
+			try {
+				echo self::render_matches( (array) ( tk_api()->get( '/v2/admin/curated/matches?limit=300', true )['items'] ?? array() ), (array) get_option( TK_Questions::OPT_CURATED, array() ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in render_matches()
 			} catch ( TK_Api_Error $e ) {
 				echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
 			}
@@ -172,14 +183,59 @@ class TK_Admin_Questions {
 		return $out . '</tbody></table></form>';
 	}
 
+	const MATCH_ACTION = 'tk_curated_reject';
+
+	/**
+	 * 2.7.17: other wordings of the shown questions. "Same" ones get the approved answer; a wrong match is undone here
+	 * (that wording is answered on its own from then on). @param array $items /v2/admin/curated/matches.
+	 */
+	public static function render_matches( array $items, array $last ) {
+		$out  = '<p>' . esc_html__( 'מבקר ששואל שאלה שמוצגת בעמוד השאלות, באותן מילים או בניסוח אחר, מקבל את התשובה המאושרת במקום תשובה חדשה. ניסוח אחר מזוהה בהשוואת משמעות, ומודל זול מאשר שזו אותה שאלה. כאן רואים כל ניסוח והשאלה שאליה הופנה, ואפשר לבטל התאמה שגויה.', 'trial-knowledge' ) . '</p>';
+		$out .= '<p class="description">' . esc_html( ! empty( $last['at'] ) ? sprintf( 'עדכון אחרון של רשימת השאלות המאושרות בשרת: %1$s UTC%2$s', $last['at'], ! empty( $last['error'] ) ? ' — נכשל: ' . $last['error'] : ' — ' . (int) ( $last['result']['approved'] ?? 0 ) . ' שאלות' ) : 'רשימת השאלות המאושרות עוד לא נשלחה לשרת (נשלחת בכל שינוי בטבלה ופעם בשעה).' ) . '</p>';
+		if ( ! $items ) {
+			return $out . '<p>' . esc_html__( 'עוד לא הופנו ניסוחים.', 'trial-knowledge' ) . '</p>';
+		}
+		$names = array( 'same' => 'הופנה לתשובה המאושרת', 'related' => 'הוצעה כשאלה קרובה', 'rejected' => 'ההתאמה בוטלה' );
+		$out  .= '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'מה המבקר שאל', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'השאלה המאושרת', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'דמיון', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'מה נעשה', 'trial-knowledge' ) . '</th><th></th></tr></thead><tbody>';
+		foreach ( $items as $m ) {
+			$id   = (string) ( $m['id'] ?? '' );
+			$out .= '<tr><td>' . esc_html( (string) ( $m['question'] ?? '' ) ) . '</td><td>' . esc_html( (string) ( $m['approved_question'] ?? '—' ) ) . '</td><td>' . esc_html( null !== ( $m['similarity'] ?? null ) ? number_format( (float) $m['similarity'], 2 ) : '—' ) . '</td><td>' .
+				esc_html( $names[ $m['decision'] ?? '' ] ?? (string) ( $m['decision'] ?? '' ) ) . '</td><td>';
+			if ( 'rejected' !== ( $m['decision'] ?? '' ) && preg_match( '/^[0-9a-f-]{36}$/', $id ) ) {
+				$out .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">' . wp_nonce_field( self::MATCH_ACTION . '_' . $id, '_wpnonce', true, false ) .
+					'<input type="hidden" name="action" value="' . esc_attr( self::MATCH_ACTION ) . '"><input type="hidden" name="match_id" value="' . esc_attr( $id ) . '">' .
+					'<button class="button">' . esc_html__( 'זו לא אותה שאלה', 'trial-knowledge' ) . '</button></form>';
+			}
+			$out .= '</td></tr>';
+		}
+		return $out . '</tbody></table>';
+	}
+
+	public static function handle_match() {
+		if ( ! current_user_can( TK_Permissions::CAP_REVIEW ) ) {
+			wp_die( esc_html__( 'אין הרשאה.', 'trial-knowledge' ), 403 );
+		}
+		$id = isset( $_POST['match_id'] ) ? sanitize_text_field( wp_unslash( $_POST['match_id'] ) ) : '';
+		check_admin_referer( self::MATCH_ACTION . '_' . $id );
+		try {
+			tk_api()->post( '/v2/admin/curated/matches/' . rawurlencode( $id ) . '/reject', new stdClass(), true );
+			$msg = __( 'ההתאמה בוטלה: הניסוח הזה ייענה מעכשיו בנפרד.', 'trial-knowledge' );
+		} catch ( TK_Api_Error $e ) {
+			$msg = $e->getMessage();
+		}
+		wp_safe_redirect( add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_state' => 'matches', 'tk_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
+		exit;
+	}
+
 	/** The tabs: the questions' states, all, and the answers held for the editor. */
 	public static function tabs( array $counts, $state ) {
 		$base  = admin_url( 'admin.php?page=trial-knowledge-questions' );
-		$names = array( 'pending' => 'ממתינות', 'shown' => 'מוצגות באתר', 'hidden' => 'מוסתרות', 'all' => 'הכול', 'held' => 'תשובות שנעצרו לבדיקה' );
+		$names = array( 'pending' => 'ממתינות', 'shown' => 'מוצגות באתר', 'hidden' => 'מוסתרות', 'all' => 'הכול', 'held' => 'תשובות שנעצרו לבדיקה', 'matches' => 'ניסוחים שהופנו לשאלות מאושרות' );
 		$tabs  = array();
 		foreach ( $names as $k => $label ) {
 			$n      = 'all' === $k ? array_sum( array_intersect_key( $counts, array_flip( TK_Questions::STATES ) ) ) : (int) ( $counts[ $k ] ?? 0 );
-			$tabs[] = '<li><a href="' . esc_url( add_query_arg( 'tk_state', $k, $base ) ) . '"' . ( $k === $state ? ' class="current" aria-current="page"' : '' ) . '>' . esc_html( $label ) . ' <span class="count">(' . $n . ')</span></a></li>';
+			$count  = 'matches' === $k ? '' : ' <span class="count">(' . $n . ')</span>';
+			$tabs[] = '<li><a href="' . esc_url( add_query_arg( 'tk_state', $k, $base ) ) . '"' . ( $k === $state ? ' class="current" aria-current="page"' : '' ) . '>' . esc_html( $label ) . $count . '</a></li>';
 		}
 		return '<ul class="subsubsub">' . implode( ' | ', $tabs ) . '</ul><br class="clear">';
 	}
@@ -435,6 +491,10 @@ class TK_Admin_Questions {
 			$msg = __( 'התשובה החדשה מוצגת עכשיו.', 'trial-knowledge' );
 		} else {
 			$msg = __( 'השינויים נשמרו.', 'trial-knowledge' );
+		}
+		// 2.7.17: the shown questions (and their wording) are the API's approved set
+		if ( null === TK_Questions::push_curated() ) {
+			$msg .= ' ' . __( '(עדכון רשימת השאלות המאושרות בשרת נכשל — ינסה שוב בעוד שעה.)', 'trial-knowledge' );
 		}
 		wp_safe_redirect( add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_state' => $state, 'tk_msg' => rawurlencode( $msg ) ), admin_url( 'admin.php' ) ) );
 		exit;

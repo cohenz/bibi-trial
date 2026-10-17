@@ -108,3 +108,17 @@ $html = TK_Admin_Questions::editor( '11111111-1111-1111-1111-111111111111', 'ש�
 TK_T::ok( false !== strpos( $html, 'name="edits[answer_short]"' ) && false !== strpos( $html, 'name="edits[sections/0]"' ) && false === strpos( $html, 'קצר <b>' ) && false !== strpos( $html, 'שמירת העריכה' ) && false === strpos( $html, 'value="reject"' ), 'editor (edit mode): textareas, escaped, save only' );
 $html = TK_Admin_Questions::editor( '11111111-1111-1111-1111-111111111111', '', 'קצר', array( array( 'kind' => 'defense', 'text' => 'פסקה' ) ), array( 'sections/0' => array( 'supported' => 'partial', 'attribution_ok' => true ) ), array(), 'held' );
 TK_T::ok( false !== strpos( $html, 'value="reject"' ) && false !== strpos( $html, 'value="sections/0" checked' ), 'editor (held): a sentence the verifier did not approve is ticked to omit' );
+// --- 2.7.17: shown questions are the API's approved set; an approved answer to a reworded question says so
+$aid = '22222222-2222-2222-2222-222222222222';
+$items = TK_Questions::curated_items( array(
+	array( 'state' => 'shown', 'answer_id' => $aid, 'question' => 'מקור', 'display_question' => 'נוסח מוצג', 'qkey' => 'k1' ),
+	array( 'state' => 'pending', 'answer_id' => '33333333-3333-3333-3333-333333333333', 'question' => 'ממתינה', 'display_question' => '', 'qkey' => 'k2' ),
+	array( 'state' => 'shown', 'answer_id' => 'bogus', 'question' => 'x', 'display_question' => '', 'qkey' => 'k3' ),
+) );
+TK_T::eq( array( array( 'answer_id' => $aid, 'question' => 'נוסח מוצג' ) ), $items, 'curated: only shown questions with an answer id, as displayed' );
+$note = TK_Render::matched_note( array( 'warnings' => array( 'matched_question' ), 'question' => 'השאלה <b>המאושרת</b>', 'asked_question' => 'ניסוח אחר', 'answer_id' => $aid ) );
+TK_T::ok( false !== strpos( $note, 'שאלה דומה כבר נענתה' ) && false === strpos( $note, '<b>' ), 'matched note: shown and escaped' );
+TK_T::eq( '', TK_Render::matched_note( array( 'warnings' => array( 'matched_question' ), 'question' => 'אותה', 'asked_question' => 'אותה' ) ), 'matched note: not when asked word for word' );
+TK_T::eq( '', TK_Render::matched_note( array( 'warnings' => array(), 'question' => 'א', 'asked_question' => 'ב' ) ), 'matched note: only for a matched answer' );
+$html = TK_Admin_Questions::render_matches( array( array( 'id' => '44444444-4444-4444-4444-444444444444', 'question' => 'ניסוח <i>', 'approved_question' => 'מאושרת', 'similarity' => 0.91, 'decision' => 'same' ) ), array() );
+TK_T::ok( false !== strpos( $html, 'זו לא אותה שאלה' ) && false === strpos( $html, '<i>' ) && false !== strpos( $html, '0.91' ), 'matches tab: a wrong match can be undone' );

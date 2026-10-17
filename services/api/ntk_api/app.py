@@ -49,6 +49,7 @@ class AppState:
     limiter: RateLimiter
     ask: AskEngine
     redis: Any = None
+    curated: Any = None  # ntk_common.curated.Matcher (17.10.2026)
 
 
 def _redis(url: str):
@@ -74,8 +75,11 @@ def build_state(settings: Settings, *, queue: JobQueue | None = None, services: 
                               independent_verifier=not services.registry.single_family,
                               thinking=settings.ask_thinking, verify_thinking=settings.ask_verify_thinking,
                               lens=settings.ask_lens))
+    from ntk_common.curated import Matcher
+
+    matcher = Matcher(engine, services.embedder, services.runner, corpus_version=ask.store.corpus_version)
     return AppState(settings=settings, services=services, queue=queue or CeleryQueue(settings.redis_url),
-                    nonces=NonceStore(r), limiter=RateLimiter(r), ask=ask, redis=r)
+                    nonces=NonceStore(r), limiter=RateLimiter(r), ask=ask, redis=r, curated=matcher)
 
 
 def create_app(state: AppState | None = None) -> FastAPI:

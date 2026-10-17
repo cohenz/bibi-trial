@@ -76,6 +76,20 @@ class TK_Admin_Questions {
 		}
 		$counts         = TK_Questions::counts();
 		$counts['held'] = count( $held );
+		$edit = isset( $_GET['tk_edit'] ) ? sanitize_text_field( wp_unslash( $_GET['tk_edit'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only
+		if ( preg_match( '/^[0-9a-f-]{36}$/', $edit ) ) {
+			echo self::tabs( $counts, $state ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped
+			try {
+				$a   = (array) tk_api()->get( '/v2/admin/answers/' . rawurlencode( $edit ), true );
+				$env = (array) ( $a['envelope'] ?? array() );
+				echo '<p>' . esc_html__( 'עריכת תשובה שפורסמה: אפשר לשנות נוסח של כל משפט או להשמיט אותו. הציטוטים של המשפט נשארים כמו שהם — שנו נוסח, לא עובדות.', 'trial-knowledge' ) . '</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo self::editor( $edit, (string) ( $a['question'] ?? '' ), (string) ( $env['answer_short'] ?? '' ), (array) ( $env['sections'] ?? array() ), array(), array(), 'edit' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in editor()
+			} catch ( TK_Api_Error $e ) {
+				echo '<div class="notice notice-error"><p>' . esc_html( $e->getMessage() ) . '</p></div>';
+			}
+			echo '</div>';
+			return;
+		}
 		if ( 'held' === $state ) {
 			$details = array();
 			foreach ( array_slice( $held, 0, 15 ) as $it ) {
@@ -150,6 +164,9 @@ class TK_Admin_Questions {
 			if ( '' !== (string) $r['next_envelope'] ) {
 				$out .= '<button type="submit" class="button" name="do" value="accept:' . esc_attr( $k ) . '">' . esc_html__( 'החלפה בתשובה החדשה', 'trial-knowledge' ) . '</button>';
 			}
+			if ( preg_match( '/^[0-9a-f-]{36}$/', (string) $r['answer_id'] ) ) {
+				$out .= ' <a class="button" href="' . esc_url( add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_edit' => (string) $r['answer_id'] ), admin_url( 'admin.php' ) ) ) . '">' . esc_html__( 'עריכת התשובה', 'trial-knowledge' ) . '</a>';
+			}
 			$out .= '</td></tr>';
 		}
 		return $out . '</tbody></table></form>';
@@ -197,7 +214,6 @@ class TK_Admin_Questions {
 		if ( ! $items ) {
 			return $out . '<p>' . esc_html__( 'אין תשובות שמחכות לבדיקה.', 'trial-knowledge' ) . '</p>';
 		}
-		$kinds = array( 'allegation' => 'טענת התביעה', 'defense' => 'מה התגלה בדיונים', 'significance' => 'המשמעות', 'prosecution' => 'תשובת התביעה', 'court_position' => 'בית המשפט', 'why' => 'הסבר', 'supports' => 'מחזק', 'weakens' => 'מחליש', 'status' => 'סטטוס', 'limitation' => 'הסתייגות' );
 		foreach ( $items as $a ) {
 			$id    = (string) ( $a['answer_id'] ?? '' );
 			$draft = (array) ( $a['writer']['output'] ?? array() );
@@ -215,26 +231,61 @@ class TK_Admin_Questions {
 			}
 			$out .= '<div class="tk-held postbox" style="padding:12px 16px;margin-block:16px"><h2 style="margin-top:0">' . esc_html( (string) ( $a['question'] ?? '' ) ) . '</h2>' .
 				'<p class="description">' . esc_html( substr( (string) ( $a['created_at'] ?? '' ), 0, 16 ) . ' · ' . __( 'למה נעצרה:', 'trial-knowledge' ) . ' ' . ( implode( ' · ', self::why_held( (array) ( $a['gate_report'] ?? array() ) ) ) ?: '—' ) ) . '</p>';
-			if ( empty( $draft['sections'] ) ) {
-				$out .= '<p>' . esc_html__( 'אין טיוטה כתובה לתשובה הזו (הכתיבה נכשלה). אפשר רק לדחות.', 'trial-knowledge' ) . '</p>';
+			foreach ( (array) ( $a['verifier']['output']['omitted_counterevidence'] ?? array() ) as $o ) {
+				$out .= '<p class="notice notice-warning inline" style="padding:6px 10px">' . esc_html( 'הבודק מצא חומר סותר שהתשובה לא מזכירה: ' . (string) ( $o['note'] ?? '' ) ) . '</p>';
 			}
-			$out .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">' . wp_nonce_field( self::HELD_ACTION . '_' . $id, '_wpnonce', true, false ) .
-				'<input type="hidden" name="action" value="' . esc_attr( self::HELD_ACTION ) . '"><input type="hidden" name="answer_id" value="' . esc_attr( $id ) . '">';
-			if ( ! empty( $draft['sections'] ) ) {
-				$sv   = $v['answer_short'] ?? array();
-				$out .= '<p><strong>' . esc_html__( 'בקצרה:', 'trial-knowledge' ) . '</strong> ' . esc_html( (string) ( $draft['answer_short'] ?? '' ) ) . self::verdict( $sv, isset( $weak['answer_short'] ) ) . '</p>';
-				$out .= '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'להשמיט', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'סוג', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'המשפט', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'מה אמרו הבדיקות', 'trial-knowledge' ) . '</th></tr></thead><tbody>';
-				foreach ( (array) $draft['sections'] as $i => $sec ) {
-					$path = 'sections/' . $i;
-					$x    = $v[ $path ] ?? array();
-					$bad  = $x && ( 'yes' !== ( $x['supported'] ?? '' ) || empty( $x['attribution_ok'] ) || ! empty( $x['judicial_overstatement'] ) || ! empty( $x['false_premise'] ) );
-					$out .= '<tr><td><input type="checkbox" name="omit[]" value="' . esc_attr( $path ) . '"' . ( $bad ? ' checked' : '' ) . ' aria-label="' . esc_attr__( 'להשמיט את המשפט', 'trial-knowledge' ) . '"></td>' .
-						'<td>' . esc_html( $kinds[ $sec['kind'] ?? '' ] ?? (string) ( $sec['kind'] ?? '' ) ) . '</td><td>' . esc_html( (string) ( $sec['text'] ?? '' ) ) . '</td><td>' . self::verdict( $x, isset( $weak[ $path ] ) ) . '</td></tr>';
-				}
-				$out .= '</tbody></table>';
+			$out .= self::editor( $id, '', (string) ( $draft['answer_short'] ?? '' ), (array) ( $draft['sections'] ?? array() ), $v, $weak, 'held' ) . '</div>';
+		}
+		return $out;
+	}
+
+	/**
+	 * 2.7.16: the editor's form for an answer — every sentence editable (its citations stay), any one can be left out.
+	 * $mode 'held': approve (publish) or reject; 'edit': save the new wording of a published answer.
+	 */
+	public static function editor( $id, $question, $short, array $sections, array $v, array $weak, $mode ) {
+		$kinds = array( 'allegation' => 'טענת התביעה', 'defense' => 'מה התגלה בדיונים', 'significance' => 'המשמעות', 'prosecution' => 'תשובת התביעה', 'court_position' => 'בית המשפט', 'why' => 'הסבר', 'supports' => 'מחזק', 'weakens' => 'מחליש', 'status' => 'סטטוס', 'limitation' => 'הסתייגות' );
+		$out   = '' !== $question ? '<h2>' . esc_html( $question ) . '</h2>' : '';
+		$out  .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">' . wp_nonce_field( self::HELD_ACTION . '_' . $id, '_wpnonce', true, false ) .
+			'<input type="hidden" name="action" value="' . esc_attr( self::HELD_ACTION ) . '"><input type="hidden" name="answer_id" value="' . esc_attr( $id ) . '"><input type="hidden" name="mode" value="' . esc_attr( $mode ) . '">';
+		if ( ! $sections ) {
+			$out .= '<p>' . esc_html__( 'אין טיוטה כתובה לתשובה הזו (הכתיבה נכשלה). אפשר רק לדחות.', 'trial-knowledge' ) . '</p>';
+		} else {
+			$out .= '<p><label><strong>' . esc_html__( 'בקצרה:', 'trial-knowledge' ) . '</strong>' . self::verdict( $v['answer_short'] ?? array(), isset( $weak['answer_short'] ) ) .
+				'<textarea class="large-text" rows="4" name="edits[answer_short]">' . esc_textarea( $short ) . '</textarea></label>' .
+				'<input type="hidden" name="orig[answer_short]" value="' . esc_attr( md5( self::norm( $short ) ) ) . '"></p>';
+			$out .= '<table class="widefat striped"><thead><tr><th>' . esc_html__( 'להשמיט', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'סוג', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'המשפט (אפשר לערוך)', 'trial-knowledge' ) . '</th><th>' . esc_html__( 'מה אמרו הבדיקות', 'trial-knowledge' ) . '</th></tr></thead><tbody>';
+			foreach ( $sections as $i => $sec ) {
+				$path = 'sections/' . $i;
+				$x    = $v[ $path ] ?? array();
+				$bad  = $x && ( 'yes' !== ( $x['supported'] ?? '' ) || empty( $x['attribution_ok'] ) || ! empty( $x['judicial_overstatement'] ) || ! empty( $x['false_premise'] ) );
+				$text = (string) ( $sec['text'] ?? '' );
+				$out .= '<tr><td><input type="checkbox" name="omit[]" value="' . esc_attr( $path ) . '"' . ( $bad ? ' checked' : '' ) . ' aria-label="' . esc_attr__( 'להשמיט את המשפט', 'trial-knowledge' ) . '"></td>' .
+					'<td>' . esc_html( $kinds[ $sec['kind'] ?? '' ] ?? (string) ( $sec['kind'] ?? '' ) ) . '</td><td><textarea class="large-text" rows="' . esc_attr( (string) min( 12, 2 + intdiv( mb_strlen( $text ), 90 ) ) ) . '" name="edits[' . esc_attr( $path ) . ']">' . esc_textarea( $text ) . '</textarea>' .
+					'<input type="hidden" name="orig[' . esc_attr( $path ) . ']" value="' . esc_attr( md5( self::norm( $text ) ) ) . '"></td><td>' . self::verdict( $x, isset( $weak[ $path ] ) ) . '</td></tr>';
 			}
-			$out .= '<p>' . ( ! empty( $draft['sections'] ) ? '<button type="submit" class="button button-primary" name="decision" value="approve">' . esc_html__( 'אישור ופרסום', 'trial-knowledge' ) . '</button> ' : '' ) .
-				'<button type="submit" class="button" name="decision" value="reject">' . esc_html__( 'דחייה (להשאיר רק קטעים)', 'trial-knowledge' ) . '</button></p></form></div>';
+			$out .= '</tbody></table>';
+		}
+		if ( 'edit' === $mode ) {
+			return $out . '<p><button type="submit" class="button button-primary" name="decision" value="approve">' . esc_html__( 'שמירת העריכה', 'trial-knowledge' ) . '</button></p></form>';
+		}
+		return $out . '<p>' . ( $sections ? '<button type="submit" class="button button-primary" name="decision" value="approve">' . esc_html__( 'אישור ופרסום', 'trial-knowledge' ) . '</button> ' : '' ) .
+			'<button type="submit" class="button" name="decision" value="reject">' . esc_html__( 'דחייה (להשאיר רק קטעים)', 'trial-knowledge' ) . '</button></p></form>';
+	}
+
+	private static function norm( $t ) {
+		return trim( str_replace( "\r\n", "\n", (string) $t ) );
+	}
+
+	/** The edits the editor made: only sentences whose text changed. Pure, for tests. */
+	public static function changed_edits( array $edits, array $orig ) {
+		$out = array();
+		foreach ( $edits as $path => $text ) {
+			$path = (string) $path;
+			$text = self::norm( (string) $text );
+			if ( preg_match( '#^(answer_short|sections/[0-9]{1,2})$#', $path ) && '' !== $text && md5( $text ) !== (string) ( $orig[ $path ] ?? '' ) ) {
+				$out[ $path ] = $text;
+			}
 		}
 		return $out;
 	}
@@ -262,14 +313,31 @@ class TK_Admin_Questions {
 		$omit     = isset( $_POST['omit'] ) ? array_values( array_filter( array_map( 'sanitize_text_field', (array) wp_unslash( $_POST['omit'] ) ), static function ( $p ) {
 			return 1 === preg_match( '#^sections/[0-9]{1,2}$#', $p );
 		} ) ) : array();
-		$back     = add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_state' => 'held' ), admin_url( 'admin.php' ) );
+		$mode     = isset( $_POST['mode'] ) && 'edit' === $_POST['mode'] ? 'edit' : 'held';
+		$edits    = self::changed_edits( (array) wp_unslash( $_POST['edits'] ?? array() ), array_map( 'strval', (array) wp_unslash( $_POST['orig'] ?? array() ) ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- plain text, escaped on output
+		$edits    = array_map( 'sanitize_textarea_field', $edits );
+		$back     = 'edit' === $mode ? add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_edit' => $id ), admin_url( 'admin.php' ) )
+			: add_query_arg( array( 'page' => 'trial-knowledge-questions', 'tk_state' => 'held' ), admin_url( 'admin.php' ) );
 		if ( ! preg_match( '/^[0-9a-f-]{36}$/', $id ) || ! in_array( $decision, array( 'approve', 'reject' ), true ) ) {
 			wp_safe_redirect( add_query_arg( 'tk_msg', rawurlencode( __( 'בקשה לא תקינה.', 'trial-knowledge' ) ), $back ) );
 			exit;
 		}
 		try {
-			$res = (array) tk_api()->post( '/v2/admin/answers/' . $id . '/review', array( 'decision' => $decision, 'omit' => $omit ), true );
-			if ( 'approve' === $decision ) {
+			$body = array( 'decision' => $decision, 'omit' => $omit );
+			if ( $edits && 'approve' === $decision ) {
+				$body['edits'] = (object) $edits;
+			}
+			$res = (array) tk_api()->post( '/v2/admin/answers/' . $id . '/review', $body, true );
+			if ( 'approve' === $decision && 'edit' === $mode ) {
+				$env = (array) ( $res['envelope'] ?? array() );
+				$row = TK_Questions::get( TK_Questions::qkey( (string) ( $env['normalized_question'] ?? '' ) ) );
+				if ( $row && (string) $row['answer_id'] === $id ) {
+					$row             = (array) $row;
+					$row['envelope'] = wp_json_encode( $env, JSON_UNESCAPED_UNICODE );
+					TK_Questions::put( $row );
+				}
+				$msg = sprintf( __( 'העריכה נשמרה (%1$d משפטים נערכו, %2$d הושמטו).', 'trial-knowledge' ), count( $edits ), count( $omit ) );
+			} elseif ( 'approve' === $decision ) {
 				$env = (array) ( $res['envelope'] ?? array() );
 				$row = TK_Questions::merge(
 					TK_Questions::get( TK_Questions::qkey( (string) ( $env['normalized_question'] ?? '' ) ) ),
@@ -279,7 +347,7 @@ class TK_Admin_Questions {
 				if ( $row ) {
 					TK_Questions::put( $row );
 				}
-				$msg = sprintf( __( 'התשובה פורסמה (%d משפטים הושמטו). היא בלשונית "ממתינות" לעמוד השאלות.', 'trial-knowledge' ), count( $omit ) );
+				$msg = sprintf( __( 'התשובה פורסמה (%1$d משפטים נערכו, %2$d הושמטו). היא בלשונית "ממתינות" לעמוד השאלות.', 'trial-knowledge' ), count( $edits ), count( $omit ) );
 			} else {
 				$msg = __( 'התשובה נדחתה; המבקרים ימשיכו לראות רק את הקטעים.', 'trial-knowledge' );
 			}

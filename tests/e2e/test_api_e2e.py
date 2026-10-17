@@ -190,6 +190,17 @@ def test_full_flow(client, fixture_pdf, services):
     again = signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "reject"})
     assert again.status_code == 409  # only a held answer can be reviewed
     assert signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review", {"decision": "maybe"}).status_code in (400, 409)
+    # the editor's wording (17.10.2026): a published answer is edited as published, its citations kept
+    before = client.get(f"/v2/answers/{a1['answer_id']}").json()
+    ed = signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review",
+                {"decision": "approve", "edits": {"answer_short": "נוסח העורך [su_" + "0" * 26 + "]", "sections/0": "פסקה ערוכה"}})
+    assert ed.status_code == 200, ed.text
+    env2 = ed.json()["envelope"]
+    assert env2["answer_short"] == "נוסח העורך" and env2["sections"][0]["text"] == "פסקה ערוכה"
+    assert len(env2["sections"]) == len(before["sections"]) and env2["sections"][0]["citation_ids"] == before["sections"][0]["citation_ids"]
+    assert {c["source_unit_id"] for c in env2["citations"]} == {c["source_unit_id"] for c in before["citations"]}
+    assert signed(client, "POST", f"/v2/admin/answers/{a1['answer_id']}/review",
+                  {"decision": "approve", "edits": {"sections/x": "a"}}).status_code == 400
 
     # a source before deciding what to do with it; its type corrected (16.10.2026)
     sv0 = client.get("/v2/hearings").json()["items"][0]["source_version_id"]

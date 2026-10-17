@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
@@ -30,7 +31,7 @@ from ntk_common.jobs import (
     TASK_VERIFY_ARTIFACT,
 )
 from ntk_common.orchestrator import STAGES, doc_input_from_manifest, job_idempotency_key
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..app import ApiError, AppState
 from ..deps import admin, get_state
@@ -1001,6 +1002,8 @@ class AnswerReviewIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     decision: str
     omit: list[str] = []
+    # 17.10.2026: the editor's wording for a sentence ("answer_short" or "sections/N"); its citations stay
+    edits: dict[str, str] = Field(default_factory=dict, max_length=40)
     notes: str | None = None
 
 
@@ -1022,8 +1025,13 @@ def review_answer(answer_id: str, body: AnswerReviewIn, st: AppState = Depends(g
                          FROM ntk.answers WHERE id::text = :i FOR UPDATE""", {"i": answer_id})
         if a is None:
             raise ApiError(404, "not_found", "answer not found")
-        if a["answer_status"] != "requires_human_review":
-            raise ApiError(409, "conflict", "only a held answer can be reviewed")
+        published_edit = a["answer_status"] in {"answered", "false_premise_corrected"}
+        if a["answer_status"] != "requires_human_review" and not (published_edit and body.decision == "approve"):
+            raise ApiError(409, "conflict", "only a held answer can be reviewed, and a published one only edited")
+        bad = [k for k, v in body.edits.items()
+               if not re.fullmatch(r"answer_short|sections/\d{1,2}", k) or not (v or "").strip() or len(v) > 4000]
+        if bad:
+            raise ApiError(400, "invalid_request", f"invalid edits: {bad[:3]}")
         gr = dict(a["gate_report"] or {})
         decided = {"decision": body.decision, "by": p.label, "at": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat(),
                    "omit": body.omit, "notes": body.notes}
@@ -1032,16 +1040,28 @@ def review_answer(answer_id: str, body: AnswerReviewIn, st: AppState = Depends(g
         if body.decision == "approve":
             run = row(conn, "SELECT input, output FROM ntk.model_runs WHERE id::text = :r", {"r": a["model_run_id"] or ""})
             draft = (run or {}).get("output") or {}
+            if published_edit:
+                # a published answer is edited as published (pruned sentences stay out), not from the writer's draft
+                in_sections = {c for x in env.get("sections", []) for c in x.get("citation_ids", [])}
+                draft = {"answer_status": a["answer_status"], "answer_short": env.get("answer_short") or "",
+                         # the summary's citations are the envelope's citations no section uses
+                         "answer_short_citation_ids": [c["source_unit_id"] for c in env.get("citations", [])
+                                                       if c.get("source_unit_id") not in in_sections],
+                         "sections": [{"kind": x["kind"], "text": x["text"], "citation_ids": x.get("citation_ids", [])}
+                                      for x in env.get("sections", [])]}
             if not draft.get("sections") or draft.get("answer_status") not in {"answered", "false_premise_corrected"}:
                 raise ApiError(409, "conflict", "this answer has no written draft to approve")
             # the passages the writer was given: only those may be cited
             allowed = {c.get("id") for c in ((run or {}).get("input") or {}).get("context", [])} | set(a["retrieval_ids"] or [])
-            short, short_ids = move_inline_ids(draft["answer_short"], draft.get("answer_short_citation_ids") or [], allowed)
+            if published_edit:
+                allowed |= {c.get("source_unit_id") for c in env.get("citations", [])}
+            short, short_ids = move_inline_ids(body.edits.get("answer_short") or draft["answer_short"],
+                                               draft.get("answer_short_citation_ids") or [], allowed)
             sections = []
             for i, sec in enumerate(draft["sections"]):
                 if f"sections/{i}" in body.omit:
                     continue
-                text, cids = move_inline_ids(sec["text"], sec.get("citation_ids") or [], allowed)
+                text, cids = move_inline_ids(body.edits.get(f"sections/{i}") or sec["text"], sec.get("citation_ids") or [], allowed)
                 sections.append({"kind": sec["kind"], "text": text, "citation_ids": cids})
             if not any(s["kind"] != "limitation" for s in sections):
                 raise ApiError(400, "invalid_request", "nothing would be left to publish")
@@ -1054,12 +1074,13 @@ def review_answer(answer_id: str, body: AnswerReviewIn, st: AppState = Depends(g
                    "warnings": ["human_approved"] + [w for w in env.get("warnings", []) if w not in {"requires_human_review"}],
                    "review": {**env.get("review", {}), "state": "approved", "reviewer": p.label, "reviewed_at": decided["at"]}}
             contracts.validate("AnswerEnvelope", env)
+        decided["edits"] = sorted(body.edits)
         gr["human_review"] = decided
         execute(conn, """UPDATE ntk.answers SET answer_status = :s, envelope = CAST(:e AS jsonb), gate_report = CAST(:g AS jsonb)
                          WHERE id::text = :i""", {"s": status, "e": json.dumps(env, ensure_ascii=False),
                                                   "g": json.dumps(gr, ensure_ascii=False), "i": answer_id})
         ops.audit(conn, actor=p.label, action=f"ask.answer.{body.decision}", object_type="answer", object_id=answer_id,
-                  details={"omit": body.omit, "notes": body.notes})
+                  details={"omit": body.omit, "notes": body.notes, "edits": body.edits})
     from ntk_common import editorial
 
     return _json({"answer_id": answer_id, "answer_status": status, "envelope": editorial.polish(env)}, cache="no-store")

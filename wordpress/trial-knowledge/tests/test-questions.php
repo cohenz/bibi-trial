@@ -100,3 +100,11 @@ $lh = TK_Admin_Questions::latest_held( array(
 	array( 'answer_id' => 'q1', 'normalized_question' => 'קשיים', 'answer_status' => 'requires_human_review', 'created_at' => '2026-10-16T05:50:00Z', 'human_decision' => 'reject' ),
 ) );
 TK_T::eq( array( 'k3' ), array_column( $lh, 'answer_id' ), 'held: only the latest per question; none once published or decided' );
+// --- 2.7.16: the editor rewords sentences; only changed ones are sent; published answers can be edited
+$orig = array( 'answer_short' => md5( 'א' ), 'sections/0' => md5( 'ב' ), 'sections/1' => md5( 'ג' ) );
+TK_T::eq( array( 'sections/0' => 'ב חדש' ), TK_Admin_Questions::changed_edits( array( 'answer_short' => 'א', 'sections/0' => 'ב חדש', 'sections/1' => 'ג', 'bogus' => 'x' ), $orig ), 'edits: only changed sentences, valid paths' );
+TK_T::eq( array(), TK_Admin_Questions::changed_edits( array( 'sections/1' => '   ', 'sections/0' => "ב\r\n" ), $orig ), 'edits: emptied or only line endings — not an edit' );
+$html = TK_Admin_Questions::editor( '11111111-1111-1111-1111-111111111111', 'שאלה', 'קצר <b>', array( array( 'kind' => 'defense', 'text' => 'פסקה' ) ), array(), array(), 'edit' );
+TK_T::ok( false !== strpos( $html, 'name="edits[answer_short]"' ) && false !== strpos( $html, 'name="edits[sections/0]"' ) && false === strpos( $html, 'קצר <b>' ) && false !== strpos( $html, 'שמירת העריכה' ) && false === strpos( $html, 'value="reject"' ), 'editor (edit mode): textareas, escaped, save only' );
+$html = TK_Admin_Questions::editor( '11111111-1111-1111-1111-111111111111', '', 'קצר', array( array( 'kind' => 'defense', 'text' => 'פסקה' ) ), array( 'sections/0' => array( 'supported' => 'partial', 'attribution_ok' => true ) ), array(), 'held' );
+TK_T::ok( false !== strpos( $html, 'value="reject"' ) && false !== strpos( $html, 'value="sections/0" checked' ), 'editor (held): a sentence the verifier did not approve is ticked to omit' );
